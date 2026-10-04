@@ -243,6 +243,13 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   for the training phase (profile inside the phase prompt, `# Today` / `# History` / NOW context, this workout's
   messages only, no long-term block / directive / summaries for training). These are the only facts-area changes
   allowed in I1; everything else in facts stays owner-gated.
+- (D15) 2026-10-04 — **First live I1 workout reviewed; owner: "better, but not by much".** Order of fixes set with the
+  owner: (1) now — the weight-loss bug in `log_set` / `update_last_set` (below), code only, red test first, branch
+  `plan/coach-simplification-i2`; (2) next — training-prompt changes replayed on the eval set before merge (P7):
+  drop «не до отказа» as the default phrase and the "couple of reps in reserve" default, effort to match the goal and
+  the client's state; a set below the planned range changes the next set (lower load or call it failure); no
+  self-blame, no internals; (3) later — one catalog exercise used for two different machines (lever vs plate-loaded
+  chest-supported row), planner duration estimate (48 min planned vs ~100 actual), the warm-up run not logged.
 
 ## 6. Progress log (append one line per state change; newest last)
 
@@ -518,3 +525,18 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   calls after the reply — facts timing, owner-gated, earlier answer "later"; (2) dated facts instead of undated old
   turns for chat / plan_creation / session_planning + correct summary date and phase; (3) newest plan wins, older
   plans archived on save (+ dev data fix, owner-gated). Waiting for his decision.
+- 2026-10-04 20:00 Manila — **Live check of I1: owner's workout on dev** (session `9a24d418`, Upper A, 50 turns,
+  09:52–11:32 UTC, Sonnet 5.5). Owner: better, not by much. Good: bench 60→65→70 with a named new best; dated history
+  numbers mostly right; mix-up of exercises handled. Bad, by area — **tone:** one template per reply («Записал… запас
+  около N повторов… не до отказа»; that phrase 20+ times — the prompt's own example and "couple of reps in reserve"
+  are copied), self-blame («это моя вина» ×4), internals leak («система подтвердила», «сводка», «пересоздание»,
+  «проверь в приложении»), contradicting the client («бицепс свежим не был»), invented excuses; **loads:** reverse
+  pec deck kept at 52 kg after 10 reps @ RPE 9 against 12–15 (owner: «рекомендации от балды»), row load 45 kg taken
+  from another machine under the same exercise id and a guess sold as fact, default caution (owner: «ты не
+  занижаешь?»), April lateral-raise load used unadjusted after six months, biceps 10×10 offered "not to failure" when
+  last time it was RPE 10; **plan:** bench 3×5–6 unexplained until asked, 48 min estimated vs ~100 actual, 2 km run
+  not logged; **after-set:** a set below the planned range does not change the next set (triceps 9 vs 10–12 —
+  owner had to say it was failure), exercise "closed" by set count. **Code bug (root-caused):** `log_set` without
+  weight stores `type: functional_reps`; `update_last_set` adds `weight` but keeps the type, so `# Today` drops the
+  weight → the coach saw "12 reps" twice after two successful updates, then deleted and re-logged the set (side
+  effect: lateral raise marked completed). DB now correct (12×59). Decision D15; bug fix dispatched.
