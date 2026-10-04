@@ -3,7 +3,9 @@
 - Status: planned
 - Parent: `docs/superpowers/plans/coach-simplification.md` (governing plan; this is a side plan of code-only fixes
   found in the D15 live review and the 2026-10-04/05 findings). Branch `plan/plan-and-tool-fixes`, cut from `dev`.
-- Executor: one independent worker on a remote machine; picks the plan up from git. Server code is in
+- Executor: an autonomous orchestrator session (Opus) on the Orca host `finland-v4-8gb`, launched by the owner's
+  order of 2026-10-05; it dispatches workers (GLM by default) and follows § 2a. Host facts (test DB, local stand,
+  env symlinks, restricted `ssh filko.dev`) are in `CLAUDE.local.md` on that host. Server code is in
   `apps/server/src` (paths below are relative to it unless they start with `apps/` or `docs/`). Commands run from
   `apps/server`.
 
@@ -18,8 +20,9 @@
    Task 1, `.env*`, CI, deploy scripts. No new dependencies, no migrations.
 4. Tool reply texts written by this plan state facts only — no instructions, no "always/never", no advice to the
    model. (Owner rule 2026-10-05: behaviour is not patched with prose; see `.claude/agents/prompt-doctor.md`.)
-5. One commit per task (`fix(<area>): … (plan-and-tool-fixes T<N>)`), no attribution lines. Push the branch to
-   origin after each task so progress is visible. Never merge into `dev`, never deploy, never touch the VPS.
+5. One commit per task (`fix(<area>): … (plan-and-tool-fixes T<N>)`), no attribution lines. Push the plan branch
+   to origin after each accepted task so progress is visible. Nobody in this run merges into `dev`, deploys or
+   touches the VPS or the dev data — those wait for the owner (§ 2a).
 6. Something unclear or a task cannot be done as written → stop that task, write the question into § 3 under the
    task, commit, push, continue with the next independent task. Do not guess.
 7. Docs and code comments in English.
@@ -101,12 +104,37 @@ Verify: unit tests next to the existing D15 ones (`log-set.carry-over.unit.test.
 `update_last_set` weight 0 on a 10 kg set → functional_reps, same reps; reps-only still carries.
 `npm run test:unit`.
 
-## 2. Close (worker)
+## 2. Close (suites)
 
 All four tasks committed and pushed, then from `apps/server`:
 `npm run check-all` (0 errors), `npm run test:unit`, `npm run test:integration`, `npm run test:scenarios` — paste
-the summary lines into § 3. If the machine has no test database, say so in § 3 instead of skipping silently.
-Do not change `Status:`; review, merge and deploy are the orchestrator's.
+the summary lines into § 3. DB suites run one at a time (one shared test DB on the host).
+
+## 2a. Orchestrator on the Orca host (autonomous run)
+
+Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state without the owner.
+
+1. Set `- Status: in progress`; one plan worktree from `origin/dev` with env symlinks per `CLAUDE.local.md`.
+   Workers: GLM by default (host `CLAUDE.md` § Agents); T1 and T3 may go to Sonnet if a GLM attempt fails twice —
+   record it as (D). Tasks are independent, but run DB suites serially. Review every `worker_done` against the task's
+   AC before accepting it.
+2. Suites of § 2 green on the plan branch.
+3. One independent review on Opus over the branch diff against this plan (the `close-out-review` skill); fix
+   blocking findings; record the verdict as `- Review:` in this header.
+4. **Live check on the local stand** (one task owns the stand; record take/release in § 3): point `~/fitcoach-stand`
+   at the plan worktree, run migrations on `fitcoach_local` if needed, restart `fitcoach-local-server`, then through
+   `POST http://127.0.0.1:3000/api/bot/chat` (header `X-Api-Key` from the stand env; never print it) with a test user:
+   - save a plan twice → `fitcoach_local` has one `active` plan for that user, the newest (T1);
+   - a `search_exercises` call that matches nothing (e.g. a nonsense query with a narrow filter) → the reply does not
+     claim an outage or failure (T2) — model behaviour, record what happened either way;
+   - in a training session log a weighted set, then reps only under an inexact name → carried weight (T3);
+   - a bodyweight set with weight 0 → no "@ 0 kg" (T4).
+   Keep it short (Z.AI quota is shared). Paste the evidence (DB query results, reply excerpts, run ids) into § 3.
+   Point the stand back to `~/projects/fit-coach` and restart it.
+5. Set `- Status: done` only when 2–4 are green; push the plan branch. **Stop there** and report: merge into `dev`,
+   dev deploy, the dev data fix for the owner's three active plans and every deletion (worktrees, task branches)
+   are listed for the owner, not done.
+6. Decisions taken without the owner → `(D)` lines in § 3 with a one-line reason.
 
 ## 3. Worker log (append; newest last)
 
