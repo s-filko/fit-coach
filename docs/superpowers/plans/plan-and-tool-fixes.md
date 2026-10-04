@@ -243,7 +243,7 @@ Advisory (verbatim summaries; not fixed on this branch unless noted):
 - R2 `log-set.tool.ts:48-51` — after T3 the exact-name branch of `carryWeight` is effectively dead; failed resolution resolves twice (plan accepts this).
 - R2 `log-set.tool.ts:117` — `if (resolved != null)` is dead (the resolver throws, never returns null). *Closed with fix 2.*
 - R3 `workout-plan.repository.ts:30` — two overlapping saves at READ COMMITTED can both stay `active`; the newest-first read hides it; no lock.
-- R3 `log-set.tool.ts:100` — `.min(0)` makes `log_set {weight: 0}` with no reps reachable, which falls into the old `{strength, reps 0, weight 0}` fallback — an "@ 0 kg" set. *Taken into the fix as T4 completeness — (D) below.*
+- R3 `log-set.tool.ts:100` — `.min(0)` makes `log_set {weight: 0}` with no reps reachable, which falls into the old `{strength, reps 0, weight 0}` fallback — an "@ 0 kg" set. *Not reachable — see (D) below; test added.*
 - R3 `log-set.tool.ts:113` — passing the resolved id costs one extra `findById` for a new name-only exercise.
 - R3 test names for AC-PTF-2/3/4 carry the AC only in comments. *Closed with fix 2 (names carry the AC).*
 - R4 `training.spec.md:46` — the weight-0 / no-carry storage rules have no BR (nor does D15); spec gap for the owner.
@@ -258,8 +258,9 @@ Decisions:
 
 - (D) Fix 1 retires `IWorkoutPlanRepository.create` (its only callers were the tool and one integration test) instead of
   a shared insert helper: one insert path, and the port no longer offers a way around BR-TRAINING-046.
-- (D) `log_set` with `weight: 0` and no reps/duration is rejected as invalid input (llmError) rather than stored as
-  "0 reps @ 0 kg": AC-PTF-4 says weight 0 is never "@ 0 kg", and the input became reachable only through this branch.
+- (D) R3's advisory "`log_set {weight: 0}` with no reps is reachable" was wrong: the schema's second refine (reps |
+  durationSeconds | distanceKm) already rejects a weight-only payload. A first fix added a handler guard and widened the
+  refine (25446488); reverted as YAGNI (3400c5a8), keeping an AC-PTF-4 test that proves the rejection.
 - (D) BACKLOG: the T1 finding is removed (its open dev-data half is an owner item in this plan's report); the T2 finding is
   cut to its model half (whether the coach still invents a cause on a factual empty result — checked live in § 3).
 - (D) `git config core.hooksPath .husky` set on the host repo (shared by all worktrees) so the committed pre-commit gate
