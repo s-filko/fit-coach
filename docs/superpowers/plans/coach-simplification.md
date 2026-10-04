@@ -482,3 +482,10 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   `plan/coach-simplification-i1` (merged, clean). `.env.dev` lines `LOAD_PLAN_*` are dead (harmless; remove with the
   next env edit). I2 scope note from I1: tool-side guards (duplicate re-log, stopping the client's extra sets), tool
   schema size (18 345 chars), session end time = last set, emoji on plain confirmations, knee re-ask state.
+- 2026-10-04 16:01 Manila — **I1 deployed to dev.** Owner pushed `dev` (`a76be2e0`); the push did not trigger Deploy Dev
+  because the head commit carried `[skip ci]`, so the workflow was started by `workflow_dispatch` (run 37187168086,
+  success, 7m48s): no new migration (24 journal rows, nothing to stamp), containers healthy, `health` 200. Lesson: a
+  code merge pushed under a `[skip ci]` head needs a manual `gh workflow run deploy-dev.yml --ref dev`.
+  **Next:** the owner's next workout on dev is the live check of I1; then read the transcript (`print-transcript`),
+  record findings here, and write the I2 work order (tool-side guards, tool schema size, session end time, emoji on
+  plain confirmations, knee re-ask state). Cleanup still owner-gated: worktree + branch `plan/coach-simplification-i1`.
