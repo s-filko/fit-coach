@@ -461,3 +461,9 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   `fact-formats` to `domain/user`), item 2 (constraints first), B2 (ADR-0013 §3.4 + ADR-0009 note amendments, approved
   text), plan `## Review` statuses. **Next:** re-run zones R1, R2, R3 on the fixed branch; clean → `- Review:` line,
   `Status: done` on the I1 plan, merge into dev; ask the owner for push + dev deploy.
+- 2026-10-04 — B1/B2 fixed on the branch (Opus): `6cf4b3ad` code (v7/v2 unconditional, flags/branches gone, v6/v1 deleted,
+  `fact-formats` → `domain/user/services/`, `# Profile` shows `Progression preference`), `58be9360` ADR-0013 §3.4 +
+  ADR-0009 amendments (approved D14), `c0694e7b` I1 plan. `getForPrompt`: constraints unlimited first, rest fill the
+  cap (DB test with 63 facts). Decisions beyond brief: summariser L0 size limit 2 000 → 3 000 tokens (v7 ≈ 2 170);
+  ARCHITECTURE/CONTRIBUTING_AI lines on v6/v1 left for I4 (listed in §6). Suites green (unit 1 796, integration 657,
+  scenarios 392). Re-review dispatched: all four zones, fix commits named as highest-risk objects.
