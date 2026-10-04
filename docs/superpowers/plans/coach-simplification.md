@@ -237,6 +237,12 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   sets) are candidates for I2 tool-side guards and the effort setting, not for more prose. Pain reported mid-session:
   a `# Today` state line ("Reported today: knee pinch at 19:33") rendered from facts created during this session,
   same approach as D12.
+- (D14) 2026-10-04 — **Owner approved all four:** (1) compact `# Profile` rendering in training; (2) physical
+  constraints fetched first and never cut by the 50-row cap; (3) summariser v7 / fact-verifier v2 wired on
+  unconditionally (dev behaviour kept; `break` / `progression_scheme` extraction stays); (4) ADR-0013 §3.4 amendment
+  for the training phase (profile inside the phase prompt, `# Today` / `# History` / NOW context, this workout's
+  messages only, no long-term block / directive / summaries for training). These are the only facts-area changes
+  allowed in I1; everything else in facts stays owner-gated.
 
 ## 6. Progress log (append one line per state change; newest last)
 
@@ -451,3 +457,7 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   (blocked, B1–B5, 21 advisories), stale text corrected. REVIEW_FINDINGS updated (3 new rule candidates). Suites green
   (unit 1 798, integration 656, scenarios 392). **Open: B1 (summariser v7/v2 wiring) and B2 (ADR-0013 §3.4 amendment)
   wait for the owner's four decisions; then fix, re-run the zones that raised them (R1, R2, R3), push + deploy ask.**
+- 2026-10-04 — D14 recorded. Dispatched (Opus): B1 fix (v7/v2 unconditional, flag fields and branches removed,
+  `fact-formats` to `domain/user`), item 2 (constraints first), B2 (ADR-0013 §3.4 + ADR-0009 note amendments, approved
+  text), plan `## Review` statuses. **Next:** re-run zones R1, R2, R3 on the fixed branch; clean → `- Review:` line,
+  `Status: done` on the I1 plan, merge into dev; ask the owner for push + dev deploy.
