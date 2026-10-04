@@ -500,3 +500,21 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
 - 2026-10-04 — Owner on the "reply first, compact and course-check after" proposal: **later** (not approved, not rejected).
   Parked as an I3 candidate; do not dispatch, raise again when I3 is planned. **Standing state:** I1 is live on dev;
   waiting for the owner's next workout as the live check; nothing is running.
+- 2026-10-04 17:00 Manila — Two live complaints from the owner on dev (plan_creation → chat), both root-caused read-only
+  (Opus on the VPS) and **both pre-existing, in phases I1 did not rebuild**:
+  (a) Garbled reply «Сегодня вечером четверг ты уже отработал низ…» (run 935b7c05): `plan_creation` loads no workout
+  facts (`plan-creation.spec.ts:49-54`), the history carries the undated verbatim tail of Thursday's workout
+  (`EPISODE_KEEP_TURNS=6`, `compact.ts:126-165`, no gap marker), and a summary is labelled "plan_creation (today
+  16:10)" though it describes Thursday's training (`compact.node.ts:320-322`: date from the previous run's
+  `lastUserMessageAt`, phase = the new phase; `renderTranscript` gives the summariser no timestamps). Same disease as
+  the old training turn: no single dated source of truth.
+  (b) 155 s reply (run db86cab4): summariser 98.3 s + fact verifier 25.5 s + course check 23.8 s on Haiku, sequential,
+  before the 6.9 s Sonnet reply; 4 743 of 6 357 output tokens are Haiku reasoning at `low`. Same before the deploy
+  (09-29: 201 s; 10-01: 170 s). "v7 unconditional" changed nothing on dev (flags were already on).
+  (c) Finding filed in BACKLOG § Findings (commit `9e1479b0`): `save_workout_plan` never archives older plans and every
+  reader uses `findActiveByUserId` = `LIMIT 1` without ORDER BY (`workout-plan.repository.ts:40-46`) → with three
+  active rows the plan the planner reads is undefined; the owner saved a new 4-day plan today.
+  **Proposed to the owner as the next iteration, ahead of the tool-guard work ("I2-urgent"):** (1) reply first, side
+  calls after the reply — facts timing, owner-gated, earlier answer "later"; (2) dated facts instead of undated old
+  turns for chat / plan_creation / session_planning + correct summary date and phase; (3) newest plan wins, older
+  plans archived on save (+ dev data fix, owner-gated). Waiting for his decision.
