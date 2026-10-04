@@ -53,3 +53,30 @@ describe('TrainingService.updateLastSet — weight on a reps-only set', () => {
     );
   });
 });
+
+// AC-PTF-4 (plan-and-tool-fixes T4): an explicit weight of 0 means a bodyweight set —
+// the mirror of the D15 conversion above.
+describe('TrainingService.updateLastSet — weight 0 means a bodyweight set', () => {
+  it('converts a strength set to functional_reps with the same reps', async () => {
+    const { trainingService, mockSessionSetRepo } = setup({ type: 'strength', reps: 8, weight: 10, weightUnit: 'kg' });
+
+    await trainingService.updateLastSet('session-1', EX_ID, { weight: 0 });
+
+    expect(mockSessionSetRepo.update).toHaveBeenCalledWith(
+      'set-1',
+      expect.objectContaining({ setData: { type: 'functional_reps', reps: 8 } }),
+    );
+  });
+
+  it('keeps functional_reps when weight 0 is given to a reps-only set', async () => {
+    const { trainingService, mockSessionSetRepo, mockExerciseRepo } = setup({ type: 'functional_reps', reps: 12 });
+
+    await trainingService.updateLastSet('session-1', EX_ID, { weight: 0 });
+
+    expect(mockSessionSetRepo.update).toHaveBeenCalledWith(
+      'set-1',
+      expect.objectContaining({ setData: { type: 'functional_reps', reps: 12 } }),
+    );
+    expect(mockExerciseRepo.findById).not.toHaveBeenCalled(); // no D15 per-hand conversion fires
+  });
+});

@@ -199,3 +199,25 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
   - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1810 passed, 1810 total.
   - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.
   - `DB_PORT=5999 npm run test:unit` not run: no imports under infra/ were added.
+
+### T4 — Weight 0 means bodyweight (AC-PTF-4)
+
+- Red first, recorded before the fix:
+  - tool (`infra/ai/tools/__tests__/log-set.carry-over.unit.test.ts:179`): `log_set` with
+    `weight: 0` → `Received tool input did not match expected schema — Too small: expected number to be >0
+    → at weight` (zod `.positive()` rejected 0 before it could mean anything);
+  - service (`training-service-update-last-set.unit.test.ts:65` and `:76`): both weight-0 updates
+    produced `{"type": "strength", "weight": 0, "weightUnit": "kg"}` — the "@ 0 kg" bug.
+  - Summary: Tests: 3 failed, 10 passed, 13 total.
+- Implementation:
+  - `log_set`: the weight schema accepts 0 (`.min(0)`); `reps` + `weight > 0` builds a strength set, so
+    weight 0 falls to `functional_reps`; `carryWeight` never carries when an explicit weight was given
+    (0 included — an explicit weight is a statement, not shorthand). Description text unchanged.
+  - `updateLastSet` (service): weight 0 on a strength set converts it to `functional_reps` with the same
+    reps (mirror of the D15 conversion, which no longer fires for 0 — a reps-only set given weight 0 stays
+    `functional_reps`, no per-hand lookup); the weight spread skips 0 so no `weight: 0` lands in the setData.
+  - `evals/snapshots/__tests__/tool-surface.unit.test.ts.snap` updated with `jest -u`: the only diff is the
+    log_set weight schema `exclusiveMinimum: 0` → `minimum: 0`.
+- Verification (from `apps/server`):
+  - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1813 passed, 1813 total.
+  - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.

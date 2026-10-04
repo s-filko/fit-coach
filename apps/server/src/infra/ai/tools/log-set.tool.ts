@@ -35,13 +35,14 @@ interface Carried {
  * D15: reps without a weight on an exercise already weighted in this session is shorthand ("did another 12"),
  * not a bodyweight set — carry the weight of the latest set of the same kind (a warm-up weight never reaches a
  * working set) and its total-weight basis; the confirmation says so.
+ * AC-PTF-4: an explicit weight — 0 included — is never shorthand; weight 0 says bodyweight, so no carry.
  */
 function carryWeight(
   base: SetDataInput,
-  input: { exerciseId?: string; exerciseName?: string; setKind?: SetKind; weightBasis?: 'total' },
+  input: { exerciseId?: string; exerciseName?: string; weight?: number; setKind?: SetKind; weightBasis?: 'total' },
   session: WorkoutSessionWithDetails | null,
 ): { setData: SetDataInput; weightBasis?: 'total'; carried?: Carried } {
-  if (base.type !== 'functional_reps') {
+  if (base.type !== 'functional_reps' || input.weight != null) {
     return { setData: base, weightBasis: input.weightBasis };
   }
   const wanted = input.exerciseName?.trim().toLowerCase();
@@ -90,7 +91,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         if (input.durationSeconds != null) {
           return { type: 'cardio_duration' as const, duration: input.durationSeconds };
         }
-        if (input.reps != null && input.weight != null) {
+        if (input.reps != null && input.weight != null && input.weight > 0) {
           return { type: 'strength' as const, reps: input.reps, weight: input.weight, weightUnit: 'kg' as const };
         }
         if (input.reps != null) {
@@ -241,7 +242,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           reps: z.number().int().positive().optional().describe('Number of repetitions performed.'),
           weight: z
             .number()
-            .positive()
+            .min(0)
             .optional()
             .describe('Weight used in kilograms (kg). Omit for bodyweight exercises.'),
           durationSeconds: z

@@ -165,6 +165,28 @@ describe('log-set.tool — weight carried over from the previous set', () => {
     expect(renderedContent(result)).not.toContain('carried over');
   });
 
+  // AC-PTF-4 (plan-and-tool-fixes T4): an explicit weight of 0 means a bodyweight set —
+  // after a weighted pull-up, weight 0 must not store "@ 0 kg" and must not carry.
+  it('log_set with weight 0 stores functional_reps, no carry, no "@ 0 kg"', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.getSessionDetails.mockResolvedValue(
+      sessionWith([{ type: 'strength', reps: 8, weight: 10, weightUnit: 'kg' }]),
+    );
+    const expected = { type: 'functional_reps' as const, reps: 8 };
+    trainingService.logSetWithContext.mockResolvedValue({ set: savedSet(expected), setNumber: 2 });
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke({ exerciseId: EX_ID, reps: 8, weight: 0 }, config)) as ToolReturn;
+
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ setData: expected }),
+    );
+    expect(renderedContent(result)).toContain('8 reps');
+    expect(renderedContent(result)).not.toContain('@ 0 kg');
+    expect(renderedContent(result)).not.toContain('carried over');
+  });
+
   it('keeps a total-weight basis when the carried set was logged as a total', async () => {
     const trainingService = makeTrainingService();
     trainingService.getSessionDetails.mockResolvedValue(

@@ -479,15 +479,19 @@ export class TrainingService implements ITrainingService {
     };
 
     // D15: a reps-only set given a weight is a weighted set (functional_reps cannot carry one), with the same
-    // per-hand basis a freshly logged strength set gets.
+    // per-hand basis a freshly logged strength set gets. AC-PTF-4: an explicit weight of 0 is the opposite
+    // direction — a strength set becomes a bodyweight functional_reps set with the same reps.
+    const weightless = updates.weight === 0;
     const baseSetData: SessionSet['setData'] =
-      updates.weight != null && lastSet.setData.type === 'functional_reps'
+      updates.weight != null && !weightless && lastSet.setData.type === 'functional_reps'
         ? await this.applyPerHand(exerciseId, { type: 'strength', reps: lastSet.setData.reps, weightUnit: 'kg' })
-        : lastSet.setData;
+        : weightless && lastSet.setData.type === 'strength'
+          ? { type: 'functional_reps', reps: lastSet.setData.reps }
+          : lastSet.setData;
 
     const updatedSetData: SessionSet['setData'] = {
       ...baseSetData,
-      ...(updates.weight != null ? { weight: updates.weight } : {}),
+      ...(updates.weight != null && !weightless ? { weight: updates.weight } : {}),
       ...(updates.reps != null ? { reps: updates.reps } : {}),
       ...(updates.durationSeconds != null ? { duration: updates.durationSeconds } : {}),
       ...(updates.distanceKm != null ? { distance: updates.distanceKm, distanceUnit: 'km' } : {}),
