@@ -497,3 +497,6 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   load nil. OpenRouter balance: $3.78 of $30 left. **Structural cause = blocking side calls on the reply path** (I3
   scope, facts timing → owner-gated): proposal — reply first, then compact and course-check after the reply (or in
   parallel), and probe a lower reasoning setting for the `summarizer` / `course_check` profiles. Asked the owner.
+- 2026-10-04 — Owner on the "reply first, compact and course-check after" proposal: **later** (not approved, not rejected).
+  Parked as an I3 candidate; do not dispatch, raise again when I3 is planned. **Standing state:** I1 is live on dev;
+  waiting for the owner's next workout as the live check; nothing is running.
