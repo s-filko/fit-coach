@@ -221,3 +221,46 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
 - Verification (from `apps/server`):
   - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1813 passed, 1813 total.
   - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.
+
+## Review
+
+Close-out review 2026-10-04 (orchestrator; four independent Opus zones R1–R4 over `git diff $(merge-base origin/dev)...HEAD`
+at `886c6d97`). **First pass: blocked.**
+
+Blocking (verbatim):
+
+1. `blocking | R2 | apps/server/src/infra/db/repositories/workout-plan.repository.ts:36 | CONTRIBUTING_AI.md "Principles & Boundaries" (DRY) | createActiveReplacingOthers copies the insert body and row mapping of create (workout-plan.repository.ts:11-24) almost line for line. After T1, create has no production caller … one insert path should serve both.`
+2. `blocking | R3 | apps/server/src/domain/training/services/training.service.ts:486 | plan § 2 (check-all 0 errors) + SUPERPOWERS_INTEGRATION.md rule 2 | check-all fails on the branch head: no-nested-ternary (training.service.ts:486), prefer-destructuring (log-set.tool.ts:113), prettier (search-exercises.tool.ts).` — Root cause found by the orchestrator: `core.hooksPath` is unset in this host's repo config (husky `prepare` cannot find `.git` in a worktree), so the `.husky/pre-commit` gate never ran for any worker commit.
+3. `blocking | R3 | docs/superpowers/plans/plan-and-tool-fixes.md:107 | SUPERPOWERS_INTEGRATION.md rule 2 | § 2 Close-suite evidence is missing.`
+4. `blocking | R4 | docs/BACKLOG.md:113 | SUPERPOWERS_INTEGRATION.md § Backlog rule 4 | the finding "One user has three active workout plans" became T1 and is still an open entry, now claiming what the code no longer does.`
+5. `blocking | R4 | docs/BACKLOG.md:115 | SUPERPOWERS_INTEGRATION.md § Backlog rule 4 | the finding "An empty exercise search is told to the user as a database outage" became T2 and is still open; its code half is now false.`
+
+Advisory (verbatim summaries; not fixed on this branch unless noted):
+
+- R1 `workout-plan.ports.ts:12` — the port still exposes `create()` that can break BR-TRAINING-046. *Closed by fix 1 (create retired).*
+- R1 `save-workout-plan.tool.ts:146` — BR-TRAINING-046 lives in an infra repository method called by the tool, no domain service owns it (ADR-0013 §4.4); pre-existing shape, plan-prescribed.
+- R1/R2 `log-set.tool.ts:62,71,94` + `training.service.ts:484` — "weight 0 = bodyweight" is implemented in two layers (tool for new sets, service for corrections); `logSetWithContext` still accepts a 0 kg strength set from other callers.
+- R2 `log-set.tool.ts:48-51` — after T3 the exact-name branch of `carryWeight` is effectively dead; failed resolution resolves twice (plan accepts this).
+- R2 `log-set.tool.ts:117` — `if (resolved != null)` is dead (the resolver throws, never returns null). *Closed with fix 2.*
+- R3 `workout-plan.repository.ts:30` — two overlapping saves at READ COMMITTED can both stay `active`; the newest-first read hides it; no lock.
+- R3 `log-set.tool.ts:100` — `.min(0)` makes `log_set {weight: 0}` with no reps reachable, which falls into the old `{strength, reps 0, weight 0}` fallback — an "@ 0 kg" set. *Taken into the fix as T4 completeness — (D) below.*
+- R3 `log-set.tool.ts:113` — passing the resolved id costs one extra `findById` for a new name-only exercise.
+- R3 test names for AC-PTF-2/3/4 carry the AC only in comments. *Closed with fix 2 (names carry the AC).*
+- R4 `training.spec.md:46` — the weight-0 / no-carry storage rules have no BR (nor does D15); spec gap for the owner.
+- R4 `STATE.md:16` — the generated line says "(direct on integration branch)" for this plan; `state.mjs` did not detect the plan branch.
+- R4 `BUGS.md:1712` — BUG-033's "name half" says name resolution is exact-match; stale against current code.
+
+Meta (filed in `docs/REVIEW_FINDINGS.md`): R1 durable-spec escalation evidence; R1 (D) changing stored data needs a BR candidate;
+R2 plan-prescribed duplicates; R3 zone lacks the close gate (lint/format); R3 prompt names a non-existent jest config;
+R4 close-out must trim the source BACKLOG/BUGS entries.
+
+Decisions:
+
+- (D) Fix 1 retires `IWorkoutPlanRepository.create` (its only callers were the tool and one integration test) instead of
+  a shared insert helper: one insert path, and the port no longer offers a way around BR-TRAINING-046.
+- (D) `log_set` with `weight: 0` and no reps/duration is rejected as invalid input (llmError) rather than stored as
+  "0 reps @ 0 kg": AC-PTF-4 says weight 0 is never "@ 0 kg", and the input became reachable only through this branch.
+- (D) BACKLOG: the T1 finding is removed (its open dev-data half is an owner item in this plan's report); the T2 finding is
+  cut to its model half (whether the coach still invents a cause on a factual empty result — checked live in § 3).
+- (D) `git config core.hooksPath .husky` set on the host repo (shared by all worktrees) so the committed pre-commit gate
+  actually runs; this is the project's intended behaviour, not a new mechanism.

@@ -177,6 +177,10 @@ or is inert for the kind of diff under review.
   apply and either reads the main checkout or skips the citation. Briefs should name the file that holds each cited
   section, or the orchestrator should paste it. (R2)
   Runs: coach-simplification-i1 2026-10-04.
+- [×1] R2's zone does not say how to grade duplication the plan itself prescribed (T1 "add a repository method … the tool calls it instead of `create`" produced a near-copy). Proposed principle for CONTRIBUTING_AI "Principles & Boundaries": "A plan-prescribed new method that replaces an existing one must reuse or retire it; prescribing it does not exempt it from DRY."
+  Runs: plan-and-tool-fixes (2026-10-04) (R2).
+- [×1] The orchestrator's R3 brief named "the unit config as package.json defines" — there is none; `test:unit` uses inline `--testMatch` with `NODE_ENV=test` (working form: `NODE_ENV=test npx jest <paths>`).
+  Runs: plan-and-tool-fixes (2026-10-04) (R3).
 
 ## Blind spots
 
@@ -239,7 +243,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
 - [×1] R3: the zone has no instruction to probe behaviour outside the fixtures; every blocking finding of load-plan-fixes runs 3–6 came from hand-built histories adjacent to tested cases. Proposed for r3-correctness.md: "for each new rule, construct at least one adjacent history and run it." (load-plan-fixes 2026-10-01)
 - [×1] R4: a scope extension after a merge reopens Status and deletes the `- Review:` line; proposed: keep the previous line and add one for the extension range. (load-plan-fixes run 3)
 - [×1] R2: the zone does not say whether test-only builders (fixtures, generators, harnesses) are in DRY scope. (load-plan-fixes run 4)
-- [×1] R1: the durable-spec rule does not say how to treat an edit that goes beyond the owner-approved text (extra paragraphs next to approved wording); treated as rule 3. Candidate for SUPERPOWERS_INTEGRATION rule 3: "An owner-approved durable-spec amendment is applied verbatim; any added sentence that changes or qualifies its meaning is a new escalation." (load-plan 2026-10-01)
+- [×2] R1: the durable-spec rule does not say how to treat an edit that goes beyond the owner-approved text (extra paragraphs next to approved wording); treated as rule 3. Candidate for SUPERPOWERS_INTEGRATION rule 3: "An owner-approved durable-spec amendment is applied verbatim; any added sentence that changes or qualifies its meaning is a new escalation." (load-plan 2026-10-01) Second run: the "always blocking" check gives no test for when owner approval written into the plan counts as escalation (BR-TRAINING-046 edited under a dated owner decision with exact wording; R1 treated it as pre-approved). Proposed: "a durable-spec edit is escalated when the plan quotes the exact text and cites a dated owner decision". (plan-and-tool-fixes 2026-10-04)
 - [×1] Schema, indexing and unbounded-growth concerns have no owning zone: R1 reads for shape,
   R2 for duplication, R3 for logic, R4 for doc currency. The missing `run_id` index on
   `llm_calls` — queried on every model call, now synchronously — was the most operationally
@@ -417,6 +421,8 @@ a wider reader (the final whole-branch review) or noticed after the fact.
 - [×1] Plan tasks name verification commands but record no run output, so a reviewer cannot tell whether they were run;
   the reviewer must re-run them (R3 did: unit 1 796, integration 657 + 1 todo). Cheap fix: one "Verified <date> @
   <commit>: counts" line per task. Runs: coach-simplification-i1 2026-10-04 pass 2 (R3).
+- [×1] R3's zone checks per-task verification but not the plan's close gate (`check-all`); a review running before § 2 misses lint/format errors no per-task command catches. Candidate for r3-correctness.md: "Run `npm run lint` and `npm run format:check`; a lint error or format failure is blocking under the plan's close gate." (Root cause on the Orca host: `core.hooksPath` unset, so `.husky/pre-commit` never ran.)
+  Runs: plan-and-tool-fixes (2026-10-04) (R3).
 
 ## Rule candidates
 
@@ -953,3 +959,5 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
 - [×1] A plan that commits a design/spec file next to its own as-shipped sections must say which wins on divergence, and
   must not point at a spec the code does not follow (I1's header said the spec "is the spec the code follows" while the
   code diverged). Proposed for `SUPERPOWERS_INTEGRATION.md`. Runs: coach-simplification-i1 2026-10-04 pass 2 (R4).
+- [×1] R1: "A (D) decision that changes domain behaviour visible in stored data is recorded as an owner-gated BR candidate, not only in the plan" — CONTRIBUTING_AI. (plan-and-tool-fixes 2026-10-04)
+- [×1] R4: "Close-out removes or updates every BACKLOG/BUGS entry the plan's tasks cite as their source before `Status: done`" — SUPERPOWERS_INTEGRATION § Status layer. (plan-and-tool-fixes 2026-10-04)
