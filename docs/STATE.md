@@ -9,10 +9,9 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-10-02 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-10-04 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `coach-simplification-i1.md` — Coach Simplification I1 — New Training Turn Implementation Plan (direct on integration branch)
 - `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
 
 **Planned**
@@ -27,6 +26,7 @@ _Generated 2026-10-02 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `cache-accounting.md` — Cache Accounting — Cached/Reasoning Tokens per Call and Cache-Miss Attribution Implementation Plan
 - `chat-continuity.md` — Chat Continuity — Compaction Keeps the Recent Conversation, the Reply Answers the Latest Message Implementation Plan
 - `coach-baseline.md` — Coach Baseline (Roadmap U1) Implementation Plan
+- `coach-simplification-i1.md` — Coach Simplification I1 — New Training Turn Implementation Plan
 - `course-check-and-constraints.md` — Course Check and Constraint Handling Implementation Plan
 - `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
 - `fact-provenance.md` — Fact Provenance — the Summariser Stores Only What the User Said (BUG-040) Implementation Plan
