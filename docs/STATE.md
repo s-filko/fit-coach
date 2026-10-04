@@ -13,11 +13,11 @@ _Generated 2026-10-04 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **In progress**
 - `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
+- `plan-and-tool-fixes.md` — Plan and Tool Fixes — one active plan, empty search, weight carry-over tails (direct on integration branch)
 
 **Planned**
 - `coach-tone.md` — Coach Tone — the coach knows the trend and encourages progress Implementation Plan
 - `cold-start.md` — Cold Start — a load for a user with no history (U11) Implementation Plan
-- `plan-and-tool-fixes.md` — Plan and Tool Fixes — one active plan, empty search, weight carry-over tails
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 - `restart-ladder.md` — Restart Ladder — the return ladder closes on fresh workouts Implementation Plan

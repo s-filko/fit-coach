@@ -1,6 +1,6 @@
 # Plan and Tool Fixes — one active plan, empty search, weight carry-over tails
 
-- Status: planned
+- Status: in progress
 - Parent: `docs/superpowers/plans/coach-simplification.md` (governing plan; this is a side plan of code-only fixes
   found in the D15 live review and the 2026-10-04/05 findings). Branch `plan/plan-and-tool-fixes`, cut from `dev`.
 - Executor: an autonomous orchestrator session (Opus) on the Orca host `finland-v4-8gb`, launched by the owner's
