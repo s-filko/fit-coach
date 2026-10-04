@@ -24,6 +24,7 @@ export const makeTrainingService = (): jest.Mocked<ITrainingService> =>
     completeCurrentExercise: jest.fn(),
     ensureCurrentExercise: jest.fn(),
     logSetWithContext: jest.fn(),
+    resolveExerciseIdByName: jest.fn(),
   }) as unknown as jest.Mocked<ITrainingService>;
 
 /** The executor puts activeSessionId into configurable alongside userId. */

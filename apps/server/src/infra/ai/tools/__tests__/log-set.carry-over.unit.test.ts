@@ -121,6 +121,50 @@ describe('log-set.tool — weight carried over from the previous set', () => {
     );
   });
 
+  // AC-PTF-3 (plan-and-tool-fixes T3): the session exercise is matched by the id the
+  // service resolves from an inexact name — "bench press" must carry from
+  // "Barbell Bench Press", not fall through to a bodyweight set.
+  it('carries the weight when the exercise is named inexactly (resolver resolves it)', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.getSessionDetails.mockResolvedValue(
+      sessionWith([{ type: 'strength', reps: 8, weight: 60, weightUnit: 'kg' }]),
+    );
+    trainingService.resolveExerciseIdByName.mockResolvedValue(EX_ID);
+    const expected = { type: 'strength' as const, reps: 10, weight: 60, weightUnit: 'kg' as const };
+    trainingService.logSetWithContext.mockResolvedValue({ set: savedSet(expected), setNumber: 2 });
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke({ exerciseName: 'bench press', reps: 10 }, config)) as ToolReturn;
+
+    expect(trainingService.resolveExerciseIdByName).toHaveBeenCalledTimes(1);
+    expect(trainingService.resolveExerciseIdByName).toHaveBeenCalledWith('bench press');
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ exerciseId: EX_ID, setData: expected }),
+    );
+    expect(renderedContent(result)).toContain('Weight 60 kg carried over from set 1');
+  });
+
+  it('falls back to today’s name-only path when the resolver throws (no carry, name passed on)', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.getSessionDetails.mockResolvedValue(
+      sessionWith([{ type: 'strength', reps: 8, weight: 60, weightUnit: 'kg' }]),
+    );
+    trainingService.resolveExerciseIdByName.mockRejectedValue(new Error('not found'));
+    const expected = { type: 'functional_reps' as const, reps: 10 };
+    trainingService.logSetWithContext.mockResolvedValue({ set: savedSet(expected), setNumber: 2 });
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke({ exerciseName: 'bench press', reps: 10 }, config)) as ToolReturn;
+
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ exerciseName: 'bench press', setData: expected }),
+    );
+    expect(trainingService.logSetWithContext.mock.calls[0][1].exerciseId).toBeUndefined();
+    expect(renderedContent(result)).not.toContain('carried over');
+  });
+
   it('keeps a total-weight basis when the carried set was logged as a total', async () => {
     const trainingService = makeTrainingService();
     trainingService.getSessionDetails.mockResolvedValue(

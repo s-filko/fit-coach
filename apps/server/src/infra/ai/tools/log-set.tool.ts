@@ -104,7 +104,24 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       try {
         const session = await trainingService.getSessionDetails(sessionId);
 
-        const { setData, weightBasis, carried } = carryWeight(baseSetData, input, session);
+        // AC-PTF-3: a name-only call resolves the id here, once, exactly as the service
+        // would inside logSetWithContext — the session exercise is then matched by that
+        // id, so an inexact name ("bench press" for "Barbell Bench Press") still carries.
+        // A failed resolution keeps today's behaviour: no carry, and logSetWithContext
+        // reports the error when it resolves the name itself.
+        let exerciseId = input.exerciseId;
+        if (exerciseId == null && input.exerciseName != null) {
+          try {
+            const resolved = await trainingService.resolveExerciseIdByName(input.exerciseName);
+            if (resolved != null) {
+              exerciseId = resolved;
+            }
+          } catch (resolveErr) {
+            log.debug({ err: resolveErr, exerciseName: input.exerciseName }, 'log_set: name pre-resolution failed');
+          }
+        }
+
+        const { setData, weightBasis, carried } = carryWeight(baseSetData, { ...input, exerciseId }, session);
 
         const parsed = SetDataSchema.safeParse(setData);
         if (!parsed.success) {
@@ -120,7 +137,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         }
 
         const { set, setNumber, autoCompleted } = await trainingService.logSetWithContext(sessionId, {
-          exerciseId: input.exerciseId,
+          exerciseId,
           exerciseName: input.exerciseName,
           setData: parsed.data,
           rpe,
@@ -163,7 +180,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             userId,
             sessionId,
             setId: set.id,
-            exerciseId: input.exerciseId,
+            exerciseId,
             setNumber,
             setData: set.setData,
             rpe: set.rpe,

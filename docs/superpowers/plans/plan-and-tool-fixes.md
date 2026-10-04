@@ -181,3 +181,21 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
 - Verification (from `apps/server`):
   - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1808 passed, 1808 total.
   - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.
+
+### T3 — Weight carry-over works when the exercise is named inexactly (AC-PTF-3)
+
+- Red first, recorded before the fix (`infra/ai/tools/__tests__/log-set.carry-over.unit.test.ts`):
+  `139:53` 'carries the weight when the exercise is named inexactly (resolver resolves it)' —
+  `expect(trainingService.resolveExerciseIdByName).toHaveBeenCalledTimes(1)` → `Expected number of calls: 1,
+  Received number of calls: 0`, and the audit line shows the set stored as `functional_reps` (no carry).
+  Summary: Tests: 1 failed, 6 passed, 7 total.
+- Implementation (`infra/ai/tools/log-set.tool.ts`): a name-only call (no `exerciseId`) resolves the id once via
+  `trainingService.resolveExerciseIdByName` before `carryWeight`; the session exercise is matched by that id
+  (carryWeight receives `{ ...input, exerciseId }`), and the resolved id is passed to `logSetWithContext` (and the
+  audit line) so the name is not resolved twice. A thrown resolution keeps today's behaviour: debug log, no carry,
+  name-only call through which the service reports the error. `resolveExerciseIdByName: jest.fn()` added to the
+  shared test-support fake; the tool description is untouched.
+- Verification (from `apps/server`):
+  - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1810 passed, 1810 total.
+  - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.
+  - `DB_PORT=5999 npm run test:unit` not run: no imports under infra/ were added.
