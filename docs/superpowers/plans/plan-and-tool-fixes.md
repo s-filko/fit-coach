@@ -165,3 +165,19 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
     jest runs the whole integration suite; useful for T2–T4 workers quoting this command.)
   - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.
 
+
+### T2 — An empty exercise search is a result, not an error (AC-PTF-2)
+
+- Red first, recorded before the fix (`infra/ai/tools/__tests__/search-exercises.tool.unit.test.ts`):
+  - `154:17` 'returns an ok outcome naming the query when results are empty';
+  - `169:17` 'names the filters actually used in the empty-result line' — received
+    `{ kind: "user_error", message: "No exercises found matching the search criteria. Try a broader query or remove filters.", ok: false }`;
+  - `188:54` 'omits the filters part when the empty search used none'.
+  - Summary: Tests: 3 failed, 8 passed, 11 total.
+- Implementation (`infra/ai/tools/search-exercises.tool.ts`): zero matches now return
+  `ok('0 exercises match "<query>" (filters: category=…, equipment=…, muscleGroup=…)')` — only the filters
+  actually sent, no filters part when none; facts only, the advice sentence is gone. Real failures
+  (embedding or repository throws) keep the unchanged `userError` catch path. Tool description untouched.
+- Verification (from `apps/server`):
+  - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1808 passed, 1808 total.
+  - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.

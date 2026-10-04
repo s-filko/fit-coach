@@ -138,7 +138,9 @@ describe('search_exercises tool', () => {
     expect(result).toContain('chest');
   });
 
-  it('returns "no exercises found" message when results are empty', async () => {
+  // AC-PTF-2 (plan-and-tool-fixes T2): zero matches is a result, not an error —
+  // the outcome is ok and the line states the facts (query, filters used), no advice.
+  it('returns an ok outcome naming the query when results are empty', async () => {
     const exerciseRepository = makeExerciseRepository();
     exerciseRepository.searchByEmbedding.mockResolvedValue([]);
 
@@ -147,9 +149,58 @@ describe('search_exercises tool', () => {
       exerciseRepository,
     }) as unknown as InvokableTool;
 
-    const result = renderedContent((await tool.invoke({ query: 'nonexistent' })) as ToolReturn);
+    const ret = (await tool.invoke({ query: 'nonexistent' })) as ToolReturn;
 
-    expect(result).toContain('No exercises found');
+    expect(ret).toEqual({ ok: true, summary: expect.stringContaining('"nonexistent"') });
+    expect(renderedContent(ret)).not.toContain('No exercises found');
+  });
+
+  it('names the filters actually used in the empty-result line', async () => {
+    const exerciseRepository = makeExerciseRepository();
+    exerciseRepository.searchByEmbedding.mockResolvedValue([]);
+
+    const tool = buildSearchExercisesTool({
+      embeddingService: makeEmbeddingService(),
+      exerciseRepository,
+    }) as unknown as InvokableTool;
+
+    const ret = (await tool.invoke({ query: 'nonexistent', category: 'cardio', equipment: 'machine' })) as ToolReturn;
+
+    expect(ret).toEqual({
+      ok: true,
+      summary: expect.stringContaining('category=cardio'),
+    });
+    expect((ret as { summary: string }).summary).toContain('equipment=machine');
+    expect((ret as { summary: string }).summary).not.toContain('muscleGroup=');
+  });
+
+  it('omits the filters part when the empty search used none', async () => {
+    const exerciseRepository = makeExerciseRepository();
+    exerciseRepository.searchByEmbedding.mockResolvedValue([]);
+
+    const tool = buildSearchExercisesTool({
+      embeddingService: makeEmbeddingService(),
+      exerciseRepository,
+    }) as unknown as InvokableTool;
+
+    const ret = (await tool.invoke({ query: 'nonexistent' })) as ToolReturn;
+
+    expect((ret as { summary: string }).summary).not.toContain('filters:');
+  });
+
+  it('returns an error outcome when the repository throws', async () => {
+    const exerciseRepository = makeExerciseRepository();
+    exerciseRepository.searchByEmbedding.mockRejectedValue(new Error('db down'));
+
+    const tool = buildSearchExercisesTool({
+      embeddingService: makeEmbeddingService(),
+      exerciseRepository,
+    }) as unknown as InvokableTool;
+
+    const result = renderedContent((await tool.invoke({ query: 'chest' })) as ToolReturn);
+
+    expect(result).toContain('Error searching exercises');
+    expect(result).toContain('db down');
   });
 
   it('returns error string when embeddingService.embed throws', async () => {
