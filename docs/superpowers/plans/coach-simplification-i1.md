@@ -5,7 +5,7 @@
   `plan/coach-simplification-i1`, one worktree. Server code is in `apps/server/src` (paths below are relative to it
   unless they start with `apps/`, `docs/` or `data/`). All commands run from `apps/server` unless noted.
 - Reference rendering: `data/coach-simplification/i0/cases/07/input.md` (gitignored, local only) and
-  `data/coach-simplification/i0/judge-notes.md`. Durable specs are NOT edited in I1 (§ 6 lists them for the owner).
+  `data/coach-simplification/i0/judge-notes.md`. Durable specs are NOT edited in I1 (§ 6 lists them for the owner), except the ADR-0013 § 3.4 and ADR-0009 amendments the owner approved in D14 (commit 58be9360).
 - **Spec:** the implementation spec of Tasks 6a/6b (Today / History rendering, profile, the frozen prompt) is
   committed as `docs/superpowers/specs/2026-10-04-training-turn-shape.md`. It is the spec the code follows where §§ 1.1–1.2
   and 3 below differ from it; the gitignored `data/` evidence may be cited but is never the only spec.
@@ -123,11 +123,12 @@ performance → `- no earlier record`.
 ### 1.2 Profile and its dedupe rule
 
 `renderTrainingProfile(user, facts)` (`prompts/blocks/training-profile.ts`), `# Profile`, one `- ` line each. **As
-shipped (Task 6a; compact rendering is an open owner decision, see `## Review`):**
+shipped (Task 6a; compact rendering approved by the owner in D14):**
 1. `<firstName>, <fitnessLevel>` (unknown parts omitted). No age, gender, height, weight; **no registration goal** —
    the first design (goal shown when there are no facts, 3-vs-5 resolution) was dropped in the i0 replay profile:
    user-stated facts are newer and confirmed, and the course directive has left the training request.
-2. facts: drop categories `break` and `progression_scheme`; among facts with a non-null `muscleGroup`, keep one per
+2. facts: drop category `break`; a `progression_scheme` fact renders as `Progression preference: <the client's words>`
+   (the scheme description when there are none; a malformed one is not shown — D14, commit 6cf4b3ad); among facts with a non-null `muscleGroup`, keep one per
    `(category, muscleGroup)` — the latest `updatedAt`, tie → more `confirmations` (three lower-back facts → one);
    `physical_constraint` lines first, then `getForPrompt` order. Line = fact text, plus ` (<phaseNote>)` for a
    long-term fact with a phase note. No confirmation counts, no dates, no category headings.
@@ -171,9 +172,11 @@ v11/v12.unit.test.ts` (425); training entries in `evals/snapshots/__tests__/prom
 writes no weights (`start_training_session` / `save_workout_plan` schemas without `targetWeight`,
 `SESSION_PLANNING_ACTIVE_PLAN_V2`, `SESSION_PLANNING_V5` as the registry's `current`, its one phrase "the training
 phase decides them from LOAD PLAN" → "the coach sets them during the workout", its unit test updated).
-**I. Break / scheme facts** — `prompts/summarizer/v7.ts`, `prompts/fact-verifier/v2.ts` (211; T 33), their
-selection in `compact.node.ts` and `verify-fact-operations.ts` (always v6 / verifier v1), `gatedOperationValid`
-rejects `break` / `progression_scheme` unconditionally (**not as shipped — see B1 in `## Review`: the flags were removed but the v7 / v2 branch was left unreachable; owner decision pending**), `TIME_GAP_V2` branch + `ctx.trainingBreak` in
+**I. Break / scheme facts** — **reversed by D14 (commit 6cf4b3ad):** summariser v7 / fact verifier v2 stay and are the
+unconditional live versions (`SUMMARIZER_PROMPT` = v7, `FACT_VERIFIER_V2` in the registry); summariser v6 and verifier
+v1 are deleted (their AC-FV-5 tests run against v7 / v2); the flag fields and `CategoryFlags` are gone and
+`gatedOperationValid` accepts `break` / `progression_scheme` with its shape checks and lifetimes;
+`domain/training/fact-formats.ts` moved to `domain/user/services/fact-formats.ts`. Deleted as planned: `TIME_GAP_V2` branch + `ctx.trainingBreak` in
 `agent.node.ts` / `state.ts` (≈ 60; T ≈ 250 in `compact.node`, `agent.node`, `manage-fact` tests).
 **J. Repository readers left without callers** — `findLastPerformancesByExercise`,
 `countRealPerformancesByExercise` (repo + port + test stubs).
@@ -284,7 +287,7 @@ lines for leg press, plank and cycling; RPE rules (mixed / none / all equal / wa
 15, 159 days and across a year; trend variants (weighted, per hand, reps-only, isometric, cardio, mixed → none);
 skipped and no-record lines; a set created after `now` never prints a negative age; the rendered text matches none of
 `/recommend|conservative|next step|stage|tier|LOAD PLAN|should|progress|regress/i`. `training-profile.unit.test.ts` —
-the owner's 11 facts (lower back ×3) → one lower-back line, no `break`/`progression_scheme`, no "confirmed"/dates,
+the owner's 11 facts (lower back ×3) → one lower-back line, no `break`, the scheme as the client's words, no "confirmed"/dates,
 registration goal only without facts. `coach.unit.test.ts` — rendered `coach` section ≤ 2 500 chars for `ru`, `uk`
 and `languageCode: null`; contains `<context>`, no `RULE`, `LOAD PLAN`, `EXERCISE HISTORY`. `episode.unit.test`
 additions — hand-off in `current` → `[]`; slice after the start call; not found → unchanged. Verify:
@@ -308,17 +311,17 @@ isometric-hold, exercise-history-lookup*). Verify: common checks incl. `db-test-
 **Task 3 — Delete the load engine and the flags (AC-CS1-3).** Groups A, B, C, F, G, H, I, J of § 2 and the
 load-plan scenario files of K. Planning keeps not advising loads (H: the flag-on branch becomes the only one).
 `.env.example` loses the three lines; `ConversationGraphDeps` loses the four fields; `compact.node.ts` /
-`verify-fact-operations.ts` select v6 / verifier v1 only (**as shipped the `CompactStepDeps` fields remain and nothing sets them — B1**). Tests: delete the whole-file ones listed; edit
+`verify-fact-operations.ts` use v7 / verifier v2 unconditionally (D14, commit 6cf4b3ad; first shipped as v6 / v1 with the flag fields left — B1). Tests: delete the whole-file ones listed; edit
 `compact.node.unit.test.ts`, `agent.node.unit.test.ts` (breaks block), `manage-fact.tool.unit.test.ts` (break /
 scheme describes), `log-set.tool.unit.test.ts` (advised / effort hint), `save-workout-plan` /
 `start-training-session` tool tests (only the no-`targetWeight` schema), `session-planning.v5.unit.test.ts`,
 `training-service-test-support.ts`, `review-prepare` / `conversation.graph` test stubs. Grep gate must be empty of code identifiers:
-`grep -rnE "LOAD_PLAN_|load-plan|load-facts|get_load_plan|loadPlan|advised|effortHint|BreakContext|trainingBreak|plannerRebind|LoadRecommendation" src tests evals scripts | grep -vE "SUMMARIZER_V7|FACT_VERIFIER_V2|loadPlanBreaks|loadPlanSuggestion"`
+`grep -rnE "LOAD_PLAN_|load-plan|load-facts|get_load_plan|loadPlan|advised|effortHint|BreakContext|trainingBreak|plannerRebind|LoadRecommendation" src tests evals scripts`
 (except the `load_recommendations` table in `infra/db/schema.ts` and migrations; remaining hits must be comments or
-prose — the stale comments are advisory R4). **`SUMMARIZER_V7`, `FACT_VERIFIER_V2`, `loadPlanBreaks` and
-`loadPlanSuggestion` are excluded from the gate pending the owner's B1 decision** (wire v7 / v2 unconditionally, or
-approve their removal): the original gate required them gone, but deleting them changes the facts pipeline, an
-owner-gated area. Verify: grep gate + common checks
+prose). The interim exclusion of `SUMMARIZER_V7`, `FACT_VERIFIER_V2`, `loadPlanBreaks` and `loadPlanSuggestion` is
+removed (D14): v7 / v2 are live and the two flag fields are gone. Run 2026-10-04 after commit 6cf4b3ad: no code
+identifier — the hits are `load-plan` plan references in comments and test titles, the word "advised" in fixture
+summary prose, and the `advised` column of `load_recommendations` in `schema.ts`. Verify: grep gate + common checks
 incl. `db-test-lock.sh npm run test:integration` (repository readers changed).
 
 **Task 4 — Delete the old prompts and blocks; fix the episode date (AC-CS1-4).** Groups D, E and the rest of K;
@@ -383,11 +386,13 @@ cardio kind. Verify (from `apps/server`):
 
 ## 6. Durable docs that will contradict the code after I1 (list only — owner approves amendments)
 
-- `docs/adr/0013-llm-core-target-architecture.md` § 3.4 (one message shape for every phase; block 2 facts /
-  directive / summaries in every phase; budget table — training history 16 000) and the § 3.4 note at line ~212
-  (`block.time_gap` v2 with `LOAD_PLAN_BREAKS`); `StoredEpisodeSummary.endedAt` = "time of the compaction".
-- `docs/adr/0009-user-long-term-memory.md` "Always injected — all stored facts … every phase … `## User Facts`"
-  (lines ~38, ~262, ~333) and the 2026-10-01 amendment (`break` / `progression_scheme` written by summariser v7).
+- **Amended 2026-10-04 (D14, commit 58be9360):** `docs/adr/0013-llm-core-target-architecture.md` § 3.4 —
+  "Amendment 2026-10-04 (coach-simplification I1, owner-approved D14) — the training phase" (training layout,
+  `memory: 'workout'`, no long-term block / directive / summaries for training, `longTerm` budget not applied,
+  training history 16k, `block.time_gap` v2 removed); `docs/adr/0009-user-long-term-memory.md` § Fact Categories —
+  "Amendment 2026-10-04 — unconditional extraction, constraints never cut" (v7 / v2 live, flags gone, `break` at the
+  14-day cap, `progression_scheme` shown in training's profile, constraints-first `getForPrompt`).
+- Still open in ADR-0013: `StoredEpisodeSummary.endedAt` = "time of the compaction".
 - `docs/domain/training.spec.md` BR-TRAINING-036, 037, 038, 039, 041, 042, 043, 044, 045 (040 stays).
 - `docs/ARCHITECTURE.md` lines 75–82 (`load-facts/`, `load-plan/` trees), 147 (training v11/v12 prompt chain), 183–184
   (`get-load-plan.tool.ts`), plus the older ~212, 461 (time-gap v2, summariser v7, assembler "user facts + course
@@ -395,12 +400,14 @@ cardio kind. Verify (from `apps/server`):
   `prompts/phases/training/coach.ts`, `workoutHistory` in `graph/episode.ts`, `scripts/print-training-request.ts`).
 - `docs/domain/conversation.spec.md` lines 33–37 (dialogue history / `## Previous episodes` for every phase — training
   now sees this workout's messages only).
-- `docs/CONTRIBUTING_AI.md` lines ~164 (the three `LOAD_PLAN_*` flags) and ~167 (summariser v7 / verifier v2).
+- `docs/CONTRIBUTING_AI.md` lines ~164 (the three `LOAD_PLAN_*` flags) and ~167 (summariser v7 / verifier v2 "selected
+  when `LOAD_PLAN_*` is on, otherwise v6 / v1" — now always v7 / v2, v6 / v1 deleted); `docs/ARCHITECTURE.md` lines
+  ~211–214 (summariser v6 "current", v7 flag-selected, verifier v1 / v2) for the same reason.
 - `docs/MANUAL_TEST_PLAN.md` line ~69 (`get_load_plan` in the training tool list).
 - **New behaviours to record as BR candidates** (owner approves ids and wording; `docs/domain/training.spec.md` /
   `conversation.spec.md`): (1) *workout-only memory* — the training phase sends this workout's messages only, with no
   user-facts block, course directive or episode summaries; (2) *`# Profile` rules* — constraints first, one fact per
-  `(category, muscleGroup)`, `break` / `progression_scheme` dropped, no confirmations or dates, facts created during the
+  `(category, muscleGroup)`, `break` dropped, `progression_scheme` as the client's words, no confirmations or dates, facts created during the
   workout excluded; (3) *`# Today` state lines* — `Check-in:` (first turn, constraint in profile, no planner
   warnings/notes), `Reported today:` (facts created during the session), `Planning warnings:` / `planning note:`
   (planner output verbatim); (4) *History habit line and Loads used* — habit line over the last ten workouts with ≥ 2
@@ -431,23 +438,24 @@ cardio kind. Verify (from `apps/server`):
 
 Verdict: **blocked (2026-10-04)** — four independent Opus zones (R1 architecture, R2 duplication, R3 correctness, R4
 documentation currency). No `- Review:` header line is added while blocked.
+Update 2026-10-04: B1–B5 are all fixed on the branch (B1/B2 under the owner's D14); D14 (2) — `getForPrompt` never cuts physical constraints — landed with B1 in 6cf4b3ad (DB test in `user-facts.repository.integration.test.ts`). A re-review decides the verdict.
 
 | ID | Zone | Where | Rule / source | Finding | Status |
 |----|------|-------|---------------|---------|--------|
-| B1 | R1, R2, R3 | `compact.node.ts:110-113,125-127,294-300,449-475`, `verify-fact-operations.ts:72,95`, `conversation.graph.ts` (pass-through removed) | ADR-0009 Amendment 2026-10-01; master plan § 3 facts owner-gated; CONTRIBUTING_AI YAGNI | "The flags are gone from config, deps and wiring, but `CompactStepDeps.loadPlanBreaks/loadPlanSuggestion` still exist and nothing sets them, so `categoryFlags` is now always false. Compaction therefore always uses summariser v6 / verifier v1, and `gatedOperationValid` drops every `break` / `progression_scheme` operation. Dev ran with all three flags true, so the facts pipeline changes on deploy." | **open — owner decision** (wire v7/v2 unconditionally, or approve removal) |
-| B2 | R1 | `prompts/phases/training/coach.ts:60` + `agent.node.ts:227-228`; `agent.node.ts:249-253` + `phase-spec.ts` (`memory`) + `training.spec.ts:109` | ADR-0013 § 3.4 (2026-09-30 amendment), INV-LLM-004 | "For training, user facts leave the long-term block and are rendered inside block 1 as the `profile` section of the phase prompt module … `memory: 'workout'` sends training a sliced history and no directive or summaries: a per-phase message shape. Merging it makes the code contradict the ADR." | **open — owner approval of the ADR-0013 § 3.4 amendment** |
+| B1 | R1, R2, R3 | `compact.node.ts:110-113,125-127,294-300,449-475`, `verify-fact-operations.ts:72,95`, `conversation.graph.ts` (pass-through removed) | ADR-0009 Amendment 2026-10-01; master plan § 3 facts owner-gated; CONTRIBUTING_AI YAGNI | "The flags are gone from config, deps and wiring, but `CompactStepDeps.loadPlanBreaks/loadPlanSuggestion` still exist and nothing sets them, so `categoryFlags` is now always false. Compaction therefore always uses summariser v6 / verifier v1, and `gatedOperationValid` drops every `break` / `progression_scheme` operation. Dev ran with all three flags true, so the facts pipeline changes on deploy." | **fixed on the branch (commit 6cf4b3ad) under D14**: v7 / v2 live unconditionally, flag fields, `CategoryFlags` and their branches removed, v6 / v1 deleted; AC-CS1-3 gate re-run without the exclusion |
+| B2 | R1 | `prompts/phases/training/coach.ts:60` + `agent.node.ts:227-228`; `agent.node.ts:249-253` + `phase-spec.ts` (`memory`) + `training.spec.ts:109` | ADR-0013 § 3.4 (2026-09-30 amendment), INV-LLM-004 | "For training, user facts leave the long-term block and are rendered inside block 1 as the `profile` section of the phase prompt module … `memory: 'workout'` sends training a sliced history and no directive or summaries: a per-phase message shape. Merging it makes the code contradict the ADR." | **fixed on the branch (commit 58be9360) under D14**: ADR-0013 § 3.4 amendment 2026-10-04 (training layout) + ADR-0009 amendment 2026-10-04 |
 | B3 | R3, R4 | this plan § 1 (:63, :74), § 3 (:184-201), § 5 (Tasks 1–5 only), § 6 | SUPERPOWERS_INTEGRATION rules 1–2 | "Tasks 6a and 6b (commits 73bd8b27, 1a496ce4) shipped with no task, no AC and no verification command … the only full spec is `data/coach-simplification/i0/final-shape.md`, which is gitignored." | **fixed on the branch (this commit)**: Tasks 6a/6b, § 1, § 3, § 6 amended; spec committed under `docs/superpowers/specs/` |
 | B4 | R3 | `scripts/print-training-request.ts:16-18` | AC-CS1-5 | "The work order asks the script to read real data via `--history <json> --today <json> --at <ISO> [--messages]`. It only offers built-in fixtures … Unknown flags are silently ignored … the size claim is unproven." | **fixed on the branch**: real-data inputs, loud failure on unknown flags; case 07 re-measured (§ 5 Task 5) |
 | B5 | R2 | `workout-session.repository.ts:391`, `workout-session.ports.ts:85`, `domain/training/place.ts:7-8` | YAGNI; plan § 2 J | "`distinctRecentPlaces`, `RECENT_PLACES_WINDOW` and `PLACE_AMBIGUOUS_THRESHOLD` have no production caller left." | **fixed on the branch**: deleted with their stubs and the integration block |
 
-Advisory — every item: status **backlog candidate, I4**.
+Advisory — every item: status **backlog candidate, I4**, except the two marked fixed (commit 6cf4b3ad, D14).
 
 | Zone | File / place | Finding |
 |------|--------------|---------|
 | R1 | `training-facts.ts` (612 lines) | Mixes block rendering, training-domain derivations (`computeWarmupHabit`, `collectLoadsUsed`, trend), fact-category interpretation and `relativeDay`; the derivations belong in `domain/training`. |
 | R1 | `get-exercise-history.tool.ts:11` | Imports `relativeDay` from a phase block; it belongs in `@shared/date-utils`. |
 | R1 | `LoadInput.coachReplied`, `episode.ts` | `coachReplied` is training-only on the generic loader input; `episode.ts` hard-codes `start_training_session`. |
-| R1 | `domain/training/fact-formats.ts` | Holds user-fact category formats (belongs to `domain/user`); exists only because group I was kept. |
+| R1 | `domain/training/fact-formats.ts` | Holds user-fact category formats (belongs to `domain/user`); exists only because group I was kept. **Fixed (6cf4b3ad): moved to `domain/user/services/fact-formats.ts`.** |
 | R1 | `print-training-request.ts` | Imports a `__tests__` fixture. |
 | R1 | `Check-in:` line in `# Today` | An instruction inside a "facts only" block — record as a named exception (D12) in the block header. |
 | R2 | `formatSetShort`, `formatSetData`, `format-exercise-summary` | Three renderers of the same `SetData` with disagreeing output (`(warm-up)` vs `(w/u)`); two sets-line renderers. |
@@ -460,7 +468,7 @@ Advisory — every item: status **backlog candidate, I4**.
 | R3 | `training.spec.ts:190-193` | `reportedToday` is split by `createdAt` only: an updated fact stays in `# Profile` (breaks the cached system message), boundary-compaction facts show as "Reported today". |
 | R3 | `training.spec.ts:151-161` | Loads 60 performances per exercise every turn for "Loads used", unbounded. |
 | R3 | `episode.ts:140-155` | After compaction folded the start call, planning/chat AI text counts as a coach reply and the check-in is suppressed; untested. |
-| R4 | `compact.node.ts`, `verify-fact-operations.ts`, `summarizer/index.ts`, `fact-verifier/index.ts`, `v7.ts`, `v2.ts` | Stale comments treat `LOAD_PLAN_BREAKS/SUGGESTION` as live. |
+| R4 | `compact.node.ts`, `verify-fact-operations.ts`, `summarizer/index.ts`, `fact-verifier/index.ts`, `v7.ts`, `v2.ts` | Stale comments treat `LOAD_PLAN_BREAKS/SUGGESTION` as live. **Fixed (6cf4b3ad), with the "return ladder" mentions.** |
 | R4 | this plan § 6 | Missed `ARCHITECTURE.md` lines 75-82, 147, 183-184 and the new files, and `docs/domain/conversation.spec.md:33-37` (added to § 6 in this commit). |
 | R4 | `npm run print-training-request` | Undocumented outside plans. |
 | R4 | `docs/STATE.md:270,359`, `docs/BACKLOG.md:880,883,892` | Still point to print-load-plan / get-load-plan (I4 routing). |
