@@ -276,13 +276,10 @@ Decisions:
   `2 errors`) — the nested ternary in `updateLastSet` became if/else, `let exerciseId = input.exerciseId`
   became object destructuring, `prettier --write` on search-exercises.tool.ts and log-set.tool.ts; the dead
   `if (resolved != null)` check is dropped (the resolver throws, never returns null).
-- (D, worker) T4 completeness, red first: `log-set.carry-over.unit.test.ts:174` invoking
-  `{exerciseId, weight: 0}` failed with `✖ Either reps, durationSeconds, or distanceKm must be provided` —
-  the decided llmError was unreachable, refine #2 rejected the payload before the handler. To make the
-  decision real, refine #2 now also admits a weight-only payload (refines do not serialize into the
-  model-visible JSON schema; snapshot unchanged) and the handler rejects an explicit weight with no
-  reps/duration/distance with `Invalid set data: weight <w> needs reps` — any weight value, so a bare
-  weight 60 cannot fall into the old `0 reps @ 60 kg` fallback either.
+- T4 completeness (item 3): closed as "already rejected by the schema refine; test added" — the review's
+  reachability claim was wrong (refine #2 blocks a weight-only payload before the handler), so the handler
+  guard and the refine relaxation from 25446488 were reverted; the AC-PTF-4 test now proves the schema
+  rejection ('Either reps, durationSeconds, or distanceKm must be provided') and that nothing is stored.
 - Test names now carry the AC id (AC-PTF-2/3/4) in the search-exercises, log-set.carry-over and
   training-service-update-last-set tests — renames only.
 - Verification: `npm run check-all` → `✖ 1248 problems (0 errors, 1248 warnings)`, `tsc --noEmit` clean;

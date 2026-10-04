@@ -77,12 +77,6 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         return systemError('No active training session found. Cannot log set.');
       }
 
-      // AC-PTF-4 completeness (review R3): an explicit weight with nothing to weigh — no reps,
-      // no duration, no distance — is invalid input, not a "0 reps @ <weight> kg" set.
-      if (input.weight != null && input.reps == null && input.durationSeconds == null && input.distanceKm == null) {
-        return llmError(`Invalid set data: weight ${input.weight} needs reps`);
-      }
-
       // Build setData from flat fields — avoids LLM confusion with nested object schemas
       const baseSetData = (() => {
         if (input.distanceKm != null) {
@@ -305,16 +299,9 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         .refine(d => d.exerciseId !== undefined || d.exerciseName !== undefined, {
           message: 'Either exerciseId or exerciseName must be provided',
         })
-        .refine(
-          d =>
-            d.reps !== undefined ||
-            d.durationSeconds !== undefined ||
-            d.distanceKm !== undefined ||
-            d.weight !== undefined,
-          {
-            message: 'Either reps, durationSeconds, or distanceKm must be provided',
-          },
-        ),
+        .refine(d => d.reps !== undefined || d.durationSeconds !== undefined || d.distanceKm !== undefined, {
+          message: 'Either reps, durationSeconds, or distanceKm must be provided',
+        }),
     },
   );
 }

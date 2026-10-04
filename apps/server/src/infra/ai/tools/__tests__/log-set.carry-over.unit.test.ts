@@ -167,13 +167,13 @@ describe('log-set.tool — weight carried over from the previous set', () => {
 
   // AC-PTF-4 (plan-and-tool-fixes T4): an explicit weight of 0 means a bodyweight set —
   // after a weighted pull-up, weight 0 must not store "@ 0 kg" and must not carry.
-  it('log_set with weight 0 and no reps/duration is rejected, not stored as "0 reps @ 0 kg" (AC-PTF-4)', async () => {
+  it('log_set with weight 0 and no reps/duration/distance is rejected by the schema, nothing stored (AC-PTF-4)', async () => {
     const trainingService = makeTrainingService();
     const { byName, config } = makeDeps(trainingService);
 
-    const ret = (await byName('log_set').invoke({ exerciseId: EX_ID, weight: 0 }, config)) as ToolReturn;
-
-    expect(ret).toEqual({ ok: false, kind: 'llm_error', message: 'Invalid set data: weight 0 needs reps' });
+    await expect(byName('log_set').invoke({ exerciseId: EX_ID, weight: 0 }, config)).rejects.toThrow(
+      /Either reps, durationSeconds, or distanceKm must be provided/,
+    );
     expect(trainingService.logSetWithContext).not.toHaveBeenCalled();
   });
 
