@@ -7,8 +7,10 @@
 - Reference rendering: `data/coach-simplification/i0/cases/07/input.md` (gitignored, local only) and
   `data/coach-simplification/i0/judge-notes.md`. Durable specs are NOT edited in I1 (§ 6 lists them for the owner), except the ADR-0013 § 3.4 and ADR-0009 amendments the owner approved in D14 (commit 58be9360).
 - **Spec:** the implementation spec of Tasks 6a/6b (Today / History rendering, profile, the frozen prompt) is
-  committed as `docs/superpowers/specs/2026-10-04-training-turn-shape.md`. It is the spec the code follows where §§ 1.1–1.2
-  and 3 below differ from it; the gitignored `data/` evidence may be cited but is never the only spec.
+  committed as `docs/superpowers/specs/2026-10-04-training-turn-shape.md`. It is the **i0 design reference, not the spec
+  the code follows**: the code diverges from it (its own "Divergences from the shipped code" list). Where §§ 1.1–1.2 and 3
+  below ("as shipped") differ from the spec, **this plan's sections are authoritative**; the gitignored `data/`
+  evidence may be cited but is never the only spec.
 
 ## 1. Target — the training request after I1
 
@@ -287,11 +289,13 @@ lines for leg press, plank and cycling; RPE rules (mixed / none / all equal / wa
 15, 159 days and across a year; trend variants (weighted, per hand, reps-only, isometric, cardio, mixed → none);
 skipped and no-record lines; a set created after `now` never prints a negative age; the rendered text matches none of
 `/recommend|conservative|next step|stage|tier|LOAD PLAN|should|progress|regress/i`. `training-profile.unit.test.ts` —
-the owner's 11 facts (lower back ×3) → one lower-back line, no `break`, the scheme as the client's words, no "confirmed"/dates,
-registration goal only without facts. `coach.unit.test.ts` — rendered `coach` section ≤ 2 500 chars for `ru`, `uk`
+the owner's 11 facts (lower back ×3) → one lower-back line, no `break`, the scheme as the client's words, no "confirmed"/dates;
+no registration goal is rendered. `coach.unit.test.ts` — rendered `coach` section ≤ 2 500 chars for `ru`, `uk`
 and `languageCode: null`; contains `<context>`, no `RULE`, `LOAD PLAN`, `EXERCISE HISTORY`. `episode.unit.test`
 additions — hand-off in `current` → `[]`; slice after the start call; not found → unchanged. Verify:
 `NODE_ENV=test npx jest src/infra/ai/prompts src/infra/ai/graph/__tests__` + common checks (scenarios not needed).
+
+Verified 2026-10-04 @ c0694e7b: no per-task count recorded — see Review pass 2 totals (branch: unit 1 796 passed, integration 657 passed + 1 todo, scenarios count not recorded).
 
 **Task 2 — Switch the training phase (AC-CS1-2).** Files: `graph/phase-spec.ts` (`memory`), `graph/nodes/agent.node.ts`
 (the `'workout'` branch), `graph/phases/training.spec.ts` (prompt `TRAINING_COACH`, new loader and `TrainingData`,
@@ -307,6 +311,8 @@ tool tests where they pin the edited text, `evals/snapshots` message-assembly + 
 `-u`), `evals/scenarios/b-full-workout.scenario.ts` and `c-catch-up-logging.scenario.ts` expected headers
 (`# Today`, `# History`). Run the scenario suite (b-full-workout, c-catch-up, retro-timestamps, set-kind,
 isometric-hold, exercise-history-lookup*). Verify: common checks incl. `db-test-lock.sh npm run test:scenarios`.
+
+Verified 2026-10-04 @ c0694e7b: no per-task count recorded — see Review pass 2 totals (branch: unit 1 796 passed, integration 657 passed + 1 todo, scenarios count not recorded).
 
 **Task 3 — Delete the load engine and the flags (AC-CS1-3).** Groups A, B, C, F, G, H, I, J of § 2 and the
 load-plan scenario files of K. Planning keeps not advising loads (H: the flag-on branch becomes the only one).
@@ -324,6 +330,8 @@ identifier — the hits are `load-plan` plan references in comments and test tit
 summary prose, and the `advised` column of `load_recommendations` in `schema.ts`. Verify: grep gate + common checks
 incl. `db-test-lock.sh npm run test:integration` (repository readers changed).
 
+Verified 2026-10-04 @ c0694e7b: no per-task count recorded — see Review pass 2 totals (branch: unit 1 796 passed, integration 657 passed + 1 todo, scenarios count not recorded).
+
 **Task 4 — Delete the old prompts and blocks; fix the episode date (AC-CS1-4).** Groups D, E and the rest of K;
 move `formatSetData`/`formatExerciseSets` to `blocks/set-format.ts` (update `log-set.tool.ts`,
 `get-exercise-history.tool.ts`); `get_exercise_history` dates via `relativeDay`; remove training cases from
@@ -332,6 +340,8 @@ allowlist; rewrite `prompt-cache-harness.ts` on a plain session fixture. Fix `co
 unit test: an episode whose last user message is 2 days old renders `2 days ago`, not `today`. Grep gate:
 `grep -rnE "TRAINING_V[0-9]|WORKOUT OVERVIEW|EXERCISE HISTORY|RECENT WORKOUTS|SESSION GUIDE|buildWorkoutOverview|TRAINING_CLIENT_V1" src tests evals`
 → empty. Verify: grep gate + common checks incl. scenarios.
+
+Verified 2026-10-04 @ c0694e7b: no per-task count recorded — see Review pass 2 totals (branch: unit 1 796 passed, integration 657 passed + 1 todo, scenarios count not recorded).
 
 **Task 5 — Print and measure the assembled request (AC-CS1-5).** New `apps/server/scripts/print-training-request.ts`
 (+ `npm run print-training-request`), offline — no DB, no model: `--history <json>` (`user`, `facts`, `lastWorkout`,
@@ -345,6 +355,8 @@ ignored unknown flags). It runs the real `TRAINING_COACH`, `TRAINING_TODAY_V1`, 
 history), total, estimated tokens (`token-estimator.ts`), and the tool-schema characters separately.
 `training-request.size.unit.test.ts` on the in-memory fixture pins system ≤ 3 500 chars, context ≤ 6 000 chars.
 Verify: script runs; common checks; `node scripts/state.mjs --check`.
+
+Verified 2026-10-04 @ c0694e7b: no per-task count recorded — see Review pass 2 totals (branch: unit 1 796 passed, integration 657 passed + 1 todo, scenarios count not recorded).
 
 **Measured (2026-10-04, real case-07 moment, Thursday Oct 1 18:59 Asia/Manila):** `--history/--today/--at/--messages`
 over the real data (history and today from `data/coach-simplification/i0/cases/07/input.md`; messages = the real
@@ -371,6 +383,8 @@ legacy set without a kind is never labelled); the planner's **warnings and notes
 `NODE_ENV=test npx jest src/infra/ai/prompts/blocks/__tests__/training-facts.unit.test.ts src/infra/ai/prompts/phases/training/__tests__/coach.unit.test.ts src/infra/ai/graph/phases/__tests__/phase-specs.unit.test.ts`
 + `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run test:scenarios` + the common checks.
 
+Verified 2026-10-04 @ c0694e7b: no per-task count recorded — see Review pass 2 totals (branch: unit 1 796 passed, integration 657 passed + 1 todo, scenarios count not recorded).
+
 **Task 6b — Check-in, Reported-today and the frozen prompt (AC-CS1-7).** Commit `1a496ce4`. Goal: the two state
 lines of `# Today` (D12, D13), the prompt synced to the frozen text, the habit line replacing the cardio warm-up's own
 history block. Files: `prompts/blocks/training-facts.ts`, `prompts/phases/training/coach.ts`, `graph/episode.ts`
@@ -384,6 +398,8 @@ cardio kind. Verify (from `apps/server`):
 `NODE_ENV=test npx jest src/infra/ai/prompts/blocks/__tests__/training-facts.unit.test.ts src/infra/ai/prompts/phases/training/__tests__/coach.unit.test.ts src/infra/ai/graph/__tests__/episode.unit.test.ts src/infra/ai/graph/phases/__tests__/phase-specs.unit.test.ts`
 + `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run test:scenarios` + the common checks.
 
+Verified 2026-10-04 @ c0694e7b: no per-task count recorded — see Review pass 2 totals (branch: unit 1 796 passed, integration 657 passed + 1 todo, scenarios count not recorded).
+
 ## 6. Durable docs that will contradict the code after I1 (list only — owner approves amendments)
 
 - **Amended 2026-10-04 (D14, commit 58be9360):** `docs/adr/0013-llm-core-target-architecture.md` § 3.4 —
@@ -394,10 +410,16 @@ cardio kind. Verify (from `apps/server`):
   14-day cap, `progression_scheme` shown in training's profile, constraints-first `getForPrompt`).
 - Still open in ADR-0013: `StoredEpisodeSummary.endedAt` = "time of the compaction".
 - `docs/domain/training.spec.md` BR-TRAINING-036, 037, 038, 039, 041, 042, 043, 044, 045 (040 stays).
-- `docs/ARCHITECTURE.md` lines 75–82 (`load-facts/`, `load-plan/` trees), 147 (training v11/v12 prompt chain), 183–184
-  (`get-load-plan.tool.ts`), plus the older ~212, 461 (time-gap v2, summariser v7, assembler "user facts + course
-  directive" for every phase) — and the files I1 adds (`prompts/blocks/training-facts.ts`, `training-profile.ts`,
+- `docs/ARCHITECTURE.md` (line numbers verified in pass 2): 75 (`load-recommendation.ports.ts`), 78–82 (`load-facts/`,
+  `load-plan/` trees), 147 (`get-load-plan.tool.ts`), 150–155 (`infra/ai/load-facts/`), 166 (`effort.ts` note), 183
+  (training `v1.ts`), 184–186 (training v11 / v12 prompt chain), 187 ("`*/v2.ts` current"), 196–205 (deleted blocks:
+  `time-gap.v2.ts`, `training-exercise-history.v1.ts`, `training-load-plan.v1/v2.ts`, `training-workout-overview.*`),
+  plus the older ~212, 461 (summariser v7, assembler "user facts + course directive" for every phase) — and the
+  files I1 adds (`prompts/blocks/training-facts.ts`, `training-profile.ts`,
   `prompts/phases/training/coach.ts`, `workoutHistory` in `graph/episode.ts`, `scripts/print-training-request.ts`).
+- `docs/adr/0013-llm-core-target-architecture.md` § 10 capability table, line ~623 ("Progress awareness between
+  sessions": `findLastPerformancesByExercise` and `training.exercise_history` / `training.recent_workouts` no longer
+  exist — the training phase renders `training.history` per today's exercise).
 - `docs/domain/conversation.spec.md` lines 33–37 (dialogue history / `## Previous episodes` for every phase — training
   now sees this workout's messages only).
 - `docs/CONTRIBUTING_AI.md` lines ~164 (the three `LOAD_PLAN_*` flags) and ~167 (summariser v7 / verifier v2 "selected
@@ -472,3 +494,31 @@ Advisory — every item: status **backlog candidate, I4**, except the two marked
 | R4 | this plan § 6 | Missed `ARCHITECTURE.md` lines 75-82, 147, 183-184 and the new files, and `docs/domain/conversation.spec.md:33-37` (added to § 6 in this commit). |
 | R4 | `npm run print-training-request` | Undocumented outside plans. |
 | R4 | `docs/STATE.md:270,359`, `docs/BACKLOG.md:880,883,892` | Still point to print-load-plan / get-load-plan (I4 routing). |
+
+### Pass 2 (2026-10-04)
+
+Re-review of the branch at c0694e7b by four Opus zones (R1–R4). Pass-1 blockers B1–B5 are closed; one new blocker, B6.
+
+- R1: B1/B2 closed — the code matches the amended ADR-0013 § 3.4 and ADR-0009.
+- R2: B1/B5 closed — grep shows no `loadPlanBreaks|loadPlanSuggestion|CategoryFlags|LOAD_PLAN_|distinctRecentPlaces|RECENT_PLACES_WINDOW|PLACE_AMBIGUOUS_THRESHOLD`.
+- R3: B1/B3/B4 closed — suites re-run by the reviewer: unit 1 796, integration 657 + 1 todo, gate clean; `print-training-request` reproduces 14 098 chars / ≈ 4 185 tokens.
+- R4: B3 closed.
+
+| ID | Zone | Where | Rule / source | Finding | Status |
+|----|------|-------|---------------|---------|--------|
+| B6 | R4 | this plan header (:9-11) vs the spec | SUPERPOWERS_INTEGRATION (a plan must not point at a spec the code does not follow) | The header said the committed spec "is the spec the code follows where §§ 1.1–1.2 and 3 differ", but the spec diverges from what shipped (profile placement, Today labels, trend wording, set labels, off-plan header, prompt length). | **fixed on the branch (this commit)**: precedence reversed — the plan's as-shipped §§ 1.1–1.2 and 3 are authoritative, the spec is the i0 design reference and lists its divergences under its header |
+
+Pass-2 advisories — every item: **backlog candidate, I4**, except those marked fixed.
+
+| Zone | File / place | Finding |
+|------|--------------|---------|
+| R1 | `user-facts.ports.ts:208-213` | The port contract still says "capped" while physical constraints are uncapped. |
+| R1, R2 | `gatedOperationValid` | The name is stale (it no longer gates on flags). |
+| R1 | `training.spec.ts:107` | `longTerm: 1500` is dead data (the long-term budget is not applied to training). |
+| R2 | `print-training-request.ts:204-221` | Rebuilds history rows by hand instead of the fixture's `historyOf`; the fixture's `exerciseOf` / `performance` / `Row` / `historyOf` exports are unused outside it. |
+| R2 | `getForPrompt` constraint query | Near-copy of `getConstraints` (hard-coded `'physical_constraint'`). |
+| R2 | constraint splice-back vs training reorder | Two orderings of the same constraints (low value). |
+| R3 | `print-training-request.ts` | A strength set without `weight` prints `12×0`; the script's default `coachReplied` counts planning replies (the real loader uses `hasCoachReply`). |
+| R3 | Tasks 6a / 6b tests | They cite D12 / D13, not AC-CS1-6 / AC-CS1-7. |
+| R3 | `getForPrompt` | `cap` is no longer an upper bound for every caller; untested outside the training path. |
+| R4 | this plan § 6 ADR-0013 capability table (~623), ARCHITECTURE.md line references, Task 1 "registration goal only without facts" | **Fixed in pass 2** (this commit). |

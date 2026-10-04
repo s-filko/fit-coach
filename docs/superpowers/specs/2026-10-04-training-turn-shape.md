@@ -2,6 +2,37 @@
 
 # Final shape of a training turn — implementation spec (I0 result, 2026-10-03)
 
+## Divergences from the shipped code (2026-10-04)
+
+This file is the i0 design reference. The code differs from it; on any difference **the plan's as-shipped §§ 1.1–1.2
+and 3 (`docs/superpowers/plans/coach-simplification-i1.md`) are authoritative**. Verified against
+`training-facts.ts`, `training-profile.ts` and `phases/training/coach.ts`:
+
+- **Message shape (intro, § 5).** No `# Profile` / `# This workout so far` / `# Client's message now` sections in one user
+  message: the profile is a section of the SYSTEM message (after the prompt), the workout is the real message list
+  without headings or `[HH:MM]` stamps, `<context>` (`# Today`, `# History`, time-gap note, NOW line last) rides in the
+  client's current message.
+- **Profile (§ 2).** Placement in the system message; one line `<firstName>, <fitnessLevel>` — no "speaks Russian"
+  language line; not capped at 6 lines (one line per deduplicated fact, constraints first; `- No profile data yet.` when
+  empty); `progression_scheme` renders as `Progression preference: <words>`; a long-term fact's phase note in parentheses.
+- **Today (§ 3).** Header `# Today (sets as reps×kg)`; no `Now: <Weekday> <Mon D>, HH:MM.` line (the time is the NOW
+  line, last in `<context>`) and no `Plan:` line; instead `Plan and sets so far:` with
+  `- <Name> [id <uuid>] — plan 4×12 — in progress|done|skipped|nothing yet: <sets>` (not `Logged so far:`); optional
+  `Place:`, `Previous workout:`, `Planning warnings:`, ` — planning note:`; off-plan exercises under `Off plan:` (no
+  `(added, kg per hand)`); `Reported today:` and `Check-in:` come after the off-plan block, not right after Plan; one
+  `Check-in:` line per constraint muscle group.
+- **Effort and set labels.** `(2–3 reps left, his words)`, `(to failure)`, `(drop set)`, `(finisher)` and
+  `<N> s each side` do not ship — only `(RPE x)`, `(all RPE x)`, `(no RPE recorded)` (History only) and a `set_kind`-only
+  `(warm-up)`; per-hand weight prints `10×12 per hand`.
+- **History (§ 4).** Off-plan header is `<Name> (today off plan)` — no `(not in today's plan; <unit note>; only N
+  earlier records)`; months in `about <N> months ago` are words up to twelve; the trend wording is `top weight` (not
+  `heaviest weight`), with `working sets`, `reps per working set`, `weight × reps` (reps-only: `working sets`, `reps per
+  set`, `total reps`; isometric: `hold per set`, `sets`); a skip newer than the newest performance prints
+  `- skipped <date> (planned, not done)`, no performance `- no earlier record`.
+- **Prompt (§ 1).** Text identical to the code, but **2 496 characters** for `ru` (not 2 497).
+- **Not in the spec, shipped:** the exercise `[id <uuid>]` in Today, the `Previous workout:` line, the stale-session fact
+  line, `Planning warnings:`.
+
 Prompt frozen by D13 (round-9 text). Measured over six full-session replays (3× `--effort low`, 3× default):
 9.7 rubric-v2 faults per 21-turn session on average (range 8–11), no arithmetic errors. See `session/factcheck.run10.md`;
 owner comments in `owner-comments-run3a.md`. Reference implementation of the rendering: `session/run.py`. Examples below use

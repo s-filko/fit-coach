@@ -414,6 +414,9 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   owner-gated area (user facts pipeline), so both "delete it" and "keep it" are defensible and the zones have no
   severity for "blocking until the owner decides" — B1 had to be filed as an open owner decision instead of a
   blocking/advisory finding. Proposed: a status "blocking — owner decision" in the severity contract. Runs: coach-simplification-i1 2026-10-04 (R2).
+- [×1] Plan tasks name verification commands but record no run output, so a reviewer cannot tell whether they were run;
+  the reviewer must re-run them (R3 did: unit 1 796, integration 657 + 1 todo). Cheap fix: one "Verified <date> @
+  <commit>: counts" line per task. Runs: coach-simplification-i1 2026-10-04 pass 2 (R3).
 
 ## Rule candidates
 
@@ -947,3 +950,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
 - [×1] A spec a task implements must be committed; gitignored evidence may be cited but is never the only spec. The
   only full spec of I1 Tasks 6a/6b lived in a gitignored `data/` file. Proposed for `SUPERPOWERS_INTEGRATION.md`.
   Runs: coach-simplification-i1 2026-10-04 (R4).
+- [×1] A plan that commits a design/spec file next to its own as-shipped sections must say which wins on divergence, and
+  must not point at a spec the code does not follow (I1's header said the spec "is the spec the code follows" while the
+  code diverged). Proposed for `SUPERPOWERS_INTEGRATION.md`. Runs: coach-simplification-i1 2026-10-04 pass 2 (R4).
