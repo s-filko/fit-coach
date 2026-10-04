@@ -552,3 +552,8 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   not expressible; `weight: 0` converts to "@ 0 kg". **Next:** owner's yes on push + dev deploy; then the prompt
   work of D15 (2). Cleanup owner-gated: worktree `.claude/worktrees/agent-a2bb790986f85bbfe`, branches
   `plan/coach-simplification-i2`, `worktree-agent-a2bb790986f85bbfe`.
+- 2026-10-05 01:57 Manila — **D15 weight fix deployed to dev** (run 37222141644, `workflow_dispatch` at `08004911` —
+  the pushed head was a `[skip ci]` docs commit again; success 5m27s, `health` 200). Merged temporary worktrees and
+  branches removed on the owner's order (i1, i2, load-plan, load-plan-fixes, load-plan-t3, the agent worktree; remote
+  `plan/load-plan`, `plan/load-plan-fixes`). **Next:** D15 (2) — training-prompt changes on the eval set, owner sees
+  the result before merge.
