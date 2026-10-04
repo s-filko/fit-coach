@@ -51,13 +51,7 @@ export function buildFinishTrainingTool(deps: FinishTrainingToolDeps) {
 
         const feedbackNote = input.feedback ? ` Feedback: "${input.feedback}".` : '';
         return {
-          outcome: ok(
-            [
-              `Session completed in ${duration} min.${feedbackNote}`,
-              'Now congratulate the user in their language',
-              '— summarize the workout briefly and wish them recovery.',
-            ].join(' '),
-          ),
+          outcome: ok(`Session completed in ${duration} min.${feedbackNote}`),
           update: {
             pendingTransition: {
               toPhase: 'chat',

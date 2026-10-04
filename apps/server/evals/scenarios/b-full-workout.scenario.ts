@@ -151,7 +151,7 @@ export const setupSteps: Scenario['steps'] = [
           '=== ACTIVE WORKOUT PLAN ===',
           'Plan: Upper/Lower Split',
           '### Upper A (key: upper_a)',
-          `[ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3x8-10 @ 80kg (rest: 120s)`,
+          `[ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3x8-10 (rest: 120s)`,
           // AC-CC-1 (fixed): the transition keeps the immediately preceding turn verbatim.
           GREETING_REQUEST,
           PLANNING_FINAL_TEXT,
@@ -223,21 +223,16 @@ export const scenario: Scenario = {
       expect: {
         seen: {
           mustMatch: [
-            '=== WORKOUT OVERVIEW ===',
-            'SESSION GUIDE',
-            'Upper A · ~60 min',
-            `[ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3×8-10 @ 80 kg`,
-            `[ID:${PULL_UPS_ID}] Pull-ups: 3×6-8`,
-            'ACTIVE: none — log any set to start an exercise',
-            // BUG-030 fix (training-exercise-history plan): the same-key "previous session" block
-            // is replaced by per-exercise history (anchored 2026-09-16, 4d before T0) and the
-            // 7-day fatigue-context feed.
-            "=== EXERCISE HISTORY (today's exercises — last completed performance) ===",
-            `Barbell Bench Press [ID:${BENCH_PRESS_ID}] — last done 2026-09-16 · 4d ago (Wed)`,
-            '  Set 1: 8 reps @ 80 kg',
-            '  Set 2: 8 reps @ 80 kg',
-            `Pull-ups [ID:${PULL_UPS_ID}] — no completed record`,
-            '=== RECENT WORKOUTS (last 7 days, fatigue context) ===',
+            '# Today (sets as reps×kg)',
+            `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
+            `- Pull-ups [id ${PULL_UPS_ID}] — plan 3×6-8 — nothing yet`,
+            // coach-simplification I1: per-exercise History (the last performances with dates, anchored
+            // 2026-09-16, 4d before T0) is the training history block.
+            '# History (before today)',
+            'Barbell Bench Press (today 3×8-10)',
+            '4 days ago, Wednesday Sep 16: 8×80, 8×80',
+            'Pull-ups (today 3×6-8)',
+            '- no earlier record',
             // AC-CC-1 (fixed): the transition keeps the "да, поехали" turn verbatim.
             LETS_GO,
             START_FINAL_TEXT,
@@ -271,10 +266,7 @@ export const scenario: Scenario = {
       ],
       expect: {
         seen: {
-          mustMatch: [
-            `[IN PROGRESS] [ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3×8-10 @ 80 kg (1/3 sets)`,
-            `ACTIVE: Barbell Bench Press [ID:${BENCH_PRESS_ID}] — 1 set(s) done, 2 remaining per plan.`,
-          ],
+          mustMatch: [`- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 8×80`],
         },
         tools: { must: ['log_set'] },
         delivered: { mustMatch: [LOGGED_TEXT, AFTER_BENCH_2_TEXT] },
@@ -339,8 +331,8 @@ export const scenario: Scenario = {
       expect: {
         seen: {
           mustMatch: [
-            `[DONE       ] [ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3×8-10 @ 80 kg (2/3 sets)`,
-            `[IN PROGRESS] [ID:${PULL_UPS_ID}] Pull-ups: 3×6-8 (1/3 sets)`,
+            `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — done: 8×80, 8×80`,
+            `- Pull-ups [id ${PULL_UPS_ID}] — plan 3×6-8 — in progress: 8 reps`,
           ],
         },
         tools: { must: ['log_set'] },

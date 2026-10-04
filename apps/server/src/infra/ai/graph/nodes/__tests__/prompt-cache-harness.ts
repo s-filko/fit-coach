@@ -8,15 +8,9 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
-import { computeLoadFacts } from '@domain/training/load-facts';
-import { LEG_PRESS_ROWS, ownerNow } from '@domain/training/load-facts/__tests__/fixtures';
-import { defaultProgression } from '@domain/training/load-plan';
-
 import { buildAgentNode } from '@infra/ai/graph/nodes/agent.node';
 import type { ConversationGraphDeps, PhaseSpec } from '@infra/ai/graph/phase-spec';
 import { buildTrainingSpec, buildTrainingToolPolicy, type TrainingData } from '@infra/ai/graph/phases/training.spec';
-import { sessionRow } from '@infra/ai/load-facts/__tests__/rows';
-import { EFFORT_QUESTION } from '@infra/ai/prompts/effort';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 import { type CannedResponse, makeCapturingModel, type WireRequest } from '../../../context/__tests__/request-capture';
@@ -61,7 +55,7 @@ export function makeSpec(): PhaseSpec<Data> {
     tools: TOOLS as never,
     toolPolicy: buildTrainingToolPolicy(TOOLS as never),
     loadContext: async () => ({ ok: true as const, data: state.data }),
-    contextBlocks: [{ id: 'overview', version: 'v1', render: d => `WORKOUT OVERVIEW\n${d.overview}` }],
+    contextBlocks: [{ id: 'overview', version: 'v1', render: d => `TODAY\n${d.overview}` }],
     modelProfile: 'default',
     budget: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 100 },
   };
@@ -119,7 +113,7 @@ export async function run(
     now: Date;
     lastUserMessageAt?: string | null;
     responses?: CannedResponse[];
-    /** A different phase spec (the real training spec with the LOAD_PLAN flags on) and its deps. */
+    /** A different phase spec (e.g. the real training spec) and its deps. */
     spec?: PhaseSpec<never>;
     deps?: ConversationGraphDeps;
   },
@@ -135,108 +129,82 @@ export async function run(
 export const lastHumanIndex = (r: WireRequest): number => r.messages.map(m => m.role).lastIndexOf('user');
 
 /**
- * The REAL training spec (tools, prompt selection, context blocks) with LOAD_PLAN_SUGGESTION + LOAD_PLAN_BREAKS +
- * LOAD_PLAN_PLANNER_REBIND on — training v12 and LOAD PLAN v2 — over fixed `TrainingData` (`loadContext` is replaced;
- * nothing else is). The deps carry only what `buildTrainingSpec` reads to construct the tools.
+ * The REAL training spec (tools, prompt, `# Today` / `# History` blocks, `memory: 'workout'`) over fixed
+ * `TrainingData` (`loadContext` is replaced; nothing else is). The deps carry only what `buildTrainingSpec` reads to
+ * construct the tools.
  */
-export function makeLoadPlanTrainingSpec(data: () => TrainingData): {
+export function makeRealTrainingSpec(data: () => TrainingData): {
   spec: PhaseSpec<never>;
   deps: ConversationGraphDeps;
 } {
-  const flagged = {
+  const real = {
     ...(deps() as unknown as Record<string, unknown>),
-    loadPlanSuggestion: true,
-    loadPlanBreaks: true,
-    loadPlanPlannerRebind: true,
     trainingService: {},
     exerciseRepository: {},
     embeddingService: {},
     workoutSessionRepo: {},
   } as unknown as ConversationGraphDeps;
-  const real = buildTrainingSpec(flagged);
-  const spec = { ...real, loadContext: async () => ({ ok: true as const, data: data() }) };
-  return { spec: spec as unknown as PhaseSpec<never>, deps: flagged };
+  const spec = { ...buildTrainingSpec(real), loadContext: async () => ({ ok: true as const, data: data() }) };
+  return { spec: spec as unknown as PhaseSpec<never>, deps: real };
 }
 
-// --- the real training phase with the LOAD_PLAN flags on (training v12 + LOAD PLAN v2) ---
+const LEG_PRESS_ID = '44444444-4444-4444-8444-444444444444';
 
-const LEG_PRESS = {
-  id: '44444444-4444-4444-8444-444444444444',
-  name: '45° Leg Press',
-  muscles: [['quads', 'primary']] as never,
-};
-
-/** TrainingData with a real LOAD PLAN entry (owner leg-press history); `sets` = today's logged sets on the exercise. */
-export function loadPlanTrainingData(todaySets: number): TrainingData {
-  const past = LEG_PRESS_ROWS.filter(r => r.date <= '2026-09-21').map(r => {
-    const at = new Date(`${r.date}T04:00:00Z`);
-    return sessionRow(`s-${r.date}`, new Date(at.getTime() - 3_600_000), [
-      {
-        rowId: `r-${r.date}`,
-        ...LEG_PRESS,
-        targetReps: r.targetReps,
-        sets: r.sets.map(([weight, reps], i) => ({ weight, reps, at: new Date(at.getTime() + i * 120_000) })),
-      },
-    ]);
+/** Plain TrainingData: a leg-press plan, `todaySets` sets logged so far, one earlier performance in the history. */
+export function trainingData(todaySets: number): TrainingData {
+  const at = new Date('2026-09-29T10:00:00Z');
+  const set = (n: number, weight: number) => ({
+    id: `set-${n}`,
+    sessionExerciseId: 'se-1',
+    setNumber: n,
+    rpe: 8,
+    userFeedback: null,
+    createdAt: at,
+    completedAt: null,
+    setData: { type: 'strength' as const, reps: 12, weight, weightUnit: 'kg' as const },
   });
-  const now = ownerNow('2026-09-21', 4);
-  const session = sessionRow(
-    'today',
-    now,
-    [
+  const session = {
+    id: 'today',
+    createdAt: at,
+    startedAt: at,
+    updatedAt: T0,
+    place: null,
+    sessionPlanJson: {
+      exercises: [{ exerciseId: LEG_PRESS_ID, exerciseName: '45° Leg Press', targetSets: 4, targetReps: '12' }],
+    },
+    exercises: [
       {
-        rowId: 'rt',
-        ...LEG_PRESS,
-        targetReps: '10-12',
-        sets: Array.from({ length: todaySets }, (_v, i) => ({
-          weight: 120,
-          reps: 12,
-          at: new Date(now.getTime() + i * 120_000),
-        })),
+        exerciseId: LEG_PRESS_ID,
+        status: 'in_progress',
+        exercise: { name: '45° Leg Press' },
+        sets: Array.from({ length: todaySets }, (_v, i) => set(i + 1, 120)),
       },
     ],
-    { status: 'in_progress' },
-  );
-  const performances = past.map(p => ({
-    id: p.exercises[0].id,
-    sessionId: p.id,
-    place: null,
-    startedAt: p.startedAt,
-    performedAt: p.completedAt ?? p.startedAt,
-    targetReps: p.exercises[0].targetReps,
-    sets: p.exercises[0].sets.map(s => ({
-      setData: s.setData,
-      setKind: s.setKind ?? null,
-      rpe: s.rpe,
-      userFeedback: s.userFeedback,
-      createdAt: s.createdAt,
-    })),
-    otherSets: [],
-  }));
-  const exercise = {
-    id: LEG_PRESS.id,
-    name: LEG_PRESS.name,
-    exerciseType: 'strength' as const,
-    equipment: 'machine' as const,
-    muscles: [{ muscleGroup: 'quads' as const, involvement: 'primary' as const }],
   };
-  const facts = computeLoadFacts(
-    exercise,
-    performances as never,
-    { sessionId: 'today', place: null, startedAt: now, targetReps: '10-12', sets: [], otherSets: [] },
-    { constraints: [], equipmentFacts: [], workouts: [] },
-    now,
-    null,
-  );
   return {
     session,
-    exerciseHistory: [],
-    recentWorkouts: [],
-    todayMuscles: ['quads'],
-    recentPlacesCount: 0,
-    loadPlan: [{ exercise, facts, returnBranch: { ladder: null, breakReason: 'unknown' } }],
-    progression: defaultProgression(null),
+    history: [
+      {
+        exerciseId: LEG_PRESS_ID,
+        exerciseName: '45° Leg Press',
+        plannedText: '4×12',
+        lastSkippedAt: null,
+        loadsUsed: [],
+        performances: [
+          {
+            exerciseId: LEG_PRESS_ID,
+            completedAt: new Date('2026-09-21T10:00:00Z'),
+            sessionExercise: { sets: [set(1, 110), set(2, 110)] },
+          },
+        ],
+      },
+    ],
+    lastWorkout: null,
+    warmupHabit: null,
+    profileFacts: [],
+    reportedToday: [],
+    coachReplied: true,
   } as unknown as TrainingData;
 }
 
-export const EFFORT_HINT_RESULT = `Set 1 logged — 45° Leg Press: 12 reps @ 120 kg.\n\nEffort hint: this set is decision-critical (the last planned set) and was stored without RPE. Ask once, in plain words: «${EFFORT_QUESTION}»`;
+export const SET_RESULT = 'Set 1 logged — 45° Leg Press: 12 reps @ 120 kg.';

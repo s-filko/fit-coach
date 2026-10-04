@@ -1,20 +1,17 @@
 /**
- * Training PhaseSpec (ADR-0013 §4.2) — moved verbatim from
- * training.subgraph.ts (refactor-p3-phase-spec Task 1). The policy keeps the
- * ADR-0011 protections: priority ordering, log_set batch dedup, error budget
- * 1 and dynamic tool filtering (BUG-008 Plan A).
+ * Training PhaseSpec (ADR-0013 §4.2). The policy keeps the ADR-0011 protections: priority ordering, log_set batch
+ * dedup, error budget 1. Since coach-simplification I1 (AC-CS1-2) the phase runs on `TRAINING_COACH` and the two
+ * fact blocks `# Today` / `# History` and remembers this workout only (`memory: 'workout'`). There is no decision
+ * engine: the loader reads each exercise's last performances and the client's facts.
  */
 import type { StructuredToolInterface } from '@langchain/core/tools';
 
-// set-kind plan Task 2 (D6): the ask-once window, named (close-out review advisory R1) — the
-// threshold itself is applied by the block that renders the ask line, not the loader.
-import { RECENT_PLACES_WINDOW } from '@domain/training/place';
 // set-kind plan Task 2 (D7): the plan-id guard moved into the domain (plan-exercise-id.ts) so
 // TrainingService's finish reconciliation reuses this one copy — a bad legacy `session_plan_json`
 // row never reaches a DB query (close-out review advisory 6).
 import { isValidExerciseId } from '@domain/training/plan-exercise-id';
-import { defaultProgression, type ProgressionChoice } from '@domain/training/load-plan';
-import type { ExerciseWithMuscles, MuscleGroup, WorkoutSessionWithDetails } from '@domain/training/types';
+import type { WorkoutSessionWithDetails } from '@domain/training/types';
+import type { UserFact } from '@domain/user/ports';
 
 import type {
   ConversationGraphDeps,
@@ -24,27 +21,20 @@ import type {
   PhaseSpec,
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
-import { loadLoadPlanEntries, planTargetRepsOf, type LoadPlanEntry } from '@infra/ai/load-facts/load-facts.loader';
-import { PHASE_PROMPTS } from '@infra/ai/prompts';
-// load-plan plan Task 5b (A5): the rebound training prompt, selected only with the flag on.
-import { TRAINING_PROMPT_V12 } from '@infra/ai/prompts/phases/training';
 import {
-  TRAINING_CLIENT_V1,
-  TRAINING_EXERCISE_HISTORY_V1,
-  TRAINING_LOAD_PLAN_V1,
-  TRAINING_LOAD_PLAN_V2,
-  TRAINING_RECENT_WORKOUTS_V1,
-  TRAINING_STALE_SESSION_V1,
-  TRAINING_WORKOUT_OVERVIEW_V1,
-  TRAINING_WORKOUT_OVERVIEW_V2,
-  type ExerciseHistoryEntry,
+  collectLoadsUsed,
+  computeWarmupHabit,
+  type ExerciseHistory,
+  TRAINING_HISTORY_V1,
+  TRAINING_TODAY_V1,
+  type WarmupHabit,
 } from '@infra/ai/prompts/blocks';
+import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
 import {
   buildCompleteCurrentExerciseTool,
   buildDeleteLastSetsTool,
   buildFinishTrainingTool,
   buildGetExerciseHistoryTool,
-  buildGetLoadPlanTool,
   buildLogSetTool,
   buildSearchExercisesTool,
   buildSetSessionPlaceTool,
@@ -52,37 +42,31 @@ import {
   buildUpdateLastSetTool,
 } from '@infra/ai/tools';
 
-import { createLogger } from '@shared/logger';
-
 import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
-import { plannerRebindOn } from './planner-rebind';
 
-const log = createLogger('training-spec');
+/** How many earlier performances of an exercise the History block shows. */
+const PERFORMANCES_PER_EXERCISE = 3;
+/** How many earlier performances are scanned for the distinct loads used (the "Loads used" line). */
+const PERFORMANCES_FOR_LOADS = 60;
+/** The last workouts scanned for the warm-up habit (the habit looks at the last ten with two exercises). */
+const WORKOUTS_FOR_HABIT = 14;
 
 /**
- * What the training prompt renders beyond the directive base (BUG-030 fix, training-exercise-
- * history plan D4): `exerciseHistory` replaces the single same-`session_key` `previousSession` —
- * one entry per today's exercise, anchored by exercise id (D2). `recentWorkouts` + `todayMuscles`
- * back the fatigue-context block (D3).
+ * What the training turn renders: today's session, per-exercise history (one entry per plan exercise — also the
+ * not-started ones, the Today block takes their names from it), the previous real workout and the client's facts
+ * for the system message's `# Profile`.
  */
 export interface TrainingData {
   session: WorkoutSessionWithDetails;
-  exerciseHistory: ExerciseHistoryEntry[];
-  recentWorkouts: WorkoutSessionWithDetails[];
-  todayMuscles: MuscleGroup[];
-  /**
-   * set-kind plan Task 2 (D6): distinct places among the last RECENT_PLACES_WINDOW real
-   * workouts; 0 when today's session already states a place (short-circuits, never queries the
-   * repository). The overview block renders its one-line ask once this crosses its threshold.
-   */
-  recentPlacesCount: number;
-  /** load-facts plan D11: the computed facts per today's exercise (same order as `exerciseHistory`). */
-  loadPlan: LoadPlanEntry[];
-  /**
-   * load-plan plan D8: the scheme in force — the profile default until the user's choice exists (Task 5).
-   * Set only with LOAD_PLAN_SUGGESTION on, so the flag-off data is unchanged.
-   */
-  progression?: ProgressionChoice;
+  history: ExerciseHistory[];
+  lastWorkout: { completedAt: Date; exerciseNames: string[] } | null;
+  warmupHabit: WarmupHabit | null;
+  /** The facts stored before this workout started: the system message's `# Profile`. */
+  profileFacts: UserFact[];
+  /** Facts created during this workout (the coach's `manage_fact`), rendered as `Reported today:` in `# Today`. */
+  reportedToday: UserFact[];
+  /** The coach has already replied in this workout — the check-in line is a first-turn state (D12). */
+  coachReplied: boolean;
 }
 
 /**
@@ -101,25 +85,11 @@ export function buildTrainingToolPolicy(_tools: StructuredToolInterface[]): Tool
 
 export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<TrainingData> {
   const { userService, trainingService, exerciseRepository, embeddingService, workoutSessionRepo } = deps;
-  const entry = PHASE_PROMPTS.training;
   const tools = [
     buildSearchExercisesTool({ embeddingService, exerciseRepository }),
     buildGetExerciseHistoryTool({ trainingService, exerciseRepository, workoutSessionRepo }),
-    // load-facts plan D12: computed facts for an exercise outside today's LOAD PLAN.
-    buildGetLoadPlanTool({
-      trainingService,
-      exerciseRepository,
-      workoutSessionRepo,
-      userFacts: deps.userFacts,
-      suggestion: deps.loadPlanSuggestion === true,
-      breaks: deps.loadPlanBreaks === true,
-    }),
-    buildLogSetTool({
-      trainingService,
-      loadPlanPlannerRebind: plannerRebindOn(deps),
-      effortHints: deps.loadPlanSuggestion === true,
-    }),
-    buildCompleteCurrentExerciseTool({ trainingService, loadPlanPlannerRebind: plannerRebindOn(deps) }),
+    buildLogSetTool({ trainingService }),
+    buildCompleteCurrentExerciseTool({ trainingService }),
     buildFinishTrainingTool({ trainingService }),
     // set-kind plan Task 2 (D6): "я сегодня в другом зале" — after the start.
     buildSetSessionPlaceTool({ trainingService }),
@@ -130,13 +100,13 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
 
   return {
     name: 'training',
-    // Task 5b (A5) / load-plan-fixes item 3: v12 (v11 + no invented conservative option) with
-    // LOAD_PLAN_PLANNER_REBIND + LOAD_PLAN_SUGGESTION; else v10.
-    prompt: (plannerRebindOn(deps) ? TRAINING_PROMPT_V12 : entry) as PhasePromptEntry<PromptContextFor<TrainingData>>,
+    prompt: TRAINING_PROMPT as PhasePromptEntry<PromptContextFor<TrainingData>>,
     tools,
     toolPolicy: buildTrainingToolPolicy(tools),
-    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
-    budget: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 2000 },
+    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`). History 16 000 (I1 § 7 Q2): summaries
+    // are not rendered in training any more, so a mid-workout budget compaction must not hide early turns.
+    budget: { system: 5000, longTerm: 1500, domain: 6000, history: 16000, outputReserve: 2000 },
+    memory: 'workout',
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps): Promise<LoadResult<TrainingData>> => {
       if (!input.activeSessionId) {
         return { ok: false, reply: 'training_no_active_session' };
@@ -147,12 +117,10 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       }
 
       const plan = session.sessionPlanJson;
-      const startedById = new Map(session.exercises.map(ex => [ex.exerciseId, ex]));
 
-      // Today's exercises (BUG-030 D2/step 3): plan order first, then off-plan exercises the user
-      // actually started — an exercise that is only planned still gets its history (AC-EH-2). A
-      // bad legacy plan row is filtered out here, before it reaches planExerciseIds/nameById or
-      // any DB query.
+      // Today's exercises: plan order first, then off-plan exercises the user actually started — an exercise that
+      // is only planned still gets its history. A bad legacy plan row is filtered out here, before it reaches a DB
+      // query.
       const validPlanExercises = (plan?.exercises ?? []).filter(p => isValidExerciseId(p.exerciseId));
       const planExerciseIds = validPlanExercises.map(p => p.exerciseId);
       const offPlanStartedIds = session.exercises
@@ -164,124 +132,80 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       for (const p of validPlanExercises) {
         nameById.set(p.exerciseId, p.exerciseName ?? 'Exercise');
       }
+      // The catalog name is the truth for an id (D19): a plan's exerciseName can disagree with its exerciseId
+      // (live 2026-09-25: "Treadmill" carrying Rowing Machine's id).
+      const startedById = new Map(session.exercises.map(ex => [ex.exerciseId, ex]));
       for (const ex of session.exercises) {
         nameById.set(ex.exerciseId, ex.exercise.name);
       }
-
-      // Muscle groups for TODAY'S MUSCLES (fatigue overlap, D3): started exercises already carry
-      // them (findByIdWithDetails); not-started plan exercises need their own lookup.
       const notStartedPlanIds = planExerciseIds.filter(id => !startedById.has(id));
-      const notStartedMuscles: ExerciseWithMuscles[] =
-        notStartedPlanIds.length > 0 ? await deps.exerciseRepository.findByIdsWithMuscles(notStartedPlanIds) : [];
-
-      const todayMuscleSet = new Set<MuscleGroup>();
-      for (const ex of session.exercises) {
-        for (const mg of ex.exercise.muscleGroups ?? []) {
-          todayMuscleSet.add(mg.muscleGroup);
+      if (notStartedPlanIds.length > 0) {
+        for (const ex of await deps.exerciseRepository.findByIdsWithMuscles(notStartedPlanIds)) {
+          if (ex.name) {
+            nameById.set(ex.id, ex.name);
+          }
         }
       }
-      for (const ex of notStartedMuscles) {
-        // The catalog name is the truth for an id (D19): a plan's exerciseName can disagree with its
-        // exerciseId (live 2026-09-25: "Treadmill" carrying Rowing Machine's id).
-        if (ex.name) {
-          nameById.set(ex.id, ex.name);
-        }
-        for (const mg of ex.muscleGroups ?? []) {
-          todayMuscleSet.add(mg.muscleGroup);
-        }
-      }
+      const plannedTextById = new Map(validPlanExercises.map(p => [p.exerciseId, `${p.targetSets}×${p.targetReps}`]));
 
-      // Exercise history (D2): last real performance per today's exercise, anchored by exercise
-      // id — not by session_key.
-      const performances =
+      const [performancesById, skips, recent, allFacts] = await Promise.all([
+        Promise.all(
+          todayExerciseIds.map(id =>
+            deps.workoutSessionRepo.findRecentPerformancesForExercise(
+              input.userId,
+              id,
+              session.id,
+              PERFORMANCES_FOR_LOADS,
+            ),
+          ),
+        ),
         todayExerciseIds.length > 0
-          ? await deps.workoutSessionRepo.findLastPerformancesByExercise(input.userId, todayExerciseIds, session.id)
-          : [];
-      const performanceById = new Map(performances.map(p => [p.exerciseId, p]));
-      // set-kind plan Task 2 (D7): the newest skip per today's exercise — the history block's
-      // `skipped <date>` line. Not a performance (no sets), so it never feeds the anchor above.
-      const skips =
-        todayExerciseIds.length > 0
-          ? await deps.workoutSessionRepo.findLastSkipsByExercise(input.userId, todayExerciseIds, session.id)
-          : [];
+          ? deps.workoutSessionRepo.findLastSkipsByExercise(input.userId, todayExerciseIds, session.id)
+          : Promise.resolve([]),
+        deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, WORKOUTS_FOR_HABIT, {
+          realWorkoutsOnly: true,
+        }),
+        deps.userFacts.getForPrompt(input.userId, input.now ?? new Date()),
+      ]);
       const skipById = new Map(skips.map(sk => [sk.exerciseId, sk.skippedAt]));
-      const exerciseHistory: ExerciseHistoryEntry[] = todayExerciseIds.map(exerciseId => {
-        const performance = performanceById.get(exerciseId);
-        return {
-          exerciseId,
-          exerciseName: nameById.get(exerciseId) ?? 'Exercise',
-          performance: performance?.sessionExercise ?? null,
-          completedAt: performance?.completedAt ?? null,
-          lastSkippedAt: skipById.get(exerciseId) ?? null,
-        };
-      });
 
-      // set-kind plan Task 2 (D6): the distinct places among the user's last RECENT_PLACES_WINDOW
-      // real workouts, so the overview block can decide whether to ask (D6, once per session).
-      // `session.place` short-circuits the ternary — a stated place never reaches the repository
-      // (B3, close-out review).
-      const recentPlacesCount = session.place
-        ? 0
-        : (await deps.workoutSessionRepo.distinctRecentPlaces(input.userId, RECENT_PLACES_WINDOW)).length;
+      const history: ExerciseHistory[] = todayExerciseIds.map((exerciseId, i) => ({
+        exerciseId,
+        exerciseName: nameById.get(exerciseId) ?? 'Exercise',
+        plannedText: plannedTextById.get(exerciseId) ?? null,
+        performances: (performancesById[i] ?? []).slice(0, PERFORMANCES_PER_EXERCISE),
+        loadsUsed: collectLoadsUsed(performancesById[i] ?? []),
+        lastSkippedAt: skipById.get(exerciseId) ?? null,
+      }));
 
-      // Fatigue window (D3): up to 7 recent real workouts; the block applies the 7-day cut
-      // against ctx.now (the loader never reads the clock). Today's own session is excluded.
-      const recentWorkoutsRaw = await deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, 7, {
-        realWorkoutsOnly: true,
-      });
-      const recentWorkouts = recentWorkoutsRaw.filter(s => s.id !== session.id);
+      const previous = recent.find(s => s.id !== session.id && s.completedAt != null);
+      const lastWorkout = previous?.completedAt
+        ? { completedAt: previous.completedAt, exerciseNames: previous.exercises.map(ex => ex.exercise.name) }
+        : null;
 
-      // load-facts plan D11: computed facts per today's exercise. A failure here must not take the
-      // workout chat down — the block is derived data, so log and render nothing.
-      let loadPlan: LoadPlanEntry[] = [];
-      try {
-        loadPlan = await loadLoadPlanEntries(
-          {
-            workoutSessionRepo: deps.workoutSessionRepo,
-            exerciseRepository: deps.exerciseRepository,
-            trainingService: deps.trainingService,
-            userFacts: deps.userFacts,
-          },
-          {
-            userId: input.userId,
-            session,
-            exerciseIds: todayExerciseIds,
-            planTargetReps: planTargetRepsOf(session),
-            now: input.now ?? new Date(),
-            timezone: input.user?.timezone ?? null,
-            breaks: deps.loadPlanBreaks === true,
-          },
-        );
-      } catch (err) {
-        log.error({ err, userId: input.userId, sessionId: session.id }, 'load-facts: loader failed');
-      }
+      const warmupHabit = computeWarmupHabit(recent.filter(s => s.id !== session.id));
+
+      // D13: a fact created after the workout started is today's report, not the standing profile (which stays
+      // byte-stable for the prompt cache); `Today` renders it. Facts, their service and the categories are untouched.
+      const startedAt = session.startedAt ?? session.createdAt;
+      const isToday = (f: UserFact): boolean => f.createdAt > startedAt;
+      const profileFacts = allFacts.filter(f => !isToday(f));
+      const reportedToday = allFacts.filter(isToday);
 
       return {
         ok: true,
         data: {
           session,
-          exerciseHistory,
-          recentWorkouts,
-          todayMuscles: [...todayMuscleSet],
-          recentPlacesCount,
-          loadPlan,
-          ...(deps.loadPlanSuggestion === true ? { progression: defaultProgression(input.user) } : {}),
+          history,
+          lastWorkout,
+          warmupHabit,
+          profileFacts,
+          reportedToday,
+          coachReplied: input.coachReplied ?? true,
         },
       };
     },
-    // D-B/D4: v1's `client`, `workout_overview`, `stale_session` sections, plus `exercise_history`
-    // and `recent_workouts` (BUG-030 fix) in place of the old same-key `previous_session`.
-    contextBlocks: [
-      TRAINING_CLIENT_V1,
-      // load-plan plan Task 5b (D10): v2 (sets × reps only) with the flag on; off = v1 unchanged.
-      plannerRebindOn(deps) ? TRAINING_WORKOUT_OVERVIEW_V2 : TRAINING_WORKOUT_OVERVIEW_V1,
-      TRAINING_STALE_SESSION_V1,
-      TRAINING_EXERCISE_HISTORY_V1,
-      TRAINING_RECENT_WORKOUTS_V1,
-      // load-facts plan D5: block 3, after RECENT WORKOUTS. load-plan plan A5: v2 (suggestion) only with
-      // LOAD_PLAN_SUGGESTION on; off = v1 unchanged.
-      deps.loadPlanSuggestion === true ? TRAINING_LOAD_PLAN_V2 : TRAINING_LOAD_PLAN_V1,
-    ],
+    contextBlocks: [TRAINING_TODAY_V1, TRAINING_HISTORY_V1],
     modelProfile: 'default',
   };
 }

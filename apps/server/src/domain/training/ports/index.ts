@@ -5,4 +5,3 @@ export * from './training-service.ports';
 export * from './workout-plan.ports';
 export * from './workout-session.ports';
 export * from '../errors';
-export * from './load-recommendation.ports';

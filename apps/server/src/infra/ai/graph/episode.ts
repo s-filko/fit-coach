@@ -89,3 +89,67 @@ export function toTranscriptMessages(messages: BaseMessage[]): TranscriptMessage
   }
   return out;
 }
+
+const START_TRAINING_TOOL = 'start_training_session';
+
+function toolCallsOf(message: BaseMessage | undefined): Array<{ id?: string; name: string }> {
+  return (
+    (message as (BaseMessage & { tool_calls?: Array<{ id?: string; name: string }> }) | undefined)?.tool_calls ?? []
+  );
+}
+
+/**
+ * The training phase's memory is this workout only (coach-simplification I1). `history` is the episode before this
+ * run, `current` the run itself. Hand-off run (the `start_training_session` call is in `current`) → `[]`: the
+ * workout starts with this very run. Otherwise: the HumanMessage that triggered the LAST start call, then
+ * everything after that call's ToolMessage(s) — the call and its result are dropped. Not found (a budget
+ * compaction folded the start away) → `history` unchanged.
+ */
+export function workoutHistory(history: BaseMessage[], current: BaseMessage[]): BaseMessage[] {
+  if (current.some(m => m._getType() === 'ai' && toolCallsOf(m).some(c => c.name === START_TRAINING_TOOL))) {
+    return [];
+  }
+  let startIdx = -1;
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const m = history[i];
+    if (m?._getType() === 'ai' && toolCallsOf(m).some(c => c.name === START_TRAINING_TOOL)) {
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx < 0) {
+    return history;
+  }
+  const callIds = new Set(toolCallsOf(history[startIdx]).map(c => c.id));
+  let after = startIdx + 1;
+  while (after < history.length) {
+    const m = history[after];
+    if (m?._getType() === 'tool' && callIds.has((m as ToolMessage).tool_call_id)) {
+      after += 1;
+    } else {
+      break;
+    }
+  }
+  let humanIdx = -1;
+  for (let i = startIdx - 1; i >= 0; i -= 1) {
+    if (history[i]?._getType() === 'human') {
+      humanIdx = i;
+      break;
+    }
+  }
+  const trigger = humanIdx >= 0 ? [history[humanIdx]] : [];
+  return [...trigger, ...history.slice(after)];
+}
+
+/**
+ * Has the coach already answered in this workout (coach-simplification D12)? True when any non-empty AI text sits
+ * in this workout's messages (`workoutHistory`) or in the current run. A hand-off run (the start call is in
+ * `current`) counts only what follows the start call — earlier AI text there belongs to the previous phase.
+ */
+export function hasCoachReply(history: BaseMessage[], current: BaseMessage[]): boolean {
+  const startAt = current.findIndex(
+    m => m._getType() === 'ai' && toolCallsOf(m).some(c => c.name === START_TRAINING_TOOL),
+  );
+  const messages = startAt >= 0 ? current.slice(startAt + 1) : [...workoutHistory(history, current), ...current];
+  return messages.some(m => m._getType() === 'ai' && textOf(m.content) !== '');
+}

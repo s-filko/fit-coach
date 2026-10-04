@@ -6,10 +6,10 @@ import type { PromptModule, Section } from '@infra/ai/prompts/types';
 import type { SessionPlanningPromptContextV3 } from './v3';
 
 /**
- * v5 (load-plan plan Task 5b, D10, AC-LP-7): v4 minus any instruction to propose or save weights —
- * the session plan is sets × reps only; loads come from LOAD PLAN during training. Two lines of v3's
+ * v5 (plan Task 5b, D10, AC-LP-7): v4 minus any instruction to propose or save weights —
+ * the session plan is sets × reps only; loads are set by the coach during the workout. Two lines of v3's
  * STEP text change (the v5 unit test enforces the diff is exactly those); the CONTEXT LOCATION note
- * from v4 is kept. Selected only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION on (session-planning.spec.ts).
+ * from v4 is kept. The registry's `current` since coach-simplification I1.
  */
 export type SessionPlanningPromptContextV5 = SessionPlanningPromptContextV3;
 
@@ -46,7 +46,7 @@ After the client responds:
    Once you have results with IDs, do NOT re-search the same muscle group — reuse the IDs from this conversation history.
 2. Propose the session with:
    - Brief reasoning — why this template today: gap since last done, recovery status, goal relevance.
-   - The exercise list with IDs from search results, sets, reps, rest times — sets × reps only, no weights: loads are not planned here; the training phase decides them from LOAD PLAN.
+   - The exercise list with IDs from search results, sets, reps, rest times — sets × reps only, no weights: loads are not planned here; the coach sets them during the workout.
    - A short closing invite: "Want to swap anything or shall we go?"
 
 --- STEP 4: REFINE ---

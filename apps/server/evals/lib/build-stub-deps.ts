@@ -59,7 +59,7 @@ interface StubSessionExercise {
  * Why not the raw `fixture.activeSession`: the datasets carry only
  * `{id, sessionKey}` — the session shape is incidental to what a case asserts.
  * But the training prompt builder dereferences `session.exercises.map(...)`
- * (training.node.ts buildWorkoutOverview) and the router checks `status`,
+ * (the training phase's context blocks) and the router checks `status`,
  * so a bare `{id}` object throws before the model is ever reached. The stub
  * world fills in a realistic mid-workout "Upper A" session; fixture keys win.
  */
@@ -135,7 +135,7 @@ function buildTrainingSession(fixtureSession: unknown): Record<string, unknown> 
     autoCloseReason: null,
     createdAt: startedAt,
     updatedAt: startedAt,
-    // view shape consumed by buildWorkoutOverview: exercise.name, sets, status
+    // view shape consumed by the training blocks: exercise.name, sets, status
     exercises: exercises.map(ex => ({
       ...ex,
       exercise: { id: ex.exerciseId, name: ex.name },
@@ -369,10 +369,9 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       findRecentByUserId: async () => fixture.sessions ?? [],
       // training.spec.ts's loader (BUG-030 fix): no eval fixture asserts on exercise-history
       // content today, so "nothing on record" is the safe default here.
-      findLastPerformancesByExercise: async () => [],
+      findRecentPerformancesForExercise: async () => [],
       // set-kind plan Task 2 (D6/D7): no fixture asserts on places or skips today —
       // "nothing on record" keeps both flags off.
-      distinctRecentPlaces: async () => [],
       findLastSkipsByExercise: async () => [],
     },
     exerciseRepository: {

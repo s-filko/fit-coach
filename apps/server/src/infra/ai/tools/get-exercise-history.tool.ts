@@ -7,8 +7,8 @@ import { ExerciseNotFoundError } from '@domain/training/errors';
 import type { IExerciseRepository, ITrainingService, IWorkoutSessionRepository } from '@domain/training/ports';
 
 import { ctxOf } from '@infra/ai/graph/state';
-import { formatDateAge } from '@infra/ai/prompts/blocks/training-exercise-history.v1';
-import { formatExerciseSets } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
+import { formatExerciseSets } from '@infra/ai/prompts/blocks/set-format';
+import { relativeDay } from '@infra/ai/prompts/blocks/training-facts';
 import type { ContextBlockCtx } from '@infra/ai/prompts/blocks/types';
 
 import { createLogger } from '@shared/logger';
@@ -28,7 +28,7 @@ export interface GetExerciseHistoryToolDeps {
 
 const GET_EXERCISE_HISTORY_DESCRIPTION = [
   "Look up an exercise's real completed history — use this when the user asks about an exercise that is",
-  'NOT shown in EXERCISE HISTORY or RECENT WORKOUTS (e.g. "how much did I bench last time?" for an exercise',
+  'not among today\'s exercises (e.g. "how much did I bench last time?" for an exercise',
   "not in today's plan).",
   'Identify the exercise with exerciseId when you have its exact UUID; prefer search_exercises to get an',
   'exact exerciseId over passing exerciseName when you are not sure of the English catalog name.',
@@ -90,7 +90,7 @@ export function buildGetExerciseHistoryTool(deps: GetExerciseHistoryToolDeps) {
       };
 
       const blocks = performances.map(p => {
-        const when = formatDateAge(p.completedAt, ctx);
+        const when = relativeDay(p.completedAt, ctx.now, ctx.timezone ?? ctx.user?.timezone ?? null);
         return `${when}\n${formatExerciseSets(p.sessionExercise.sets, p.sessionExercise.userFeedback)}`;
       });
 

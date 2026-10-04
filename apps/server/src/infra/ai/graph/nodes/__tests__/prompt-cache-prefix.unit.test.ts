@@ -8,11 +8,11 @@ import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langcha
 import { wireText, type WireRequest } from '../../../context/__tests__/request-capture';
 
 import {
-  EFFORT_HINT_RESULT,
   history0,
   lastHumanIndex,
-  loadPlanTrainingData,
-  makeLoadPlanTrainingSpec,
+  trainingData,
+  makeRealTrainingSpec,
+  SET_RESULT,
   noSets,
   oneSet,
   run,
@@ -133,7 +133,7 @@ describe('AC-PC-5: the checkpointed HumanMessage carries no <context> text (D2)'
     // The wire request carries the volatile context inside the current human message…
     const currentUser = r.messages[lastHumanIndex(r)]!;
     expect(wireText(currentUser)).toContain('<context>');
-    expect(wireText(currentUser)).toContain('WORKOUT OVERVIEW');
+    expect(wireText(currentUser)).toContain('TODAY');
     expect(wireText(currentUser)).toContain('ещё подход');
 
     // …while nothing the node hands back to the checkpoint, and no input message, was rewritten.
@@ -144,16 +144,16 @@ describe('AC-PC-5: the checkpointed HumanMessage carries no <context> text (D2)'
   });
 });
 
-describe('AC-PC-1 + AC-LPF-8: the real training phase with the LOAD_PLAN flags on (v12, LOAD PLAN v2)', () => {
+describe('AC-PC-1: the real training phase (v13 coach prompt, # Today / # History, workout memory)', () => {
   async function twoTurns(): Promise<{ r1: WireRequest; r2: WireRequest }> {
     let sets = 0;
-    const { spec, deps } = makeLoadPlanTrainingSpec(() => loadPlanTrainingData(sets));
+    const { spec, deps } = makeRealTrainingSpec(() => trainingData(sets));
     const first = await run([...history0(), new HumanMessage({ content: 'жим ногами 120 на 12', id: 'h1' })], {
       now: T0,
       spec,
       deps,
     });
-    // Between the turns: log_set stored a decision-critical set without RPE — its RESULT carries the effort hint.
+    // Between the turns: log_set stored a set — its RESULT sits in the history, the facts block is re-rendered.
     sets = 1;
     const second = await run(
       [
@@ -164,8 +164,8 @@ describe('AC-PC-1 + AC-LPF-8: the real training phase with the LOAD_PLAN flags o
           id: 'a1',
           tool_calls: [{ id: 'c1', name: 'log_set', args: {}, type: 'tool_call' }],
         }),
-        new ToolMessage({ tool_call_id: 'c1', content: EFFORT_HINT_RESULT, id: 't1' }),
-        new AIMessage({ content: 'Записал. Сколько ещё раз смог бы сделать на этом весе?', id: 'a2' }),
+        new ToolMessage({ tool_call_id: 'c1', content: SET_RESULT, id: 't1' }),
+        new AIMessage({ content: 'Записал. Следующий подход?', id: 'a2' }),
         new HumanMessage({ content: 'пару раз ещё мог', id: 'h2' }),
       ],
       { now: T1, lastUserMessageAt: T0.toISOString(), spec, deps },
@@ -173,31 +173,34 @@ describe('AC-PC-1 + AC-LPF-8: the real training phase with the LOAD_PLAN flags o
     return { r1: first.requests[0]!, r2: second.requests[0]! };
   }
 
-  it('the system message is byte-identical across the two turns, and it is the v12 prompt', async () => {
+  it('the system message is byte-identical across the two turns, and it is the v13 coach prompt + profile', async () => {
     const { r1, r2 } = await twoTurns();
     expect(JSON.stringify(r2.messages[0])).toBe(JSON.stringify(r1.messages[0]));
-    expect(wireText(r1.messages[0]!)).toContain('Effort in plain language');
+    expect(wireText(r1.messages[0]!)).toContain("You are the client's personal strength coach");
+    expect(wireText(r1.messages[0]!)).toContain('# Profile');
+    expect(wireText(r1.messages[0]!)).not.toMatch(/## User Facts|## Course Directive|## Previous episodes/);
     expect(JSON.stringify(r2.tools)).toBe(JSON.stringify(r1.tools));
   });
 
-  it('LOAD PLAN rides in the <context> part of the CURRENT user message — never in the system message or the history prefix', async () => {
+  it('# Today and # History ride in the <context> part of the CURRENT user message — never in the system message or the history prefix', async () => {
     const { r1, r2 } = await twoTurns();
     for (const r of [r1, r2]) {
       const current = wireText(r.messages[lastHumanIndex(r)]!);
       expect(current).toContain('<context>');
-      expect(current).toContain('=== LOAD PLAN');
-      expect(current).toContain('next step:');
+      expect(current).toContain('# Today');
+      expect(current).toContain('# History');
       const before = r.messages.slice(0, lastHumanIndex(r)).map(wireText).join('\n');
-      expect(before).not.toContain('=== LOAD PLAN');
-      // (the system prompt itself explains the <context> part, so only the history messages are checked for it)
+      expect(before).not.toContain('# Today');
+      expect(before).not.toContain('# History');
+      // (the system prompt itself names the <context> part's content, so only the history messages are checked)
       expect(r.messages.slice(1, lastHumanIndex(r)).map(wireText).join('\n')).not.toContain('<context>');
     }
   });
 
-  it('the turn after the effort hint keeps the prefix: the hint sits in the history, the cached prefix before it is unchanged', async () => {
+  it('the turn after a logged set keeps the prefix: the tool result sits in the history, the cached prefix before it is unchanged', async () => {
     const { r1, r2 } = await twoTurns();
     const prefix1 = r1.messages.slice(0, lastHumanIndex(r1));
     expect(JSON.stringify(r2.messages.slice(0, prefix1.length))).toBe(JSON.stringify(prefix1));
-    expect(r2.messages.map(wireText).join('\n')).toContain('Effort hint:');
+    expect(r2.messages.map(wireText).join('\n')).toContain('Set 1 logged');
   });
 });

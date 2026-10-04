@@ -1,4 +1,4 @@
-import { checkRenderedPrompt, checkSections, FORBIDDEN_STRING_ALLOWLIST, FORBIDDEN_STRINGS, runL0 } from '../l0';
+import { checkRenderedPrompt, checkSections, FORBIDDEN_STRINGS, runL0 } from '../l0';
 
 describe('L0 static checks (AC-1303 L0 half, PROMPT_EVAL_FRAMEWORK §4.1)', () => {
   it('flags a prompt containing "undefined"', () => {
@@ -27,13 +27,6 @@ describe('L0 static checks (AC-1303 L0 half, PROMPT_EVAL_FRAMEWORK §4.1)', () =
 
   it('lists every forbidden string §4.1 names', () => {
     expect(FORBIDDEN_STRINGS).toEqual(expect.arrayContaining(['undefined', 'null', '[object Object]', 'NaN']));
-  });
-
-  it('passes the allowlisted prose phrase from the training prompt', () => {
-    const [allowed] = FORBIDDEN_STRING_ALLOWLIST;
-    const results = checkRenderedPrompt('phase.training', 'complete-profile', `RULE 7. ${allowed}.`);
-    const forbidden = results.find(r => r.check === 'no-forbidden-strings');
-    expect(forbidden?.passed).toBe(true);
   });
 
   it('still flags prose that is not in the allowlist verbatim', () => {

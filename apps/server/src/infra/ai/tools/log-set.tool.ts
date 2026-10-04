@@ -3,15 +3,12 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
-import { effortHint, type EffortHintReason, type HintSet } from '@domain/training/load-plan';
 import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
-import type { SessionSet } from '@domain/training/types';
 
-import { maybeCtxOf } from '@infra/ai/graph/state';
-import { formatSetData } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
-import { EFFORT_MAPPING_TEXT, EFFORT_QUESTION } from '@infra/ai/prompts/effort';
+import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
+import { EFFORT_MAPPING_TEXT } from '@infra/ai/prompts/effort';
 import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
@@ -24,40 +21,6 @@ const log = createLogger('training-tools');
 
 export interface LogSetToolDeps {
   trainingService: ITrainingService;
-  /** Load plan (load-plan plan Task 5b, D10): the completion summary's Target line drops the plan weight. */
-  loadPlanPlannerRebind?: boolean;
-  /** LOAD_PLAN_SUGGESTION: the effort hint reaches the coach only where the v2 block / v12 rules are (item 10). */
-  effortHints?: boolean;
-}
-
-const HINT_REASON_TEXT: Record<EffortHintReason, string> = {
-  below_floor: 'below the rep floor',
-  above_range: 'above the rep range by 3+ reps',
-  last_planned_set: 'the last planned set',
-};
-
-/** The tool-result words of an effort hint (the domain says WHY; words and mapping live here / in effort.ts). */
-function effortText(hint: { reason: EffortHintReason } | null): string | null {
-  return hint === null
-    ? null
-    : [
-        `Effort hint: this set is decision-critical (${HINT_REASON_TEXT[hint.reason]}) and was stored without RPE.`,
-        `Ask once, in plain words: «${EFFORT_QUESTION}»`,
-        `Then record the answer on this set with update_last_set rpe (${EFFORT_MAPPING_TEXT}).`,
-        'Do not ask again for this exercise today.',
-      ].join(' ');
-}
-
-/** A stored set as the effort hint reads it. */
-function hintSetOf(s: SessionSet): HintSet {
-  const d = s.setData;
-  return {
-    reps: d.type === 'strength' || d.type === 'functional_reps' ? d.reps : 0,
-    weight: d.type === 'strength' ? (d.weight ?? null) : null,
-    rpe: s.rpe,
-    feedback: s.userFeedback,
-    isWarmup: s.setKind === 'warmup',
-  };
 }
 
 export function buildLogSetTool(deps: LogSetToolDeps) {
@@ -100,9 +63,6 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         return llmError(`Invalid set data: ${parsed.error.message}`);
       }
 
-      // load-plan plan Task 3: the recommendation log's run context; ignored when the log is off.
-      const runCtx = maybeCtxOf(config);
-
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
 
       try {
@@ -126,12 +86,6 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           skipActivityUpdate: isRetro,
           setKind: input.setKind,
           weightBasis: input.weightBasis,
-          loadPlanLog: {
-            runId: runCtx?.runId ?? null,
-            now: runCtx?.now ?? new Date(),
-            timezone: runCtx?.user?.timezone ?? null,
-            advised: input.advised,
-          },
         });
 
         // Named for the summariser (renderTranscript over this tool's own confirmation) as much
@@ -139,23 +93,10 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         // The set is already saved at this point: a failure resolving the name degrades the
         // confirmation text, it must never turn a successful write into a reported error.
         let exerciseName = input.exerciseName ?? '';
-        let hint: string | null = null;
         try {
           const finalSession = await trainingService.getSessionDetails(sessionId);
           const row = finalSession?.exercises.find(se => se.id === set.sessionExerciseId);
           exerciseName = row?.exercise.name ?? exerciseName;
-          // Item 10: code decides when the coach asks the effort — a decision-critical set stored without RPE.
-          hint =
-            deps.effortHints === true && row
-              ? effortText(
-                  effortHint({
-                    set: hintSetOf(set),
-                    earlier: (row.sets ?? []).filter(s => s.id !== set.id && s.setNumber < setNumber).map(hintSetOf),
-                    targetReps: row.targetReps ?? null,
-                    targetSets: row.targetSets ?? null,
-                  }),
-                )
-              : null;
         } catch (nameErr) {
           log.warn({ err: nameErr, sessionId }, 'log_set: could not resolve exercise name for confirmation');
         }
@@ -168,9 +109,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         const rpeNote = rpe != null ? ` | RPE ${rpe}` : '';
         const retroNote = isRetro ? ' (retro-logged)' : '';
         const namePart = exerciseName ? ` — ${exerciseName}` : '';
-        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.${
-          hint ? `\n\n${hint}` : ''
-        }`;
+        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.`;
 
         log.info(
           {
@@ -190,11 +129,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         );
 
         if (autoCompleted) {
-          // BUG-037: this transition was triggered by the user's own set — the instruction
-          // must tell the model to confirm that set first, not to lead with the recap.
-          const prevSummary = formatExerciseSummary(autoCompleted, 'set-triggered', {
-            omitTargetWeight: deps.loadPlanPlannerRebind === true,
-          });
+          const prevSummary = formatExerciseSummary(autoCompleted);
           return ok(`${setConfirmation}\n\n${prevSummary}`);
         }
 
@@ -213,7 +148,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       name: 'log_set',
       description: [
         'Log a completed set for the current exercise.',
-        'Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from the SESSION PLAN or from a search_exercises result ("ID:..." line).',
+        'Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from today\'s plan in the context or from a search_exercises result ("ID:..." line).',
         'If the exercise is not in the plan and you do not have its exact UUID, pass exerciseName instead (the server resolves it in the catalog) — never invent or guess a UUID.',
         'For strength/weighted exercises: provide reps and weight (in kg).',
         'For bodyweight exercises: provide reps only.',
@@ -290,20 +225,6 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
               'For a dumbbell/kettlebell exercise the coach assumes the weight is per hand. Pass ' +
                 "'total' only when the user explicitly states the weight is a combined/total figure " +
                 "(e.g. 'в сумме', 'total').",
-            ),
-          advised: z
-            .object({
-              load: z.number().positive().optional().describe('Load in kg you advised for this exercise.'),
-              reps: z.number().int().positive().optional().describe('Reps per set you advised.'),
-              reason: z
-                .string()
-                .optional()
-                .describe('Why the advice departs from the LOAD PLAN suggestion — only when it does.'),
-            })
-            .optional()
-            .describe(
-              'Optional. On the FIRST working set of an exercise: the load/reps you actually advised the user for it ' +
-                '(and the reason when it differs from the LOAD PLAN suggestion). Omit on later sets and when you advised nothing.',
             ),
           order: z
             .number()

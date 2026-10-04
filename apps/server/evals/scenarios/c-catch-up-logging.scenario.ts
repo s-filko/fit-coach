@@ -12,7 +12,7 @@ import { BENCH_PRESS_ID, PULL_UPS_ID, setupSteps, sharedPast } from './b-full-wo
  * sets, answers a mid-workout rest question with TEXT ONLY (no tool), then
  * the clock jumps +3.5 h — past `EPISODE_GAP_HOURS` (3 h), so the return run
  * compacts the episode away and the training phase re-reads the session from
- * the DB: STALE SESSION + a WORKOUT OVERVIEW still listing the pre-pause
+ * the DB: the stale session + a workout block still listing the pre-pause
  * sets.
  *
  * Per the owner ruling, a >2 h gap means the user is CATCHING UP an old
@@ -67,7 +67,10 @@ export const LIVE_ADDED_TO_PREVIOUS_MARKER = 'к предыдущей трени
 export const LIVE_CLOSE_OR_ADD_MARKER = 'закрыть её или добавить';
 
 /** Both bench sets — what the session holds when the user catches up. */
-const BENCH_TWO_SETS = [{ reps: 8, weight: 80 }, { reps: 8, weight: 80 }];
+const BENCH_TWO_SETS = [
+  { reps: 8, weight: 80 },
+  { reps: 8, weight: 80 },
+];
 
 /** The scripted catch-up turn: three retro pull-up sets, then the ruling's reply. */
 type UserStep = Extract<Scenario['steps'][number], { action: 'user' }>;
@@ -102,8 +105,8 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
         expect: {
           seen: {
             mustMatch: [
-              '=== WORKOUT OVERVIEW ===',
-              'ACTIVE: none — log any set to start an exercise',
+              '# Today (sets as reps×kg)',
+              `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
             ],
           },
           tools: { must: ['log_set'] },
@@ -132,9 +135,7 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
         ],
         expect: {
           seen: {
-            mustMatch: [
-              `ACTIVE: Barbell Bench Press [ID:${BENCH_PRESS_ID}] — 1 set(s) done, 2 remaining per plan.`,
-            ],
+            mustMatch: [`- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 8×80`],
           },
           tools: { must: ['log_set'] },
           delivered: { mustMatch: [AFTER_SET_2_TEXT] },
@@ -161,11 +162,7 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
         script: [{ text: REST_ANSWER }],
         expect: {
           seen: {
-            mustMatch: [
-              '=== WORKOUT OVERVIEW ===',
-              `[IN PROGRESS] [ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3×8-10 @ 80 kg (2/3 sets)`,
-              `ACTIVE: Barbell Bench Press [ID:${BENCH_PRESS_ID}] — 2 set(s) done, 1 remaining per plan.`,
-            ],
+            mustMatch: [`- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 8×80, 8×80`],
           },
           delivered: { mustMatch: [REST_ANSWER] },
           persisted: { turnRecorded: true },
@@ -185,13 +182,9 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
         expect: {
           seen: {
             mustMatch: [
-              '=== STALE SESSION ===',
-              'This session has been inactive for 3 hours.',
-              'Retro-logging is active',
-              '=== WORKOUT OVERVIEW ===',
-              `[IN PROGRESS] [ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3×8-10 @ 80 kg (2/3 sets)`,
-              `ACTIVE: Barbell Bench Press [ID:${BENCH_PRESS_ID}] — 2 set(s) done, 1 remaining per plan.`,
-              'min ago): 8 reps @ 80 kg',
+              // coach-simplification I1: the stale-session block became one fact line in `# Today`.
+              "No activity for 3 h; a set logged now is dated to the session's last activity.",
+              `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 8×80, 8×80`,
               '(retro-logged).',
               // AC-CC-1 (fixed): the rest exchange stays verbatim after the gap.
               REST_QUESTION,

@@ -13,8 +13,6 @@ const log = createLogger('training-tools');
 
 export interface CompleteCurrentExerciseToolDeps {
   trainingService: ITrainingService;
-  /** Load plan (load-plan plan Task 5b, D10): the completion summary's Target line drops the plan weight. */
-  loadPlanPlannerRebind?: boolean;
 }
 
 export function buildCompleteCurrentExerciseTool(deps: CompleteCurrentExerciseToolDeps) {
@@ -43,9 +41,7 @@ export function buildCompleteCurrentExerciseTool(deps: CompleteCurrentExerciseTo
           'AUDIT: exercise completed',
         );
 
-        return ok(
-          formatExerciseSummary(summary, 'explicit', { omitTargetWeight: deps.loadPlanPlannerRebind === true }),
-        );
+        return ok(formatExerciseSummary(summary));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         log.error({ err, sessionId }, 'complete_current_exercise failed');

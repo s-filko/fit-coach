@@ -14,30 +14,11 @@ export function sessionIdOf(config: { configurable?: Record<string, unknown> } |
 }
 
 /**
- * Which tool produced the summary — decides the instruction text that follows the facts
- * (BUG-037: the two paths teach the model opposite reply orders).
- * - `explicit`: complete_current_exercise — the user ASKED to move on, so the summary is
- *   the answer and announcing the next exercise is wanted.
- * - `set-triggered`: log_set for a different exercise — the set the user just reported is
- *   the news; the finished-exercise recap is a brief aside at the end.
+ * The facts of an auto-completed / completed exercise. Facts only (coach-simplification I1): the former
+ * instruction tails ("summarize…", "announce the next exercise…") drove unrequested recaps and are gone. Loads are
+ * not planned any more, so the Target line is sets × reps only; the logged sets keep their weights.
  */
-export type ExerciseSummaryMode = 'set-triggered' | 'explicit';
-
-const EXPLICIT_INSTRUCTION =
-  'Summarize this exercise for the user: list the sets, analyze RPE trend, compare to target, give a coaching comment. Then announce the next exercise from SESSION PLAN.';
-
-const SET_TRIGGERED_INSTRUCTION =
-  'The user just reported a set of a new exercise, which auto-completed this one. First confirm the set the user just reported (the confirmation above this summary) and reply to what they said. At the end, add a brief recap (1-2 lines) of this completed exercise — total volume vs target and one coaching comment. Do not introduce or suggest a next exercise: the user has already moved on to one.';
-
-/**
- * Load plan (load-plan plan Task 5b, D10): `omitTargetWeight` (LOAD_PLAN_PLANNER_REBIND on) drops the
- * plan target weight from the Target line — sets × reps only; the logged sets always keep their weights.
- */
-export function formatExerciseSummary(
-  ex: AutoCompletedExercise,
-  mode: ExerciseSummaryMode = 'explicit',
-  opts: { omitTargetWeight?: boolean } = {},
-): string {
+export function formatExerciseSummary(ex: AutoCompletedExercise): string {
   const setsDetail = ex.sets
     .map(s => {
       const parts = [`Set ${s.setNumber}:`];
@@ -56,8 +37,7 @@ export function formatExerciseSummary(
       return '  ' + parts.join(' ');
     })
     .join('\n');
-  const targetWeightStr = !opts.omitTargetWeight && ex.targetWeight ? ` @ ${ex.targetWeight} kg` : '';
-  const target = `Target: ${ex.targetSets ?? '?'}x${ex.targetReps ?? '?'}${targetWeightStr}`;
+  const target = `Target: ${ex.targetSets ?? '?'}x${ex.targetReps ?? '?'}`;
   // set-kind plan Task 1 (D4, AC-SK-2): the volume line counts only working sets against the
   // target — warm-ups still appear above in `setsDetail`, listing every set performed.
   const workingCount = workingSets(ex.sets).length;
@@ -65,7 +45,6 @@ export function formatExerciseSummary(
     `Exercise '${ex.exerciseName}' completed.\n` +
     `${target}\n` +
     `Sets performed:\n${setsDetail}\n` +
-    `Total: ${workingCount}/${ex.targetSets ?? '?'} sets.\n` +
-    (mode === 'set-triggered' ? SET_TRIGGERED_INSTRUCTION : EXPLICIT_INSTRUCTION)
+    `Total: ${workingCount}/${ex.targetSets ?? '?'} sets.`
   );
 }

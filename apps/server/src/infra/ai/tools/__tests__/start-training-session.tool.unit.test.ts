@@ -145,14 +145,12 @@ const buildTools = (
   workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
   userFactsService: jest.Mocked<IUserFactsService> = makeUserFactsService(),
   exerciseRepository: jest.Mocked<IExerciseRepository> = makeExerciseRepository(),
-  opts: { loadPlanPlannerRebind?: boolean } = {},
 ) => {
   const startTrainingSession = buildStartTrainingSessionTool({
     trainingService,
     workoutPlanRepository,
     exerciseRepository,
     userFactsService,
-    ...opts,
   }) as unknown as InvokableTool;
   return { startTrainingSession };
 };
@@ -544,40 +542,26 @@ describe('start-training-session.tool — start_training_session', () => {
 });
 
 /** The tool's parsed zod schema, for surface assertions. */
-const exerciseShapeOf = (opts?: { loadPlanPlannerRebind?: boolean }): Record<string, unknown> =>
+const exerciseShape = (): Record<string, unknown> =>
   (
     buildStartTrainingSessionTool({
       trainingService: makeTrainingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
       exerciseRepository: makeExerciseRepository(),
       userFactsService: makeUserFactsService(),
-      ...(opts ?? {}),
     }) as unknown as {
       schema: { shape: { exercises: { element: { shape: Record<string, unknown> } } } };
     }
   ).schema.shape.exercises.element.shape;
 
-describe('start_training_session — LOAD_PLAN_PLANNER_REBIND (load-plan plan Task 5b, D10, AC-LP-7)', () => {
-  it('schema keeps targetWeight with the flag off or absent (legacy behaviour)', () => {
-    expect(exerciseShapeOf()).toHaveProperty('targetWeight');
-    expect(exerciseShapeOf({ loadPlanPlannerRebind: false })).toHaveProperty('targetWeight');
-  });
-
-  it('schema drops targetWeight with the flag on — the session plan carries sets × reps only', () => {
-    expect(exerciseShapeOf({ loadPlanPlannerRebind: true })).not.toHaveProperty('targetWeight');
+describe('start_training_session — the planner writes no weights (coach-simplification I1)', () => {
+  it('schema drops targetWeight — the session plan carries sets × reps only', () => {
+    expect(exerciseShape()).not.toHaveProperty('targetWeight');
   });
 
   it('a targetWeight sent anyway is stripped: the session plan DTO stores none', async () => {
     const trainingService = makeTrainingService();
-    const { startTrainingSession } = buildTools(
-      trainingService,
-      makeWorkoutPlanRepo(),
-      makeUserFactsService(),
-      makeExerciseRepository(),
-      {
-        loadPlanPlannerRebind: true,
-      },
-    );
+    const { startTrainingSession } = buildTools(trainingService, makeWorkoutPlanRepo());
 
     const input = JSON.parse(JSON.stringify(MINIMAL_SESSION_PLAN)) as { exercises: Record<string, unknown>[] };
     input.exercises[0].targetWeight = 70;

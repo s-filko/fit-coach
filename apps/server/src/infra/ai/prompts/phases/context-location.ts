@@ -2,7 +2,7 @@ import type { PromptModule, Section } from '@infra/ai/prompts/types';
 
 /**
  * Prompt-caching plan (BUG-051) D2: the per-turn context — the domain blocks the phase prompt refers to
- * (WORKOUT OVERVIEW, EXERCISE HISTORY, LOAD PLAN, client profile, …), the current time (NOW) and the time-gap note
+ * (today's workout, workout history, client profile, …), the current time (NOW) and the time-gap note
  * — no longer arrives as system messages. It rides in a `<context>` part at the start of the user's latest
  * message, so the system prompt and history stay byte-identical from call to call (prompt cache).
  */

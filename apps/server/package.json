@@ -42,7 +42,7 @@
     "db:prune-checkpoints": "tsx --env-file-if-exists=.env src/infra/db/scripts/prune-checkpoints.cli.ts",
     "db:prune-llm-calls": "tsx --env-file-if-exists=.env src/infra/db/scripts/prune-llm-calls.cli.ts",
     "print-transcript": "tsx --env-file-if-exists=.env scripts/print-transcript.ts",
-    "print-load-plan": "tsx --env-file-if-exists=.env scripts/print-load-plan.ts",
+    "print-training-request": "tsx --env-file-if-exists=.env scripts/print-training-request.ts",
     "cache-report": "tsx --env-file-if-exists=.env scripts/cache-report.ts",
     "db:sync": "tsx --env-file=.env src/infra/db/scripts/sync-user-data.ts",
     "build": "rimraf dist && tsup src/index.ts --format esm --dts --sourcemap --out-dir dist --clean",

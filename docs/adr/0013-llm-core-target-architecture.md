@@ -257,6 +257,24 @@ Numbers are initial defaults to be tuned with the eval harness; the invariant is
 > `LLM_CONTEXT_HARD_CAP_TOKENS` — any cut would rewrite the cached prefix. Block 1 is still never cut. Same warm
 > predicate and cap measure as the BR-LLM-003 amendment in §3.3.
 
+> **Amendment 2026-10-04 (coach-simplification I1, owner-approved D14) — the training phase.** Training has its own
+> layout; every other phase keeps the 2026-09-30 one. `PhaseSpec.memory: 'workout'` (training only; default
+> `'episodes'`) selects it:
+>
+> 1. **system** = the phase prompt (`TRAINING_COACH`, `phase.training` v13, ≤ 2 500 chars) + `# Profile`: the user
+>    line and the user facts rendered compact — one per category and muscle group, physical constraints first,
+>    `break` hidden, no dates or confirmation counts. Facts created during this workout are left out, so the system
+>    message stays cache-stable. The profile is part of block 1 and is never cut.
+> 2. **per-turn context** (`<context>` part of the current message) = `# Today` (plan, logged sets, planner warnings
+>    and notes, state lines: the check-in on the first training turn, `Reported today`) + `# History` (the last three
+>    performances per exercise, trend, loads used, habit line) + the time-gap note when due + `NOW`.
+> 3. **messages** = this workout only, from the message that started the session.
+>
+> The long-term block (`## User Facts`), the course directive and the episode summaries are not sent to training;
+> compaction and the course check still run. The `longTerm` budget does not apply to training, so INV-LLM-004's
+> facts and summaries steps have nothing to cut there; training's `history` budget is 16k. The `block.time_gap`
+> v2 path of the 2026-09-27 amendment was removed with `LOAD_PLAN_BREAKS` (I1); the gap note is v1 for every phase.
+
 Training's "history as a system text block" is replaced by the same message channel for all phases; the anti-"act on past messages" protection moves to (i) the `=== TOOL EXECUTION RESULTS ===` block, which stays, and (ii) an eval rubric criterion (TR-4 in the eval spec) instead of a structural hack.
 
 Rejected: per-phase bespoke assembly (current); token counting via provider API (adds latency and provider coupling); no budget (current).

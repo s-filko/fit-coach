@@ -17,7 +17,6 @@ import {
   DEFAULT_EXPIRY_ASK_WINDOW_MS,
   DEFAULT_RETRY_COOLDOWN_MS,
 } from '@infra/ai/course-check/course-check.step';
-import type { IBreakContext } from '@infra/ai/load-facts/break-context';
 
 import type { TokenBudgetOverride } from '@config/llm-budget-overrides';
 
@@ -57,26 +56,6 @@ export interface ConversationGraphDeps {
    * absent means enabled (the layer is the shipped behaviour).
    */
   courseCheckEnabled?: boolean;
-  /**
-   * LOAD_PLAN_SUGGESTION (load-plan plan A5), resolved once at the composition root: the training phase renders
-   * `training.load_plan` v2 and `get_load_plan` returns the v2 text. Optional; absent = off (the v1 behaviour).
-   */
-  loadPlanSuggestion?: boolean;
-  /**
-   * LOAD_PLAN_BREAKS (load-plan plan A5, Task 4), resolved once at the composition root: the break fact pipeline
-   * (summariser v7, verifier v2), the return ladder in LOAD PLAN and the one-time reason question in the time-gap
-   * note. Optional; absent = off (today's behaviour).
-   */
-  loadPlanBreaks?: boolean;
-  /**
-   * LOAD_PLAN_PLANNER_REBIND (load-plan plan A5, Task 5b, D10), resolved once at the composition root: the
-   * training / session_planning prompts become v11 / v5, WORKOUT OVERVIEW and the active-plan block become v2
-   * (sets × reps only) and the planner tools drop `targetWeight`. Takes effect only together with `loadPlanSuggestion`
-   * (`plannerRebindOn`). Optional; absent = off (today's behaviour).
-   */
-  loadPlanPlannerRebind?: boolean;
-  /** Task 4: the training-break context for the time-gap note; read only with `loadPlanBreaks` on. */
-  breakContext?: IBreakContext;
   /**
    * COURSE_CHECK_RETRY_COOLDOWN_MINUTES in ms — how long a failed check is not
    * retried on the same fingerprint. Optional like the switch; absent = 15 min.
@@ -145,8 +124,6 @@ function buildGraph(deps: ConversationGraphDeps) {
     userFacts,
     config: episodeConfig,
     budgetFor,
-    loadPlanBreaks: deps.loadPlanBreaks,
-    loadPlanSuggestion: deps.loadPlanSuggestion,
   });
   // AC-FL-5: the course-check step — same gap threshold as compaction and the
   // time-gap note (threaded from episodeConfig, never re-read from env).

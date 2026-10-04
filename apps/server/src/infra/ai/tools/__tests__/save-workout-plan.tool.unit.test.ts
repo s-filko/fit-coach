@@ -173,13 +173,11 @@ const buildTools = (
   workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
   userFactsService: jest.Mocked<IUserFactsService> = makeUserFactsService(),
   exerciseRepository: jest.Mocked<IExerciseRepository> = makeExerciseRepository(),
-  opts: { loadPlanPlannerRebind?: boolean } = {},
 ) => {
   const saveWorkoutPlan = buildSaveWorkoutPlanTool({
     workoutPlanRepository,
     exerciseRepository,
     userFactsService,
-    ...opts,
   }) as unknown as InvokableTool;
   return { saveWorkoutPlan };
 };
@@ -516,13 +514,12 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
 });
 
 /** The tool's parsed zod schema, for surface assertions. */
-const exerciseShapeOf = (opts?: { loadPlanPlannerRebind?: boolean }): Record<string, unknown> =>
+const exerciseShape = (): Record<string, unknown> =>
   (
     buildSaveWorkoutPlanTool({
       workoutPlanRepository: makeWorkoutPlanRepo(),
       exerciseRepository: makeExerciseRepository(),
       userFactsService: makeUserFactsService(),
-      ...(opts ?? {}),
     }) as unknown as {
       schema: {
         shape: {
@@ -532,21 +529,14 @@ const exerciseShapeOf = (opts?: { loadPlanPlannerRebind?: boolean }): Record<str
     }
   ).schema.shape.sessionTemplates.element.shape.exercises.element.shape;
 
-describe('save_workout_plan — LOAD_PLAN_PLANNER_REBIND (load-plan plan Task 5b, D10, AC-LP-7)', () => {
-  it('schema keeps targetWeight with the flag off or absent (legacy behaviour)', () => {
-    expect(exerciseShapeOf()).toHaveProperty('targetWeight');
-    expect(exerciseShapeOf({ loadPlanPlannerRebind: false })).toHaveProperty('targetWeight');
-  });
-
-  it('schema drops targetWeight with the flag on — sets × reps only', () => {
-    expect(exerciseShapeOf({ loadPlanPlannerRebind: true })).not.toHaveProperty('targetWeight');
+describe('save_workout_plan — the planner writes no weights (coach-simplification I1)', () => {
+  it('schema drops targetWeight — sets × reps only', () => {
+    expect(exerciseShape()).not.toHaveProperty('targetWeight');
   });
 
   it('a targetWeight sent anyway is stripped: the stored planJson carries none (the column is simply not written)', async () => {
     const repo = makeWorkoutPlanRepo();
-    const { saveWorkoutPlan } = buildTools(repo, makeUserFactsService(), makeExerciseRepository(), {
-      loadPlanPlannerRebind: true,
-    });
+    const { saveWorkoutPlan } = buildTools(repo);
 
     const input = JSON.parse(JSON.stringify(MINIMAL_PLAN)) as {
       sessionTemplates: { exercises: Record<string, unknown>[] }[];

@@ -150,6 +150,47 @@ describe('UserFactsRepository – integration', () => {
       expect(all[2]!.category).toBe('nutrition_preference');
     });
 
+    it('D14: physical constraints are never cut by the cap — 60 other facts, every constraint still returned', async () => {
+      const user = await userRepo.create(createTestUserData({ username: 'user_facts_constraint_cap_user' }));
+      // 'coaching_preference' / 'equipment' sort before 'physical_constraint' and fill the cap on their own;
+      // 'schedule_constraint' sorts after it. Constraints are the OLDEST rows.
+      await seedFact(user.id, {
+        category: 'physical_constraint',
+        fact: 'Lower back: avoid heavy axial loading',
+        muscleGroup: 'lower_back',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      await seedFact(user.id, {
+        category: 'physical_constraint',
+        fact: 'Left knee: no deep flexion',
+        muscleGroup: 'quads',
+        createdAt: new Date('2026-01-02T00:00:00Z'),
+      });
+      for (let i = 0; i < 30; i += 1) {
+        await seedFact(user.id, { category: 'coaching_preference', fact: `Preference ${i}` });
+        await seedFact(user.id, { category: 'equipment', fact: `Machine ${i}` });
+      }
+      await seedFact(user.id, { category: 'schedule_constraint', fact: 'Trains evenings' });
+
+      const facts = await repository.getForPrompt(user.id, FAR_FUTURE);
+      expect(facts).toHaveLength(50);
+      const constraints = facts.filter(f => f.category === 'physical_constraint').map(f => f.fact);
+      expect(constraints).toEqual(['Left knee: no deep flexion', 'Lower back: avoid heavy axial loading']);
+      // Category order is kept: the constraints sit after the categories that sort before them.
+      const categories = facts.map(f => f.category);
+      expect(categories).toEqual([...categories].sort());
+      expect(categories[categories.length - 1]).toBe('physical_constraint');
+
+      // Below the cap: the whole set in category order, the later category after the constraints.
+      const all = await repository.getForPrompt(user.id, FAR_FUTURE, 100);
+      expect(all).toHaveLength(63);
+      expect(all.map(f => f.category).slice(-3)).toEqual([
+        'physical_constraint',
+        'physical_constraint',
+        'schedule_constraint',
+      ]);
+    });
+
     it('AC-FL-1: an expired short fact is not returned; the same fact is before its expiry', async () => {
       const userData = createTestUserData({ username: 'user_facts_expiry_user' });
       const user = await userRepo.create(userData);

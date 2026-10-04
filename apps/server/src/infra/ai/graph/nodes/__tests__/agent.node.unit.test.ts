@@ -365,6 +365,90 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     );
   });
 
+  // coach-simplification I1 (AC-CS1-2): `memory: 'workout'` — the phase's own blocks carry the facts, the request
+  // holds this workout's messages only.
+  describe("memory: 'workout' (coach-simplification I1)", () => {
+    const FACT = {
+      id: 'f1',
+      category: 'preference',
+      fact: 'ALWAYS-ON-FACT',
+      confirmations: 1,
+      updatedAt: new Date('2026-09-01T10:00:00Z'),
+    };
+    const DIRECTIVE = {
+      vector: 'strength',
+      constraints: [],
+      questions: ['DIRECTIVE-QUESTION'],
+      suspectFacts: [],
+      exerciseVerdicts: [],
+    };
+    const SUMMARY = {
+      endedAt: '2026-09-01T10:00:00.000Z',
+      phaseAtEnd: 'training',
+      summary: {
+        topics: ['EPISODE-TOPIC'],
+        decisions: [],
+        userState: [],
+        trainingFeedback: [],
+        openItems: [],
+        facts: [],
+      },
+    };
+    const START = new AIMessage({
+      content: '',
+      tool_calls: [{ id: 'start-1', name: 'start_training_session', args: {}, type: 'tool_call' }],
+    });
+    const messages = [
+      new HumanMessage('before the workout'),
+      new AIMessage('old reply'),
+      new HumanMessage('начнём тренировку'),
+      START,
+      new ToolMessage({ tool_call_id: 'start-1', content: 'started' }),
+      new AIMessage('Поехали!'),
+      new HumanMessage('жим 80 на 8'),
+    ];
+    const loaded = (data: object) => jest.fn(async () => ({ ok: true as const, data }));
+
+    const sentWith = async (memory: 'workout' | undefined): Promise<BaseMessage[]> => {
+      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+      const deps = makeDeps({ userFacts: { getForPrompt: jest.fn(async () => [FACT]) } });
+      const spec = makeSpec({ loadContext: loaded({ lastMessageTime: null }), ...(memory ? { memory } : {}) });
+      await buildAgentNode(spec, deps)(
+        makeState({
+          messages,
+          episodeSummaries: [SUMMARY as never],
+          courseDirective: { directive: DIRECTIVE, createdAt: '2026-09-01T10:00:00.000Z' } as never,
+        }),
+        CONFIG,
+      );
+      return mockInvoke.mock.calls[0][0] as BaseMessage[];
+    };
+
+    it('no user facts, course directive or episode summaries in the system message; facts are not even loaded', async () => {
+      const sent = await sentWith('workout');
+      const system = textOf(sent[0] as BaseMessage);
+      expect(system).not.toMatch(/ALWAYS-ON-FACT|DIRECTIVE-QUESTION|EPISODE-TOPIC|User Facts|Previous episodes/);
+    });
+
+    it('sends this workout only: from the human message that started it, without the start call and its result', async () => {
+      const sent = await sentWith('workout');
+      const texts = sent.slice(1).map(m => (m._getType() === 'human' ? textOf(m) : String(m.content)));
+      expect(texts.some(t => t.includes('before the workout') || t.includes('old reply'))).toBe(false);
+      expect(sent.some(m => m._getType() === 'tool')).toBe(false);
+      expect(sent.filter(m => m._getType() === 'human')).toHaveLength(2); // «начнём тренировку» + the current one
+      expect(sent.some(m => m._getType() === 'ai' && String(m.content) === 'Поехали!')).toBe(true);
+    });
+
+    it('the default memory (episodes) is unchanged: facts, directive, summaries and the whole history', async () => {
+      const sent = await sentWith(undefined);
+      const system = textOf(sent[0] as BaseMessage);
+      expect(system).toContain('ALWAYS-ON-FACT');
+      expect(system).toContain('DIRECTIVE-QUESTION');
+      expect(system).toContain('EPISODE-TOPIC');
+      expect(sent.filter(m => m._getType() === 'human')).toHaveLength(3);
+    });
+  });
+
   it('a block that renders null is absent from the message array (block is "not applicable" this run)', async () => {
     mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
     const spec = makeSpec({
@@ -423,80 +507,6 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
 
       const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
       expect(sent.some(m => String(m.content).includes('The user returns after'))).toBe(false);
-    });
-  });
-
-  // load-plan Task 4 (D9, LOAD_PLAN_BREAKS): the same note carries the training-break tier and the once-only
-  // reason question; off = v1 exactly.
-  describe('time-gap note with breaks (load-plan Task 4)', () => {
-    // A run's ctx is per run (the node memoises the break note on it) — never share CONFIG's object across tests.
-    const freshConfig = (): RunnableConfig => {
-      const base = CONFIG as unknown as { context: Record<string, unknown> };
-      return { ...CONFIG, context: { ...base.context } } as unknown as RunnableConfig;
-    };
-    const FOUR_H_AGO = (): string => new Date(-4 * 3_600_000).toISOString();
-    const SHORT_AGO = (): string => new Date(-60_000).toISOString();
-    const run = async (deps: ConversationGraphDeps, lastUserMessageAt: string | null) => {
-      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
-      await buildAgentNode(makeSpec(), deps)(
-        { ...makeState(), messages: [new HumanMessage('привет')], lastUserMessageAt },
-        freshConfig(),
-      );
-      return contextOf(mockInvoke.mock.calls[0][0] as BaseMessage[]);
-    };
-    const breakContext = (note: unknown) => ({ resolve: jest.fn(async () => note) });
-
-    it('flag on, training break not yet asked about: the tier and the question ride in the note even without a message gap', async () => {
-      const resolve = breakContext({ tier: 'rebuild', days: 30, ask: true });
-      const context = await run(makeDeps({ loadPlanBreaks: true, breakContext: resolve }), SHORT_AGO());
-      expect(context).toContain('The user returns after a training break of 30 days');
-      expect(context).toContain('tier rebuild');
-      expect(context).toContain('ask ONCE');
-      expect(resolve.resolve).toHaveBeenCalledWith('u1', new Date(0), expect.anything());
-    });
-
-    it('flag on with a message gap: v1 sentence, then the training tier', async () => {
-      const context = await run(
-        makeDeps({ loadPlanBreaks: true, breakContext: breakContext({ tier: 'return', days: 15, ask: false }) }),
-        FOUR_H_AGO(),
-      );
-      expect(context).toContain('The user returns after 4 h.');
-      expect(context).toContain('Training: training break of 15 days');
-      expect(context).not.toContain('ask ONCE');
-    });
-
-    it('flag on, already asked and no message gap: no note at all', async () => {
-      const context = await run(
-        makeDeps({ loadPlanBreaks: true, breakContext: breakContext({ tier: 'return', days: 15, ask: false }) }),
-        SHORT_AGO(),
-      );
-      expect(context).not.toContain('The user returns after');
-    });
-
-    it('flag on, no training break and no message gap: no note', async () => {
-      const context = await run(makeDeps({ loadPlanBreaks: true, breakContext: breakContext(null) }), SHORT_AGO());
-      expect(context).not.toContain('The user returns after');
-    });
-
-    it('the question survives the later model calls of the same run (resolved once per run)', async () => {
-      const resolve = breakContext({ tier: 'rebuild', days: 30, ask: true });
-      const deps = makeDeps({ loadPlanBreaks: true, breakContext: resolve });
-      const node = buildAgentNode(makeSpec(), deps);
-      const state = { ...makeState(), messages: [new HumanMessage('привет')], lastUserMessageAt: SHORT_AGO() };
-      mockInvoke.mockResolvedValue(new AIMessage({ content: 'ok', tool_calls: [] }));
-      const runConfig = freshConfig();
-      await node(state, runConfig);
-      await node(state, runConfig);
-      expect(resolve.resolve).toHaveBeenCalledTimes(1);
-      expect(contextOf(mockInvoke.mock.calls[1][0] as BaseMessage[])).toContain('ask ONCE');
-    });
-
-    it('flag off: the break context is never consulted and the note is v1', async () => {
-      const resolve = breakContext({ tier: 'rebuild', days: 30, ask: true });
-      const context = await run(makeDeps({ breakContext: resolve }), FOUR_H_AGO());
-      expect(resolve.resolve).not.toHaveBeenCalled();
-      expect(context).toContain('The user returns after 4 h. Reply to their new message first');
-      expect(context).not.toContain('training break');
     });
   });
 

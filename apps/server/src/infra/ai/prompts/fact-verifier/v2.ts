@@ -1,8 +1,25 @@
-import { BREAK_REASONS, type SchemeId, SCHEMES } from '@domain/training/load-plan';
+import { BREAK_REASONS, type SchemeId, SCHEMES } from '@domain/user/services/fact-formats';
 
 import type { PromptModule, Section } from '@infra/ai/prompts/types';
 
-import type { FactVerifierOperation } from './v1';
+/** One candidate operation as the verifier must see it (D3): the index is the verdict's `index`. */
+export interface FactVerifierOperation {
+  /** The verdict must quote this number back as `index`. */
+  index: number;
+  op: 'add' | 'update' | 'retract';
+  /** add/update: the fact text about to be stored. */
+  fact?: string;
+  /** add/update: the phase note about to be stored beside the fact. */
+  phaseNote?: string;
+  /** update only: the text of the known fact being superseded. */
+  oldFactText?: string;
+  /** retract only: the text of the known fact being retracted (D13 — the reason alone misleads on a wrong factId). */
+  retractedFactText?: string;
+  /** retract only: why the summariser says the fact stopped being true. */
+  reason?: string;
+  /** The summariser’s own `evidence` quote — a HINT, verified against the transcript, never trusted. */
+  evidence?: string;
+}
 
 /** How the user describes each scheme; keyed by `SchemeId`, so a new scheme fails to compile until it has one. */
 const SCHEME_WORDS: Record<SchemeId, string> = {
@@ -21,11 +38,15 @@ export interface FactVerifierV2Context {
 }
 
 /**
- * Fact verifier v2 (load-plan plan Task 4 + 5a — with `LOAD_PLAN_BREAKS` or `LOAD_PLAN_SUGGESTION`): v1 plus the
- * `break` and `progression_scheme` category rules.
- * A break fact (break reason=<class> from=<date> to=<date> — <words>) is supported only when the user said
- * that they paused training for that reason and over those dates; the reason class must be the one the user's
- * words name, "unknown" only when the user gave no reason. Everything else is v1 verbatim.
+ * Fact verifier v2 (the live version): the model-based replacement of the string `checkFactProvenance`
+ * (fact-verification plan, BUG-040 follow-up) — one structured call receives the episode transcript with speaker
+ * labels and the candidate operations, and says per operation whether the USER stated or explicitly confirmed it.
+ * Only verdicts the code can map to an operation count (missing / duplicate / out-of-range index → unsupported, D4);
+ * a thrown or unparsable answer fails closed in `verify-fact-operations` (D5). v2 = v1 (retired) plus the `break`
+ * and `progression_scheme` category rules: a break fact (break reason=<class> from=<date> to=<date> — <words>) is
+ * supported only when the user said that they paused training for that reason and over those dates, the reason
+ * class the one the user's words name ("unknown" only when the user gave no reason); a scheme only when the user
+ * asked for or accepted it. Pure (BR-LLM-007): transcript and operations arrive as data; no clock, no I/O.
  */
 export const FACT_VERIFIER_V2: PromptModule<FactVerifierV2Context> = {
   id: 'fact-verifier',

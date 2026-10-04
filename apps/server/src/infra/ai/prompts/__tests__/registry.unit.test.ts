@@ -13,21 +13,14 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     ]);
   });
 
-  it('promptVersionsForPhase(training) lists the phase (v10 — prompt-caching plan D2: CONTEXT LOCATION note, per-turn context now rides in <context> of the latest user message; v9 was load-facts plan Task 2, D13: LOAD PLAN rule 1, get_load_plan TOOLS entry, RULE 11 sources; v8 was set-kind plan Task 1, D9: setKind/per-hand rules, set_session_place TOOLS entry; v7 was training-history-lookup D4, get_exercise_history; v6 was BUG-030 exercise-history rewrite; v5 was BUG-037 transition reply order; v4 was BUG-032 current-time directive; v3 was exerciseId / search_exercises tool rules; v2 was P4 Task 2, D-B), its directives and the shared blocks', () => {
+  it('promptVersionsForPhase(training) lists the phase (v13 — coach-simplification I1: coach persona + profile, no directives), the stamped shared blocks', () => {
     const versions = promptVersionsForPhase('training');
-    expect(versions['phase.training']).toBe('v10');
-    expect(versions['directive.identity']).toBeUndefined(); // training has no identity directive
-    expect(versions['directive.tool-reply']).toBe('v1');
-    expect(versions['block.episode_summaries']).toBe('v2');
-    // BUG-036 + owner language rule (R3): training reaches DIRECTIVES_WITHOUT_IDENTITY_V2,
-    // which carries LANGUAGE_V2 (no "from Telegram" wording) — the only v2 directive.
-    expect(versions['directive.language']).toBe('v2');
-    const {
-      'phase.training': _phaseVersion,
-      'block.episode_summaries': _episodeSummariesVersion,
-      'directive.language': _languageVersion,
-      ...rest
-    } = versions;
+    expect(versions['phase.training']).toBe('v13');
+    expect(versions['directive.identity']).toBeUndefined(); // training has no directives any more
+    expect(versions['directive.tool-reply']).toBeUndefined();
+    expect(versions['directive.language']).toBeUndefined();
+    expect(versions['block.episode_summaries']).toBe('v2'); // stamped for every phase (the block is just not rendered here)
+    const { 'phase.training': _phaseVersion, 'block.episode_summaries': _episodeSummariesVersion, ...rest } = versions;
     expect(Object.values(rest).every(v => v === 'v1')).toBe(true);
   });
 

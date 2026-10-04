@@ -71,16 +71,32 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505';
 }
 
+const CONSTRAINT: FactCategory = 'physical_constraint';
+
 /** Drizzle implementation of {@link IUserFactsService} (ADR-0009 table shape, D-B/D-C). */
 export class UserFactsRepository implements IUserFactsService {
+  /**
+   * Visible facts ordered by category, then newest first, at most `cap` rows — except that physical constraints are
+   * never cut (coach-simplification D14): they are fetched without a limit and the other categories fill what is left
+   * of the cap. Below the cap the result is exactly the single ordered query's.
+   */
   async getForPrompt(userId: string, now: Date, cap = 50): Promise<UserFact[]> {
-    const rows = await db
+    const constraints = await db
       .select()
       .from(userFacts)
-      .where(and(eq(userFacts.userId, userId), visibleAt(now)))
+      .where(and(eq(userFacts.userId, userId), eq(userFacts.category, CONSTRAINT), visibleAt(now)))
+      .orderBy(desc(userFacts.createdAt));
+    const others = await db
+      .select()
+      .from(userFacts)
+      .where(and(eq(userFacts.userId, userId), ne(userFacts.category, CONSTRAINT), visibleAt(now)))
       .orderBy(asc(userFacts.category), desc(userFacts.createdAt))
-      .limit(cap);
-    return rows.map(toUserFact);
+      .limit(Math.max(cap - constraints.length, 0));
+    // Back into category order: the constraint block goes before the first category that sorts after it (the
+    // categories are fixed lowercase ids, so JS order and the column's collation agree).
+    const at = others.findIndex(row => row.category > CONSTRAINT);
+    const split = at === -1 ? others.length : at;
+    return [...others.slice(0, split), ...constraints, ...others.slice(split)].map(toUserFact);
   }
 
   async getExpiredActive(userId: string, now: Date): Promise<UserFact[]> {

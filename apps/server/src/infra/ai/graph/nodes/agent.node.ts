@@ -14,12 +14,12 @@ import { assembleContext } from '@infra/ai/context/assemble-context';
 import { applyCacheBreakpoints, partsOf, withParts } from '@infra/ai/context/cache-breakpoints';
 import { warmCacheOf } from '@infra/ai/context/cache-warmth';
 import type { CourseCheckDirective, StoredCourseDirective } from '@infra/ai/course-check/directive';
-import { splitEpisode } from '@infra/ai/graph/episode';
+import { hasCoachReply, splitEpisode, workoutHistory } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
-import { CURRENT_TIME_V1, POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1, TIME_GAP_V2 } from '@infra/ai/prompts/blocks';
+import { CURRENT_TIME_V1, POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 import { extractUsageFromMessage, stripRawResponse } from '@infra/ai/usage';
 
@@ -146,7 +146,16 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     const { history, current } = splitEpisode(state.messages ?? []);
     const lang = langOf(user?.languageCode);
 
-    const loaded = await spec.loadContext({ userId, user, activeSessionId: state.activeSessionId ?? null, now }, deps);
+    const loaded = await spec.loadContext(
+      {
+        userId,
+        user,
+        activeSessionId: state.activeSessionId ?? null,
+        now,
+        coachReplied: hasCoachReply(history, current),
+      },
+      deps,
+    );
     if (!loaded.ok) {
       // D-B: phase data guards are catalog replies — no model call.
       return { messages: [new AIMessage(t(loaded.reply, lang))] };
@@ -162,25 +171,13 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     const gapMs = lastMessageTime !== null ? now.getTime() - lastMessageTime.getTime() : null;
     const messageGapMs = gapMs !== null && gapMs >= deps.episodeConfig.gapMs ? gapMs : null;
     let gapNote: string | null = null;
-    let gapModule: typeof TIME_GAP_V1 | typeof TIME_GAP_V2 = TIME_GAP_V1;
-    if (deps.loadPlanBreaks === true) {
-      // load-plan Task 4 (D9): the same note also carries the training-break tier and, once per break, the
-      // reason question — one "long time no see" mechanism. Off = v1 exactly.
-      if (ctx.trainingBreak === undefined) {
-        ctx.trainingBreak = (await deps.breakContext?.resolve(userId, now, user?.timezone ?? null)) ?? null;
-      }
-      const training = ctx.trainingBreak ?? undefined;
-      if (messageGapMs !== null || training?.ask) {
-        gapModule = TIME_GAP_V2;
-        gapNote = renderBlock(TIME_GAP_V2, { gapMs: messageGapMs, training });
-      }
-    } else if (messageGapMs !== null) {
+    if (messageGapMs !== null) {
       gapNote = renderBlock(TIME_GAP_V1, { gapMs: messageGapMs });
     }
     if (gapNote !== null) {
       // Review R1 (BR-LLM-008): the note reached the request, so the run row
       // must stamp it — `commit` merges these into the row's promptVersions.
-      ctx.promptVersionExtras = { [gapModule.id]: gapModule.version };
+      ctx.promptVersionExtras = { [TIME_GAP_V1.id]: TIME_GAP_V1.version };
     }
     // The shared render context (review R2: built once) — the NOW line and the
     // phase prompt render from the same `now`/`timezone`/`user` (BR-LLM-007:
@@ -205,10 +202,8 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
         ...loaded.data,
       } as PromptContextFor<D>),
     );
-    // load-plan plan Task 5b (AC-LP-7): stamp the phase module version actually rendered — with
-    // LOAD_PLAN_PLANNER_REBIND the graph renders v11/v5 while the static registry still says
-    // v10/v4. `commit` merges these extras over `promptVersionsForPhase`; the value is the same
-    // one when the flag is off, so today's run rows do not change.
+    // Stamp the phase module version actually rendered; `commit` merges these extras over
+    // `promptVersionsForPhase`.
     ctx.promptVersionExtras = {
       ...ctx.promptVersionExtras,
       [spec.prompt.current.id]: spec.prompt.current.version,
@@ -227,7 +222,10 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // P6 Task 4 (D-F): facts are loaded once per run here, not per block
     // render — the block itself is pure and takes already-loaded data. AC-FL-1:
     // the run clock (ctx.now) decides what is expired — never the DB clock.
-    const userFacts = await deps.userFacts.getForPrompt(userId, now);
+    // coach-simplification I1: a `'workout'` phase (training) renders its own facts through its blocks and
+    // system message — no user-facts block, course directive or episode summaries, and only this workout's messages.
+    const workoutMemory = spec.memory === 'workout';
+    const userFacts = workoutMemory ? [] : await deps.userFacts.getForPrompt(userId, now);
 
     // ADR-0013 §3.4 block 2a (D-F) + block 3 (D-A/D-B) + INV-LLM-004 (Task 3,
     // order extended by Task 4): assembleContext renders spec.contextBlocks at
@@ -248,11 +246,11 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       userFacts,
       // AC-FL-5: the directive the course-check step stored (or kept) in
       // prepare this run — its payload, rendered as one block after the facts.
-      courseDirective: directiveForRun(state),
-      episodeSummaries: state.episodeSummaries ?? [],
+      courseDirective: workoutMemory ? null : directiveForRun(state),
+      episodeSummaries: workoutMemory ? [] : (state.episodeSummaries ?? []),
       contextBlocks: spec.contextBlocks,
       blockData: loaded.data,
-      history,
+      history: workoutMemory ? workoutHistory(history, current) : history,
       current,
       gapNote,
       nowLine,

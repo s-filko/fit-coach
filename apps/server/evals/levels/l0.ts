@@ -20,11 +20,7 @@ export const FORBIDDEN_STRINGS = ['undefined', 'null', '[object Object]', 'NaN']
  * substituted into a prompt instead of scanning the whole rendered string. This
  * allowlist is the stopgap until then.
  */
-export const FORBIDDEN_STRING_ALLOWLIST = [
-  // src/infra/ai/prompts/phases/training/v1.ts RULES_TEXT — RULE 7 of the training prompt.
-  // "undefined" here is English ("in undefined sequence"), not an unrendered value.
-  'Sets without order may execute in undefined sequence',
-];
+export const FORBIDDEN_STRING_ALLOWLIST: readonly string[] = [];
 
 function findForbiddenHits(rendered: string): string[] {
   let scannable = rendered;
@@ -47,7 +43,7 @@ function findForbiddenHits(rendered: string): string[] {
  *   phase.plan_creation    1378-1385   (budget  8000)
  *   phase.session_planning 2199-2216   (budget 12000)
  *   phase.training         3391-3396   (budget  8000)
- *   summarizer               248       (budget  2000)
+ *   summarizer               248       (budget  2000; v7 measures 2170 → budget 3000, coach-simplification D14)
  *   block.*                  34-119    (default  8000)
  */
 export const PROMPT_TOKEN_BUDGET: Record<string, number> = {
@@ -56,7 +52,7 @@ export const PROMPT_TOKEN_BUDGET: Record<string, number> = {
   'phase.plan_creation': 8000,
   'phase.session_planning': 12000,
   'phase.training': 8000,
-  summarizer: 2000,
+  summarizer: 3000,
 };
 
 export const EVAL_PHASES = ['registration', 'chat', 'plan_creation', 'session_planning', 'training'];

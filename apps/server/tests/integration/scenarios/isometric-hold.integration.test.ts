@@ -1,5 +1,5 @@
 /**
- * load-plan-fixes item 2 (AC-LPF-2, replay C2): a plank reported in seconds goes through `log_set` with
+ * plan-fixes item 2 (AC-LPF-2, replay C2): a plank reported in seconds goes through `log_set` with
  * `durationSeconds` and must be stored as an `isometric` set (`{type:'isometric', duration}`), not as
  * `cardio_duration` or `functional_reps`; a cardio duration stays `cardio_duration`. Scripted model, real test DB,
  * journey B's setup (same wiring as `set-kind.integration.test.ts`).

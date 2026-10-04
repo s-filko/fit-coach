@@ -1,8 +1,8 @@
 /**
  * `get_exercise_history` (training-history-lookup plan, Task 1 — AC-HL-3): a scripted-model
- * training scenario. The user asks about an exercise EXERCISE HISTORY and RECENT WORKOUTS do NOT
+ * training scenario. The user asks about an exercise today's History block does NOT
  * cover (Running: not in the upper_a plan, and its one completed performance is 10 days back,
- * outside the 7-day RECENT WORKOUTS window) — the scripted model calls `get_exercise_history`, and
+ * outside the recent-workouts window) — the scripted model calls `get_exercise_history`, and
  * its dated result must reach the model on the SAME turn (the second scripted-model call, once the
  * tool has run — `scripted-model.ts`'s FIFO chat recording captures both calls of a turn).
  *
@@ -30,8 +30,8 @@ const past: Scenario['past'] = {
   ...sharedPast,
   workouts: [
     ...sharedPast.workouts,
-    // Outside the 7-day RECENT WORKOUTS window (T0 - 10d), and Running is not in the upper_a
-    // plan — EXERCISE HISTORY never lists it either. The only way to see this data is the tool.
+    // Outside the recent-workouts window (T0 - 10d), and Running is not in the upper_a
+    // plan — today's History never lists it either. The only way to see this data is the tool.
     {
       at: '-10d',
       key: 'cardio_a',
@@ -43,7 +43,7 @@ const past: Scenario['past'] = {
 const scenarioDef: Scenario = {
   id: 'exercise-history-lookup',
   description:
-    'AC-HL-3: the user asks about an exercise absent from EXERCISE HISTORY/RECENT WORKOUTS; the ' +
+    'AC-HL-3: the user asks about an exercise absent from the History block; the ' +
     'model calls get_exercise_history and the dated numbers reach it on the same turn',
   past,
   steps: [
@@ -104,7 +104,7 @@ describe('get_exercise_history — scripted training scenario (AC-HL-3)', () => 
 
   it("the tool result — dated, carrying Running's real numbers — reaches the model on the same turn", () => {
     const seen = seenByStep.get(ASK_STEP_INDEX) ?? '';
-    expect(seen).toContain('2026-09-10');
+    expect(seen).toContain('10 days ago, Thursday Sep 10');
     expect(seen).toContain('30min');
     expect(seen).not.toContain('no completed record of Running');
   });

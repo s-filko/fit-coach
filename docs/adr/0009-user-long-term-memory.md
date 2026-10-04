@@ -217,6 +217,17 @@ Approved by the owner 2026-09-30 (plan `load-plan` gate 2):
   deload, stress/poor sleep, unknown) and the user's words; `durability = short`, expiring at the end of the return
   ladder.
 
+### Amendment 2026-10-04 — unconditional extraction, constraints never cut (coach-simplification I1, owner-approved D14)
+
+- `break` and `progression_scheme` extraction no longer depends on a flag: summariser v7 and fact verifier v2 are the
+  live versions (v6 and verifier v1 retired), and `LOAD_PLAN_BREAKS` / `LOAD_PLAN_SUGGESTION` are gone with the load
+  engine. The apply step still checks each text's shape and forces the lifetimes; `break` is `short` at the 14-day
+  cap (the return ladder no longer exists).
+- The load engine that read both categories is deleted. Training's `# Profile` shows a `progression_scheme` fact as
+  the user's words and hides `break` (ADR-0013 §3.4, amendment 2026-10-04); the other phases keep `## User Facts`.
+- `getForPrompt` never cuts `physical_constraint` rows: they are read without the 50-row cap and the other
+  categories fill the rest; below the cap the result is unchanged.
+
 ---
 
 ## Architecture

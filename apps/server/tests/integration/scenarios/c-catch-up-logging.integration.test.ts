@@ -318,10 +318,8 @@ describe.each([
     itEntries('seen', 9, stepAt(9).expect?.seen?.mustMatch, () => seenOf(9));
     itEntries('delivered', 9, stepAt(9).expect?.delivered?.mustMatch, () => observationOf(9).delivered);
 
-    it('the model saw the STALE SESSION block (the training phase re-read the session)', () => {
-      expect(seenOf(9)).toContain('=== STALE SESSION ===');
-      expect(seenOf(9)).toContain('This session has been inactive for 3 hours.');
-      expect(seenOf(9)).toContain('Retro-logging is active');
+    it('the model saw the stale-session fact in # Today (the training phase re-read the session)', () => {
+      expect(seenOf(9)).toContain("No activity for 3 h; a set logged now is dated to the session's last activity.");
     });
 
     it('log_set was called for the pull-ups', () => {

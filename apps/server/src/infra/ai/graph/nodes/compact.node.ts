@@ -13,7 +13,7 @@
  *
  * Fact operations (fact-lifecycle plan Task 3, AC-FL-4 — reverses the P6
  * 2026-09-17 no-per-turn-tool stance, which Task 2's `manage_fact` already
- * ended): the episode summariser (v4/v5/v6 — one shared EpisodeSummaryV4Schema)
+ * ended): the episode summariser (v4…v7 — one shared EpisodeSummaryV4Schema)
  * SEES the user's known active facts and returns operations (add / confirm /
  * update / retract) instead of a blind upsert. BUG-040 follow-up
  * (fact-verification plan): add/update/retract are further guarded by ONE
@@ -47,8 +47,8 @@ import {
 } from '@domain/conversation/episode';
 import type { ConversationPhase } from '@domain/conversation/phases';
 import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
-import { parseBreakFact, parseProgressionFact } from '@domain/training/load-plan';
 import type { IUserFactsService } from '@domain/user/ports';
+import { parseBreakFact, parseProgressionFact } from '@domain/user/services/fact-formats';
 import { FACT_LIFECYCLE_BOUNDS, PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
 
 import { conversationTokens, warmCacheOf } from '@infra/ai/context/cache-warmth';
@@ -56,7 +56,7 @@ import { estimateMessages } from '@infra/ai/context/token-estimator';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
 import { episodeParagraph } from '@infra/ai/prompts/blocks';
-import { SUMMARIZER_PROMPT, SUMMARIZER_V7 } from '@infra/ai/prompts/summarizer';
+import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
 
 import { formatInUserTz } from '@shared/date-utils';
 import { createLogger } from '@shared/logger';
@@ -66,7 +66,7 @@ import { type FactVerdictMap, verifyFactOperations } from './verify-fact-operati
 
 const log = createLogger('compact-node');
 
-/** The `break` fact's lifetime: the short-class cap — about the length of the return ladder. */
+/** The `break` fact's lifetime: the short-class cap (14 days). */
 const BREAK_TTL_DAYS = FACT_LIFECYCLE_BOUNDS.short.maxDays;
 
 /** The D-L tunables, resolved once at the composition root (never read mid-run). */
@@ -107,10 +107,6 @@ export interface CompactStepDeps {
   config: EpisodeTunables;
   /** PhaseSpec.budget.history (D-D) — the BR-LLM-003 trigger input. */
   budgetFor: (phase: ConversationPhase) => number;
-  /** LOAD_PLAN_BREAKS (load-plan Task 4): summariser v7 + verifier v2 (the `break` category). Absent = off. */
-  loadPlanBreaks?: boolean;
-  /** LOAD_PLAN_SUGGESTION (load-plan Task 5a, A6): also selects v7 / verifier v2 and allows `progression_scheme`. */
-  loadPlanSuggestion?: boolean;
 }
 
 export type CompactStep = (
@@ -121,11 +117,6 @@ export type CompactStep = (
 export function buildCompactStep(deps: CompactStepDeps): CompactStep {
   const { llmGateway, summaries, userFacts, config, budgetFor } = deps;
   const { gapMs, minTurns, minTokens, keepTurns, budgetLowWater = 1, cacheTtlMs, hardCapTokens } = config;
-
-  const categoryFlags: CategoryFlags = {
-    breaks: deps.loadPlanBreaks === true,
-    schemes: deps.loadPlanSuggestion === true,
-  };
 
   return async function compactStep(state, config): Promise<Partial<ConversationStateType>> {
     const ctx = ctxOf(config as never);
@@ -288,22 +279,16 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     // D3: the verifier must see the SAME transcript the summariser saw.
     const transcript = renderTranscript(removed);
     try {
-      // load-plan Task 4 + 5a (A6): v7 (adds the `break` / `progression_scheme` categories) only with
-      // LOAD_PLAN_BREAKS or LOAD_PLAN_SUGGESTION on, each section only for its own flag; both off = v6 exactly.
-      const sections =
-        categoryFlags.breaks || categoryFlags.schemes
-          ? SUMMARIZER_V7.render({
-              phase: state.phase,
-              transcript,
-              knownFacts,
-              breaks: categoryFlags.breaks,
-              schemes: categoryFlags.schemes,
-              episodeDate: formatInUserTz(
-                state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : ctx.now,
-                ctx.user?.timezone ?? null,
-              ).dateOnly,
-            })
-          : SUMMARIZER_PROMPT.render({ phase: state.phase, transcript, knownFacts });
+      // Summariser v7: the episode date resolves the relative dates of a `break` fact.
+      const sections = SUMMARIZER_PROMPT.render({
+        phase: state.phase,
+        transcript,
+        knownFacts,
+        episodeDate: formatInUserTz(
+          state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : ctx.now,
+          ctx.user?.timezone ?? null,
+        ).dateOnly,
+      });
       const messages: ChatMsg[] = sections.map(s => ({
         role: s.id === 'system' ? 'system' : 'user',
         content: s.text,
@@ -332,7 +317,9 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       const stored: StoredEpisodeSummary = {
         episodeId: state.episodeId || runId,
         phaseAtEnd: state.phase,
-        endedAt: ctx.now.toISOString(),
+        // The episode's newest user message — compaction itself runs at the NEXT run, so ctx.now would
+        // label an old episode "today".
+        endedAt: (state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : ctx.now).toISOString(),
         summary,
       };
       // fact-lifecycle plan Task 1: the mirrored summary turn row is the honest
@@ -385,7 +372,6 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
             knownFacts,
             runId,
             userId,
-            breaks: categoryFlags.breaks || categoryFlags.schemes,
           });
         }
         let mutatingIndex = -1; // the verifier numbers the mutating ops 0..n-1, in this order
@@ -427,7 +413,7 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
             // add/update consume it (D19) — retract/confirm write no quote.
             const userQuote = verdict?.userQuote ?? '';
             const quote = userQuote !== '' ? userQuote : (op.evidence ?? null);
-            await applyFactOperation(userFacts, userId, op, quote, evidenceAt, ctx.now, summaryTurnId, categoryFlags);
+            await applyFactOperation(userFacts, userId, op, quote, evidenceAt, ctx.now, summaryTurnId);
           } catch (err) {
             if (err instanceof PermanentFactRefusal) {
               log.info({ userId, runId, op: op.op }, 'Fact operation skipped — permanent refused without the gate');
@@ -444,24 +430,18 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
   };
 }
 
-/** Gated fact categories: `break` needs LOAD_PLAN_BREAKS, `progression_scheme` needs LOAD_PLAN_SUGGESTION. */
-interface CategoryFlags {
-  breaks: boolean;
-  schemes: boolean;
-}
-
 /** The `progression_scheme` fact is a standing choice: long-term, reviewed at the class maximum (182 d). */
 const SCHEME_REVIEW_DAYS = FACT_LIFECYCLE_BOUNDS.longTerm.maxDays;
 
 /**
- * load-plan D8/D9 (A6): the gated categories are stored only when their flag is on AND their text is well formed —
- * `break`: known reason class, valid dates; `progression_scheme`: a registry id (an unknown id is rejected). The
- * code reads both back from the text. Lifetimes are forced to the class rule: `break` short, expiring with the return
- * ladder (≈ the 14-day short cap), forgotten silently; `progression_scheme` long-term. Any other category passes.
+ * The two fixed-shape categories are stored only when their text is well formed — `break`: known reason class,
+ * valid dates; `progression_scheme`: a registry id (an unknown id is rejected). The code reads both back from the
+ * text. Lifetimes are forced to the class rule: `break` short (the 14-day short cap), forgotten silently;
+ * `progression_scheme` long-term. Any other category passes.
  */
-function gatedOperationValid(op: FactOperation, flags: CategoryFlags): boolean {
+function gatedOperationValid(op: FactOperation): boolean {
   if (op.category === 'break') {
-    if (!flags.breaks || op.fact === undefined || parseBreakFact(op.fact) === null) {
+    if (op.fact === undefined || parseBreakFact(op.fact) === null) {
       return false;
     }
     op.durability = 'short';
@@ -470,7 +450,7 @@ function gatedOperationValid(op: FactOperation, flags: CategoryFlags): boolean {
     return true;
   }
   if (op.category === 'progression_scheme') {
-    if (!flags.schemes || op.fact === undefined || parseProgressionFact(op.fact) === null) {
+    if (op.fact === undefined || parseProgressionFact(op.fact) === null) {
       return false;
     }
     op.durability = 'long_term';
@@ -498,14 +478,13 @@ async function applyFactOperation(
   evidenceAt: Date,
   now: Date,
   sourceTurnId: string | undefined,
-  flags: CategoryFlags,
 ): Promise<void> {
   switch (op.op) {
     case 'add': {
       if (op.category === undefined || op.fact === undefined || op.durability === undefined) {
         return;
       }
-      if (!gatedOperationValid(op, flags)) {
+      if (!gatedOperationValid(op)) {
         return;
       }
       await rememberFromEpisode(
@@ -547,7 +526,7 @@ async function applyFactOperation(
       ) {
         return;
       }
-      if (!gatedOperationValid(op, flags)) {
+      if (!gatedOperationValid(op)) {
         return;
       }
       await supersedeFromEpisode(

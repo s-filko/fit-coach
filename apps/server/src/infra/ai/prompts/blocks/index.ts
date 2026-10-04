@@ -36,8 +36,6 @@ export { episodeParagraph } from './episode-summaries.v2';
 export type { EpisodeSummariesContext } from './episode-summaries.v2';
 export { TIME_GAP_V1, TIME_GAP_PREFIX } from './time-gap.v1';
 export type { TimeGapContext } from './time-gap.v1';
-export { TIME_GAP_V2 } from './time-gap.v2';
-export type { TimeGapV2Context } from './time-gap.v2';
 // now-line-last review R1: the NOW line is a standalone message module like
 // the gap note (moved from directives/) — exported with its label prefix (D4).
 export { CURRENT_TIME_PREFIX, CURRENT_TIME_V1 } from './current-time.v1';
@@ -74,43 +72,24 @@ export {
   SESSION_PLANNING_RECOVERY_TIMELINE_V1,
   type SessionPlanningRecoveryTimelineData,
 } from './session-planning-recovery-timeline.v1';
+export { formatExerciseSets, formatSetData } from './set-format';
 export {
-  buildPreviousSessionSection,
-  buildStaleSessionSection,
-  buildWorkoutOverview,
-  formatExerciseSets,
-  formatSetData,
-  TRAINING_CLIENT_V1,
-  TRAINING_PREVIOUS_SESSION_V1,
-  TRAINING_STALE_SESSION_V1,
-  TRAINING_WORKOUT_OVERVIEW_V1,
-  type TrainingClientData,
-  type TrainingPreviousSessionData,
-  type TrainingStaleSessionData,
-  type TrainingWorkoutOverviewData,
-} from './training-workout-overview.v1';
-export { TRAINING_WORKOUT_OVERVIEW_V2 } from './training-workout-overview.v2';
-export {
-  TRAINING_EXERCISE_HISTORY_V1,
-  TRAINING_RECENT_WORKOUTS_V1,
-  type ExerciseHistoryEntry,
-  type TrainingExerciseHistoryData,
-  type TrainingRecentWorkoutsData,
-} from './training-exercise-history.v1';
-export {
-  LOAD_PLAN_HEADER,
-  renderLoadPlanEntry,
-  TRAINING_LOAD_PLAN_V1,
-  type RenderLoadPlanOpts,
-  type TrainingLoadPlanData,
-} from './training-load-plan.v1';
-export {
-  LOAD_PLAN_HEADER_V2,
-  renderLoadPlanEntryV2,
-  TRAINING_LOAD_PLAN_V2,
-  type RenderLoadPlanV2Opts,
-  type TrainingLoadPlanV2Data,
-} from './training-load-plan.v2';
+  formatSetShort,
+  formatSetsLine,
+  collectLoadsUsed,
+  computeWarmupHabit,
+  relativeDay,
+  TRAINING_HISTORY_HEADER,
+  TRAINING_HISTORY_V1,
+  TRAINING_TODAY_HEADER,
+  TRAINING_TODAY_V1,
+  trendLine,
+  type ExerciseHistory,
+  type LoadUsed,
+  type TrainingFactsData,
+  type WarmupHabit,
+} from './training-facts';
+export { renderTrainingProfile } from './training-profile';
 
 /** A block renders as one composed string — its own SystemMessage at a fixed position. */
 export function renderBlock<TCtx>(module: PromptModule<TCtx>, ctx: TCtx): string {

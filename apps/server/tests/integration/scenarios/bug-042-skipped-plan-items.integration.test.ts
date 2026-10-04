@@ -5,12 +5,12 @@
  * BUG-042 (AC-SK-6): the upper_a plan carries Bench Press and Pull-ups; the user sets the place,
  * logs two bench sets and finishes WITHOUT ever touching Pull-ups. At finish the session must
  * gain a `session_exercises` row for Pull-ups with `status = 'skipped'` and the plan's targets
- * (today: no row is created at all), and the NEXT day's session must render its EXERCISE HISTORY
+ * (today: no row is created at all), and the NEXT day's session must render its History
  * line as `skipped 2026-09-20, no completed record` (today: bare `no completed record`).
  *
  * Place (AC-SK-5): "я сегодня в другом зале" after the start must write
  * `workout_sessions.place` via `set_session_place` (today: the tool does not exist) and the next
- * turn's WORKOUT OVERVIEW must print `Place: Fitness House на Ленина`.
+ * turn's workout block must print `Place: Fitness House на Ленина`.
  *
  * Reuses journey B's setup (`setupSteps`/`sharedPast` — greeting → session_planning → proposal →
  * start_training_session), same production wiring as `set-kind.integration.test.ts`.
@@ -20,6 +20,8 @@
  * `set_session_place` rejected as an unknown tool, and the day-2 line read bare
  * `no completed record`).
  */
+import { textOnly } from '@infra/ai/message-text';
+
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
 import type { Scenario } from '../../../evals/schema/scenario.schema';
 import { BENCH_PRESS_ID, PULL_UPS_ID, setupSteps, sharedPast } from '../../../evals/scenarios/b-full-workout.scenario';
@@ -46,7 +48,7 @@ const BENCH_2_FOLLOWUP = 'Ок.';
 const FINISH_TEXT = 'всё, закончил, подтягивания не делал';
 const FINISH_TOOL_REPLY = 'Отличная работа! Отдыхай.';
 
-/** Day 2: a fresh session whose EXERCISE HISTORY must show yesterday's skip. */
+/** Day 2: a fresh session whose History must show yesterday's skip. */
 const D2_GREETING_TEXT = 'привет, хочу потренироваться';
 const D2_GREETING_REPLY = 'Привет! Давай подберём тренировку.';
 const D2_GREETING_FOLLOWUP = 'Какую группу сегодня нагружаем?';
@@ -132,7 +134,7 @@ const scenarioDef: Scenario = {
       text: FINISH_TEXT,
       script: [{ toolCall: { name: 'finish_training', args: {} } }, { text: FINISH_TOOL_REPLY }],
     },
-    // Next calendar day: a fresh session must see yesterday's skip in EXERCISE HISTORY.
+    // Next calendar day: a fresh session must see yesterday's skip in its History.
     // All day-2 user steps run back-to-back after the single '+1d' advance (see the
     // index comment above for why no further advances follow it).
     { action: 'advance', at: '+1d' },
@@ -186,7 +188,7 @@ describe('bug-042 skipped plan items + session place — scripted training scena
           obs.stepIndex,
           calls
             .flat()
-            .map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')))
+            .map(m => textOnly(m.content) ?? JSON.stringify(m.content ?? ''))
             .join('\n'),
         );
       },
@@ -224,12 +226,15 @@ describe('bug-042 skipped plan items + session place — scripted training scena
     expect(seen).toContain('Place: Fitness House на Ленина');
   });
 
-  it("the next day's EXERCISE HISTORY reads the skip, not a bare 'no completed record' (BUG-042, AC-SK-6)", () => {
+  it("the next day's History reads the skip, not a bare 'no earlier record' (BUG-042, AC-SK-6)", () => {
     const seen = seenByStep.get(D2_WHAT_NEXT_STEP_INDEX) ?? '';
-    const pullUpsLine = seen.split('\n').find(l => l.includes(`Pull-ups [ID:${PULL_UPS_ID}]`));
+    const lines = seen.split('\n');
+    const headerAt = lines.findIndex(l => l.startsWith('Pull-ups (today'));
+    const pullUpsLine = lines[headerAt + 1] ?? '';
 
-    expect(pullUpsLine).toContain('skipped 2026-09-20');
-    expect(isBareNoRecord(pullUpsLine ?? '')).toBe(false);
+    expect(headerAt).toBeGreaterThan(-1);
+    expect(pullUpsLine).toMatch(/^- skipped .*Sep 20 \(planned, not done\)$/);
+    expect(pullUpsLine).not.toContain('no earlier record');
   });
 
   it('delivers the scripted replies', () => {
@@ -237,8 +242,3 @@ describe('bug-042 skipped plan items + session place — scripted training scena
     expect(result.steps[FINISH_STEP_INDEX]!.delivered).toContain(FINISH_TOOL_REPLY);
   });
 });
-
-/** `— no completed record` alone (no skip) is the pre-fix BUG-042 rendering this test kills. */
-function isBareNoRecord(line: string): boolean {
-  return /— no completed record$/.test(line.trim());
-}

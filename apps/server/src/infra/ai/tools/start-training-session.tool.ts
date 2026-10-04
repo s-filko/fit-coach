@@ -29,11 +29,6 @@ export interface StartTrainingSessionToolDeps {
    * turn to act on that instruction. Absent/empty = today's wording.
    */
   transitionHandoffTargets?: ReadonlySet<ConversationPhase>;
-  /**
-   * Load plan (load-plan plan Task 5b, D10): drop `targetWeight` from the schema — the session
-   * plan is sets × reps only; loads come from LOAD PLAN during training. Absent = today's schema.
-   */
-  loadPlanPlannerRebind?: boolean;
 }
 
 const START_TRAINING_SESSION_DESCRIPTION = [
@@ -51,10 +46,9 @@ const START_TRAINING_SESSION_DESCRIPTION = [
  * `place` argument. Kept local so `SessionRecommendationSchema` (the stored plan's shape)
  * stays place-free.
  */
-const StartTrainingSessionSchema = (dropTargetWeight: boolean) =>
-  buildSessionRecommendationSchema({ dropTargetWeight }).extend({
-    place: z.string().min(1).optional(),
-  });
+const StartTrainingSessionSchema = buildSessionRecommendationSchema({ dropTargetWeight: true }).extend({
+  place: z.string().min(1).optional(),
+});
 
 export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps) {
   const { trainingService, workoutPlanRepository, exerciseRepository, userFactsService } = deps;
@@ -158,7 +152,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
     {
       name: 'start_training_session',
       description: START_TRAINING_SESSION_DESCRIPTION,
-      schema: StartTrainingSessionSchema(deps.loadPlanPlannerRebind === true),
+      schema: StartTrainingSessionSchema,
     },
   );
 }

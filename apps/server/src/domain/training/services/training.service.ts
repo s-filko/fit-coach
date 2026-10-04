@@ -7,19 +7,14 @@ import type {
   EnsureExerciseResult,
   IEmbeddingService,
   IExerciseRepository,
-  ILoadRecommendationLog,
   ISessionExerciseRepository,
   ISessionSetRepository,
   ITrainingService,
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
-  LoadPlanLogContext,
-  LoadRecommendationOutcome,
-  PendingLoadRecommendation,
   UpdateSetResult,
 } from '@domain/training/ports';
 import { isLateStart, resolveCompletion, SESSION_TIMEOUT_MS } from '@domain/training/session-timing';
-import { workingSets } from '@domain/training/sets';
 import type {
   CreateSessionDto,
   CreateSessionExerciseDto,
@@ -71,8 +66,6 @@ export class TrainingService implements ITrainingService {
     private sessionSetRepo: ISessionSetRepository,
     private userRepo: UserRepository,
     private embeddingService?: IEmbeddingService,
-    // load-plan plan Task 3 (A5): present only with LOAD_PLAN_SUGGESTION on; absent = pre-plan behaviour.
-    private loadLog?: ILoadRecommendationLog,
   ) {}
 
   async getActivePlan(userId: string): Promise<WorkoutPlan | null> {
@@ -220,7 +213,6 @@ export class TrainingService implements ITrainingService {
     if (currentInProgress && currentInProgress.exerciseId !== exerciseId) {
       const newStatus = currentInProgress.sets.length > 0 ? 'completed' : 'skipped';
       await this.sessionExerciseRepo.update(currentInProgress.id, { status: newStatus });
-      await this.recordLoadOutcome(currentInProgress);
       autoCompleted = buildExerciseSummary(currentInProgress);
     }
 
@@ -257,12 +249,6 @@ export class TrainingService implements ITrainingService {
     }
 
     await this.reconcilePlanItems(session);
-    // An exercise left open when the workout ends is finished with it (no-op without the log or a row).
-    for (const ex of session.exercises) {
-      if (ex.status === 'in_progress') {
-        await this.recordLoadOutcome(ex);
-      }
-    }
 
     // BUG-043: completion never precedes the start, duration never negative.
     const resolved = resolveCompletion(session.startedAt, completedAt ?? new Date());
@@ -327,7 +313,6 @@ export class TrainingService implements ITrainingService {
     }
 
     await this.sessionExerciseRepo.update(currentExercise.id, { status: 'completed' });
-    await this.recordLoadOutcome(currentExercise);
     await this.sessionRepo.updateActivity(sessionId);
 
     return buildExerciseSummary(currentExercise);
@@ -345,7 +330,6 @@ export class TrainingService implements ITrainingService {
       skipActivityUpdate?: boolean;
       setKind?: SetKind;
       weightBasis?: 'total';
-      loadPlanLog?: LoadPlanLogContext;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }> {
     // BUG-043: the first live set of a session that never had one (plan accepted long ago) is when the
@@ -368,9 +352,6 @@ export class TrainingService implements ITrainingService {
     const setKind: SetKind = opts.setKind ?? 'working';
     const setData = await this.applyPerHand(sessionExercise.exerciseId, opts.setData, opts.weightBasis);
 
-    // D7: the entry is rendered BEFORE this set exists, so "today" excludes it; written after it is stored.
-    const pendingLoad = await this.prepareLoadRecommendation(sessionId, sessionExercise, setKind, opts.loadPlanLog);
-
     const set = opts.skipActivityUpdate
       ? await this.sessionSetRepo.create(sessionExercise.id, {
           setData,
@@ -387,47 +368,13 @@ export class TrainingService implements ITrainingService {
           setKind,
         });
 
-    if (pendingLoad) {
-      await this.loadLog?.commit(pendingLoad);
-    }
-
     return { set, setNumber: set.setNumber, autoCompleted };
-  }
-
-  /** D7 trigger: the first WORKING set of a session exercise (warm-ups never count); the log checks the rest. */
-  private async prepareLoadRecommendation(
-    sessionId: string,
-    sessionExercise: SessionExercise,
-    setKind: SetKind,
-    ctx?: LoadPlanLogContext,
-  ): Promise<PendingLoadRecommendation | null> {
-    if (!this.loadLog || !ctx || setKind === 'warmup') {
-      return null;
-    }
-    return this.loadLog.prepare({
-      sessionId,
-      sessionExerciseId: sessionExercise.id,
-      exerciseId: sessionExercise.exerciseId,
-      ctx,
-    });
-  }
-
-  /** D7: what was done on the exercise — its working sets — once it completes. */
-  private async recordLoadOutcome(ex: WorkoutSessionWithDetails['exercises'][number]): Promise<void> {
-    if (!this.loadLog) {
-      return;
-    }
-    const sets: LoadRecommendationOutcome['sets'] = workingSets(ex.sets).map(s => {
-      const { setKind: _kind, ...detail } = extractSetDetail(s);
-      return detail;
-    });
-    await this.loadLog.recordOutcome(ex.id, { sets });
   }
 
   /**
    * Shapes `setData` by the exercise's catalog row, resolved once. set-kind plan Task 1 (D5): a dumbbell exercise's
    * strength set gets `perHand` — true by default, false when the caller said the weight is a total; every other
-   * equipment leaves it untouched (no `perHand` key). load-plan-fixes item 2: `log_set` sends every duration as
+   * equipment leaves it untouched (no `perHand` key). plan-fixes item 2: `log_set` sends every duration as
    * `cardio_duration`, so a duration on an isometric exercise (Plank, Side Plank) is re-keyed to an `isometric` set.
    */
   private async applyPerHand(exerciseId: string, setData: SetData, weightBasis?: 'total'): Promise<SetData> {

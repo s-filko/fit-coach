@@ -2,7 +2,7 @@
  * set-kind plan Task 1 (D2, D3, D4, AC-SK-1, AC-SK-2): a scripted-model training scenario over
  * the real test DB. The user logs two warm-up sets and one working set for Bench Press against a
  * 3-set plan target — `session_sets.set_kind` must record `warmup, warmup, working`, the
- * confirmation must name the warm-up sets, and the next turn's WORKOUT OVERVIEW must count only
+ * confirmation must name the warm-up sets, and the next turn's workout block must count only
  * the working set against the target.
  *
  * Promoted from `set-kind.repro.test.ts` once Task 1's schema/domain/tool/block changes landed
@@ -97,7 +97,7 @@ const scenarioDef: Scenario = {
       ],
     },
     { action: 'advance', at: '+2m' },
-    // A trivial extra turn — the WORKOUT OVERVIEW a step sees is assembled from state committed by
+    // A trivial extra turn — the workout block a step sees is assembled from state committed by
     // EARLIER steps, so the post-3rd-set guide/ACTIVE STATUS text only shows up here.
     { action: 'user', text: NEXT_TEXT, script: [{ text: NEXT_REPLY }] },
   ],
@@ -164,27 +164,11 @@ describe('set-kind — scripted training scenario (set-kind plan D2, D3, D4, AC-
     expect(seen.slice(idx, idx + 80)).not.toContain('(warm-up)');
   });
 
-  it('the next turn\'s guide counts only the working set against the target — "(1/3 sets)" (AC-SK-2)', () => {
+  it("the next turn's Today line lists all three sets, the two warm-ups marked and the working set not (AC-SK-2)", () => {
     const seen = seenByStep.get(NEXT_STEP_INDEX) ?? '';
+    const line = seen.split('\n').find(l => l.startsWith('- Barbell Bench Press [id'));
 
-    expect(seen).toContain('(1/3 sets)');
-    expect(seen).not.toContain('(3/3 sets)');
-  });
-
-  it("the next turn's ACTIVE STATUS reports 1 set done, 2 remaining per plan (AC-SK-2)", () => {
-    const seen = seenByStep.get(NEXT_STEP_INDEX) ?? '';
-
-    expect(seen).toContain('1 set(s) done, 2 remaining per plan.');
-  });
-
-  it("the next turn's EXERCISE DETAIL lists all three sets, warm-ups marked (w/u) (AC-SK-2)", () => {
-    const seen = seenByStep.get(NEXT_STEP_INDEX) ?? '';
-    const lines = seen.split('\n');
-    const set1Line = lines.find(l => l.includes('Set 1 ('));
-    const set3Line = lines.find(l => l.includes('Set 3 ('));
-
-    expect(set1Line).toContain('(w/u)');
-    expect(set3Line).not.toContain('(w/u)');
+    expect(line).toMatch(/in progress: 10×40 \(warm-up\), 10×40 \(warm-up\), 10×60( — no RPE recorded)?$/);
   });
 
   it('delivers the scripted replies', () => {

@@ -2,7 +2,7 @@ import type { ConversationPhase } from '@domain/conversation/ports';
 
 import { CURRENT_TIME_V1, EPISODE_SUMMARIES_V2, POST_TOOL_NUDGE_V1 } from './blocks';
 import { promptVersionsOf } from './compose';
-import { FACT_VERIFIER_V1 } from './fact-verifier';
+import { FACT_VERIFIER_V2 } from './fact-verifier';
 import { CHAT_PROMPT } from './phases/chat';
 import { PLAN_CREATION_PROMPT } from './phases/plan_creation';
 import { REGISTRATION_PROMPT } from './phases/registration';
@@ -28,7 +28,7 @@ export const PHASE_PROMPTS: Record<ConversationPhase, PhasePromptEntry<unknown>>
 
 export const STANDALONE_PROMPTS: readonly PromptModule<unknown>[] = [
   SUMMARIZER_PROMPT as PromptModule<unknown>,
-  FACT_VERIFIER_V1 as PromptModule<unknown>,
+  FACT_VERIFIER_V2 as PromptModule<unknown>,
   EPISODE_SUMMARIES_V2 as PromptModule<unknown>,
   POST_TOOL_NUDGE_V1 as PromptModule<unknown>,
 ];

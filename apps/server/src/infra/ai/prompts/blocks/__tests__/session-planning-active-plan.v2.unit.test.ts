@@ -1,5 +1,5 @@
 /**
- * load-plan plan Task 5b (D10, AC-LP-7): with LOAD_PLAN_PLANNER_REBIND on, the ACTIVE WORKOUT
+ * plan Task 5b (D10, AC-LP-7): with the retired planner flag on, the ACTIVE WORKOUT
  * PLAN block is v2 — sets × reps only, no target weight, even for a legacy plan that still
  * carries one. v1 is untouched.
  */
@@ -43,7 +43,7 @@ const LEGACY_PLAN = {
   },
 } as SessionPlanningContextData['activePlan'];
 
-describe('session_planning.active_plan v2 — no weights (load-plan plan Task 5b, AC-LP-7)', () => {
+describe('session_planning.active_plan v2 — no weights (plan Task 5b, AC-LP-7)', () => {
   it('v2 keeps the block id, bumps the version', () => {
     expect(SESSION_PLANNING_ACTIVE_PLAN_V2.id).toBe(SESSION_PLANNING_ACTIVE_PLAN_V1.id);
     expect(SESSION_PLANNING_ACTIVE_PLAN_V2.version).toBe('v2');

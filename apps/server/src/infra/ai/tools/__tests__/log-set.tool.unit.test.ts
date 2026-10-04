@@ -65,32 +65,6 @@ describe('log-set.tool — log_set', () => {
     expect(renderedContent(result)).toContain('10 reps @ 80 kg');
   });
 
-  it('load-plan Task 3 (A4): passes the optional advised object and the run context to logSetWithContext', async () => {
-    const trainingService = makeTrainingService();
-    const set: SessionSet = {
-      id: 'set-1',
-      sessionExerciseId: 'ex-1',
-      setNumber: 1,
-      rpe: null,
-      userFeedback: null,
-      createdAt: new Date(),
-      completedAt: null,
-      setData: EXPECTED_SET_DATA,
-    };
-    trainingService.logSetWithContext.mockResolvedValue({ set, setNumber: 1 });
-    const { byName, config } = makeDeps(trainingService);
-    const now = new Date('2026-09-29T09:30:00Z');
-    const advised = { load: 80, reps: 10, reason: 'fatigue after triceps' };
-    await byName('log_set').invoke({ exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT, advised }, {
-      ...config,
-      context: { runId: 'run-1', now, user: { timezone: 'Asia/Manila' } },
-    } as never);
-    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
-      'session-1',
-      expect.objectContaining({ loadPlanLog: { runId: 'run-1', now, timezone: 'Asia/Manila', advised } }),
-    );
-  });
-
   it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
     const trainingService = makeTrainingService();
 
@@ -295,7 +269,7 @@ describe('log-set.tool — auto-complete notice (ADR-0011 Fix 1.3)', () => {
   });
 
   // Promoted from exercise-transition-order.repro.test.ts (session-investigation-0925 R4).
-  it('BUG-037: a set-triggered switch confirms the reported set FIRST; the finished-exercise recap is brief, last, and announces nothing', async () => {
+  it('a set-triggered switch confirms the reported set FIRST; the finished exercise follows as facts only', async () => {
     const trainingService = makeTrainingService();
     const mockSet: SessionSet = {
       id: 'set-1',
@@ -332,15 +306,11 @@ describe('log-set.tool — auto-complete notice (ADR-0011 Fix 1.3)', () => {
       )) as ToolReturn,
     );
 
-    // The set the user just reported is the news: its confirmation comes first…
+    // The set the user just reported is the news: its confirmation comes first, the finished exercise follows as
+    // facts only — no instruction tail (coach-simplification I1).
     expect(text.indexOf('Set 1 logged')).toBeGreaterThanOrEqual(0);
-    // …the instruction tells the model to confirm that set before the recap…
-    const confirmIdx = /(confirm|acknowledge|reply to|respond to)[^.\n]{0,140}\bset\b/i.exec(text)?.index ?? -1;
-    const recapIdx = /recap[^.\n]{0,140}\b(finished|completed|previous|prior)\b/i.exec(text)?.index ?? -1;
-    expect(confirmIdx).toBeGreaterThan(text.indexOf('Lateral Raise'));
-    expect(recapIdx).toBeGreaterThan(confirmIdx);
-    // …and never to announce an exercise the user already started.
-    expect(text).not.toMatch(/announce[^.\n]{0,80}next exercise/i);
+    expect(text.indexOf("Exercise 'Lateral Raise' completed.")).toBeGreaterThan(text.indexOf('Set 1 logged'));
+    expect(text).not.toMatch(/summariz|announce|recap|coaching comment|SESSION PLAN|next exercise/i);
   });
 
   it('should NOT include auto-complete notice when no switch occurred', async () => {
@@ -679,95 +649,5 @@ describe('log-set.tool — retro vs live timing (BUG-043, AC-RT-1, AC-RT-4)', ()
     expect(opts.skipActivityUpdate).toBe(true);
     expect(opts.createdAt?.getTime()).toBe(session.lastActivityAt.getTime() + RETRO_SET_OFFSET_MS);
     expect(renderedContent(result)).toContain('(retro-logged)');
-  });
-});
-
-describe('log-set.tool — effort hint (AC-LPF-11, load-plan-fixes item 10)', () => {
-  const EXERCISE_ID = 'd8794819-ffc6-4d08-8336-d9bedc4e554a';
-
-  /** Logs `reps` as set `number` after `earlier` sets; the session mock holds earlier + the new set. */
-  async function logAs(opts: {
-    reps: number;
-    earlier?: { reps: number; rpe?: number | null }[];
-    rpe?: number;
-    feedback?: string;
-    targetSets?: number | null;
-    targetReps?: string | null;
-    hints?: boolean;
-  }): Promise<string> {
-    const trainingService = makeTrainingService();
-    const earlier = (opts.earlier ?? []).map((e, i) =>
-      makeSessionSet({
-        id: `e${i}`,
-        setNumber: i + 1,
-        rpe: e.rpe ?? null,
-        setData: { type: 'strength', reps: e.reps, weight: 60, weightUnit: 'kg' },
-      }),
-    );
-    const number = earlier.length + 1;
-    const set = makeSessionSet({
-      id: 'new',
-      setNumber: number,
-      rpe: opts.rpe ?? null,
-      userFeedback: opts.feedback ?? null,
-      setData: { type: 'strength', reps: opts.reps, weight: 60, weightUnit: 'kg' },
-    });
-    trainingService.logSetWithContext.mockResolvedValue({ set, setNumber: number });
-    trainingService.getSessionDetails.mockResolvedValue(
-      makeSession([
-        makeExerciseWithDetails({
-          id: set.sessionExerciseId,
-          targetReps: opts.targetReps === undefined ? '8-10' : opts.targetReps,
-          targetSets: opts.targetSets === undefined ? 3 : opts.targetSets,
-          sets: [...earlier, set],
-        }),
-      ]),
-    );
-    const { byName, config } = makeDeps(trainingService, 'session-1', { effortHints: opts.hints ?? true });
-    const result = (await byName('log_set').invoke(
-      { exerciseId: EXERCISE_ID, reps: opts.reps, weight: 60, rpe: opts.rpe, feedback: opts.feedback },
-      config,
-    )) as ToolReturn;
-    return renderedContent(result);
-  }
-
-  it('a set below the floor without RPE carries the hint with the plain-language question', async () => {
-    const out = await logAs({ reps: 6 });
-    expect(out).toContain('Set 1 logged');
-    expect(out).toContain('Effort hint:');
-    expect(out).toContain('below the rep floor');
-    expect(out).toContain('Сколько ещё раз смог бы сделать на этом весе? 0, 1–2 или 3 и больше?');
-  });
-
-  it('the last planned set without RPE carries it; a middle in-range set does not', async () => {
-    expect(await logAs({ reps: 9, earlier: [{ reps: 9 }, { reps: 9 }] })).toContain('last planned set');
-    expect(await logAs({ reps: 9, earlier: [{ reps: 9 }] })).not.toContain('Effort hint');
-  });
-
-  it('never when RPE or a phrase is given, nor again after the first hint', async () => {
-    expect(await logAs({ reps: 6, rpe: 7 })).not.toContain('Effort hint');
-    expect(await logAs({ reps: 6, feedback: 'еле дожал' })).not.toContain('Effort hint');
-    expect(await logAs({ reps: 6, earlier: [{ reps: 13 }] })).not.toContain('Effort hint');
-  });
-
-  it('a session read that fails or returns no exercise row never breaks the log', async () => {
-    const trainingService = makeTrainingService();
-    const set = makeSessionSet({
-      id: 'x',
-      setNumber: 1,
-      setData: { type: 'strength', reps: 6, weight: 60, weightUnit: 'kg' },
-    });
-    trainingService.logSetWithContext.mockResolvedValue({ set, setNumber: 1 });
-    trainingService.getSessionDetails.mockResolvedValue(makeSession([]));
-    const { byName, config } = makeDeps(trainingService, 'session-1', { effortHints: true });
-    const out = renderedContent(
-      (await byName('log_set').invoke({ exerciseId: EXERCISE_ID, reps: 6, weight: 60 }, config)) as ToolReturn,
-    );
-    expect(out).toContain('Set 1 logged');
-    expect(out).not.toContain('Effort hint');
-  });
-
-  it('only with LOAD_PLAN_SUGGESTION on (effortHints): off → no hint, whatever the set', async () => {
-    expect(await logAs({ reps: 6, hints: false })).not.toContain('Effort hint');
   });
 });
