@@ -7,23 +7,6 @@ import { db } from '@infra/db/drizzle';
 import { workoutPlans } from '@infra/db/schema';
 
 export class WorkoutPlanRepository implements IWorkoutPlanRepository {
-  async create(userId: string, plan: CreateWorkoutPlanDto): Promise<WorkoutPlan> {
-    const [created] = await db
-      .insert(workoutPlans)
-      .values({
-        userId,
-        name: plan.name,
-        planJson: plan.planJson,
-        status: plan.status ?? 'active',
-      })
-      .returning();
-
-    return {
-      ...created,
-      planJson: created.planJson as WorkoutPlan['planJson'],
-    };
-  }
-
   // BR-TRAINING-046: one active plan per user — archive + insert commit atomically,
   // so a failure between them can never leave the user without an active plan (or with two).
   async createActiveReplacingOthers(userId: string, plan: CreateWorkoutPlanDto): Promise<WorkoutPlan> {

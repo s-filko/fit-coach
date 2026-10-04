@@ -264,3 +264,27 @@ Decisions:
   cut to its model half (whether the coach still invents a cause on a factual empty result — checked live in § 3).
 - (D) `git config core.hooksPath .husky` set on the host repo (shared by all worktrees) so the committed pre-commit gate
   actually runs; this is the project's intended behaviour, not a new mechanism.
+
+### Review fixes (close-out review pass 1 blockers)
+
+- R2: `IWorkoutPlanRepository.create` retired — removed from the port and the repository;
+  `createActiveReplacingOthers` is the only insert path. The two integration-test callers
+  (`training.repository.integration.test.ts:101,128`) were retargeted and `create` cleaned from every port
+  fake (save-workout-plan / start-training-session / request-transition tool tests, conversation.graph and
+  review-prepare graph tests, session-planning-context.builder test).
+- R3: `npm run check-all` → `✖ 1248 problems (0 errors, 1248 warnings)` (baseline this pass:
+  `2 errors`) — the nested ternary in `updateLastSet` became if/else, `let exerciseId = input.exerciseId`
+  became object destructuring, `prettier --write` on search-exercises.tool.ts and log-set.tool.ts; the dead
+  `if (resolved != null)` check is dropped (the resolver throws, never returns null).
+- (D, worker) T4 completeness, red first: `log-set.carry-over.unit.test.ts:174` invoking
+  `{exerciseId, weight: 0}` failed with `✖ Either reps, durationSeconds, or distanceKm must be provided` —
+  the decided llmError was unreachable, refine #2 rejected the payload before the handler. To make the
+  decision real, refine #2 now also admits a weight-only payload (refines do not serialize into the
+  model-visible JSON schema; snapshot unchanged) and the handler rejects an explicit weight with no
+  reps/duration/distance with `Invalid set data: weight <w> needs reps` — any weight value, so a bare
+  weight 60 cannot fall into the old `0 reps @ 60 kg` fallback either.
+- Test names now carry the AC id (AC-PTF-2/3/4) in the search-exercises, log-set.carry-over and
+  training-service-update-last-set tests — renames only.
+- Verification: `npm run check-all` → `✖ 1248 problems (0 errors, 1248 warnings)`, `tsc --noEmit` clean;
+  `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1814 passed, 1814 total.
+  DB suites not run on purpose — the orchestrator owns them this pass.

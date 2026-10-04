@@ -75,7 +75,8 @@ export function buildSearchExercisesTool(deps: SearchExercisesToolDeps) {
             ['equipment', input.equipment],
             ['muscleGroup', input.muscleGroup],
           ].filter(([, value]) => value !== undefined);
-          const filterLine = usedFilters.length > 0 ? ` (filters: ${usedFilters.map(([k, v]) => `${k}=${v}`).join(', ')})` : '';
+          const filterLine =
+            usedFilters.length > 0 ? ` (filters: ${usedFilters.map(([k, v]) => `${k}=${v}`).join(', ')})` : '';
           return ok(`0 exercises match "${input.query}"${filterLine}`);
         }
 

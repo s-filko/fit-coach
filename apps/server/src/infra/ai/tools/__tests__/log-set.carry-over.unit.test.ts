@@ -124,7 +124,7 @@ describe('log-set.tool — weight carried over from the previous set', () => {
   // AC-PTF-3 (plan-and-tool-fixes T3): the session exercise is matched by the id the
   // service resolves from an inexact name — "bench press" must carry from
   // "Barbell Bench Press", not fall through to a bodyweight set.
-  it('carries the weight when the exercise is named inexactly (resolver resolves it)', async () => {
+  it('carries the weight when the exercise is named inexactly (resolver resolves it) (AC-PTF-3)', async () => {
     const trainingService = makeTrainingService();
     trainingService.getSessionDetails.mockResolvedValue(
       sessionWith([{ type: 'strength', reps: 8, weight: 60, weightUnit: 'kg' }]),
@@ -145,7 +145,7 @@ describe('log-set.tool — weight carried over from the previous set', () => {
     expect(renderedContent(result)).toContain('Weight 60 kg carried over from set 1');
   });
 
-  it('falls back to today’s name-only path when the resolver throws (no carry, name passed on)', async () => {
+  it('falls back to today’s name-only path when the resolver throws (no carry, name passed on) (AC-PTF-3)', async () => {
     const trainingService = makeTrainingService();
     trainingService.getSessionDetails.mockResolvedValue(
       sessionWith([{ type: 'strength', reps: 8, weight: 60, weightUnit: 'kg' }]),
@@ -167,7 +167,17 @@ describe('log-set.tool — weight carried over from the previous set', () => {
 
   // AC-PTF-4 (plan-and-tool-fixes T4): an explicit weight of 0 means a bodyweight set —
   // after a weighted pull-up, weight 0 must not store "@ 0 kg" and must not carry.
-  it('log_set with weight 0 stores functional_reps, no carry, no "@ 0 kg"', async () => {
+  it('log_set with weight 0 and no reps/duration is rejected, not stored as "0 reps @ 0 kg" (AC-PTF-4)', async () => {
+    const trainingService = makeTrainingService();
+    const { byName, config } = makeDeps(trainingService);
+
+    const ret = (await byName('log_set').invoke({ exerciseId: EX_ID, weight: 0 }, config)) as ToolReturn;
+
+    expect(ret).toEqual({ ok: false, kind: 'llm_error', message: 'Invalid set data: weight 0 needs reps' });
+    expect(trainingService.logSetWithContext).not.toHaveBeenCalled();
+  });
+
+  it('log_set with weight 0 stores functional_reps, no carry, no "@ 0 kg" (AC-PTF-4)', async () => {
     const trainingService = makeTrainingService();
     trainingService.getSessionDetails.mockResolvedValue(
       sessionWith([{ type: 'strength', reps: 8, weight: 10, weightUnit: 'kg' }]),

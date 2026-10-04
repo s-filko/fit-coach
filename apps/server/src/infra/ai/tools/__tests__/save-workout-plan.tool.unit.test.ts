@@ -74,7 +74,6 @@ const MINIMAL_PLAN = {
 
 const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
   ({
-    create: jest.fn().mockResolvedValue({ id: 'plan-1', ...MINIMAL_PLAN }),
     createActiveReplacingOthers: jest.fn().mockResolvedValue({ id: 'plan-2', ...MINIMAL_PLAN }),
     findById: jest.fn(),
     findActiveByUserId: jest.fn(),
@@ -213,8 +212,8 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
   });
 
   // AC-PTF-1 (plan-and-tool-fixes T1): saving archives the user's other active plans
-  // atomically — the tool must go through createActiveReplacingOthers, never create.
-  it('saves through createActiveReplacingOthers, not create (AC-PTF-1)', async () => {
+  // atomically — createActiveReplacingOthers is the port's only insert path.
+  it('saves through createActiveReplacingOthers, the only insert path (AC-PTF-1)', async () => {
     const repo = makeWorkoutPlanRepo();
     const { saveWorkoutPlan } = buildTools(repo);
 
@@ -225,7 +224,6 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
       'u1',
       expect.objectContaining({ name: MINIMAL_PLAN.name, status: 'active' }),
     );
-    expect(repo.create).not.toHaveBeenCalled();
   });
 
   it('requests pendingTransition to chat after saving the plan', async () => {

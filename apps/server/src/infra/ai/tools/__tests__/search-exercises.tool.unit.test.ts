@@ -140,7 +140,7 @@ describe('search_exercises tool', () => {
 
   // AC-PTF-2 (plan-and-tool-fixes T2): zero matches is a result, not an error —
   // the outcome is ok and the line states the facts (query, filters used), no advice.
-  it('returns an ok outcome naming the query when results are empty', async () => {
+  it('returns an ok outcome naming the query when results are empty (AC-PTF-2)', async () => {
     const exerciseRepository = makeExerciseRepository();
     exerciseRepository.searchByEmbedding.mockResolvedValue([]);
 
@@ -155,7 +155,7 @@ describe('search_exercises tool', () => {
     expect(renderedContent(ret)).not.toContain('No exercises found');
   });
 
-  it('names the filters actually used in the empty-result line', async () => {
+  it('names the filters actually used in the empty-result line (AC-PTF-2)', async () => {
     const exerciseRepository = makeExerciseRepository();
     exerciseRepository.searchByEmbedding.mockResolvedValue([]);
 
@@ -174,7 +174,7 @@ describe('search_exercises tool', () => {
     expect((ret as { summary: string }).summary).not.toContain('muscleGroup=');
   });
 
-  it('omits the filters part when the empty search used none', async () => {
+  it('omits the filters part when the empty search used none (AC-PTF-2)', async () => {
     const exerciseRepository = makeExerciseRepository();
     exerciseRepository.searchByEmbedding.mockResolvedValue([]);
 
@@ -188,7 +188,7 @@ describe('search_exercises tool', () => {
     expect((ret as { summary: string }).summary).not.toContain('filters:');
   });
 
-  it('returns an error outcome when the repository throws', async () => {
+  it('returns an error outcome when the repository throws (AC-PTF-2)', async () => {
     const exerciseRepository = makeExerciseRepository();
     exerciseRepository.searchByEmbedding.mockRejectedValue(new Error('db down'));
 

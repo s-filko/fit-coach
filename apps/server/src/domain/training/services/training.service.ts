@@ -482,12 +482,16 @@ export class TrainingService implements ITrainingService {
     // per-hand basis a freshly logged strength set gets. AC-PTF-4: an explicit weight of 0 is the opposite
     // direction — a strength set becomes a bodyweight functional_reps set with the same reps.
     const weightless = updates.weight === 0;
-    const baseSetData: SessionSet['setData'] =
-      updates.weight != null && !weightless && lastSet.setData.type === 'functional_reps'
-        ? await this.applyPerHand(exerciseId, { type: 'strength', reps: lastSet.setData.reps, weightUnit: 'kg' })
-        : weightless && lastSet.setData.type === 'strength'
-          ? { type: 'functional_reps', reps: lastSet.setData.reps }
-          : lastSet.setData;
+    let baseSetData: SessionSet['setData'] = lastSet.setData;
+    if (updates.weight != null && !weightless && lastSet.setData.type === 'functional_reps') {
+      baseSetData = await this.applyPerHand(exerciseId, {
+        type: 'strength',
+        reps: lastSet.setData.reps,
+        weightUnit: 'kg',
+      });
+    } else if (weightless && lastSet.setData.type === 'strength') {
+      baseSetData = { type: 'functional_reps', reps: lastSet.setData.reps };
+    }
 
     const updatedSetData: SessionSet['setData'] = {
       ...baseSetData,

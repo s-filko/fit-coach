@@ -56,7 +56,7 @@ describe('TrainingService.updateLastSet — weight on a reps-only set', () => {
 
 // AC-PTF-4 (plan-and-tool-fixes T4): an explicit weight of 0 means a bodyweight set —
 // the mirror of the D15 conversion above.
-describe('TrainingService.updateLastSet — weight 0 means a bodyweight set', () => {
+describe('TrainingService.updateLastSet — weight 0 means a bodyweight set (AC-PTF-4)', () => {
   it('converts a strength set to functional_reps with the same reps', async () => {
     const { trainingService, mockSessionSetRepo } = setup({ type: 'strength', reps: 8, weight: 10, weightUnit: 'kg' });
 
