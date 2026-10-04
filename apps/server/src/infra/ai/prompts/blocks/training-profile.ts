@@ -5,10 +5,11 @@
  * Pure (BR-LLM-007).
  */
 import type { UserFact } from '@domain/user/ports';
+import { parseProgressionFact, SCHEMES } from '@domain/user/services/fact-formats';
 import type { User } from '@domain/user/services/user.service';
 
-/** Categories that are not a client fact for the coach: pauses and progression schemes are dead layers. */
-const DROPPED_CATEGORIES: ReadonlySet<string> = new Set(['break', 'progression_scheme']);
+/** A pause in training is not shown to the coach (D14: `break` stays hidden). */
+const DROPPED_CATEGORIES: ReadonlySet<string> = new Set(['break']);
 
 function userLine(user: User | null): string | null {
   if (!user) {
@@ -40,7 +41,15 @@ function dedupe(facts: UserFact[]): UserFact[] {
   return facts.filter(f => f.muscleGroup == null || best.get(`${f.category}\u0000${f.muscleGroup}`) === f);
 }
 
-function factLine(f: UserFact): string {
+/**
+ * A `progression_scheme` fact is stored as `progression_scheme id=<id> — <words>`: the coach sees the client's words
+ * (the scheme's description when there are none), never the machine shape; a malformed one is not shown.
+ */
+function factLine(f: UserFact): string | null {
+  if (f.category === 'progression_scheme') {
+    const scheme = parseProgressionFact(f.fact);
+    return scheme ? `Progression preference: ${scheme.words || SCHEMES[scheme.schemeId].description}` : null;
+  }
   return f.durability === 'long_term' && f.phaseNote ? `${f.fact} (${f.phaseNote})` : f.fact;
 }
 
@@ -55,6 +64,6 @@ export function renderTrainingProfile(user: User | null, facts: UserFact[]): str
   if (own) {
     lines.push(own);
   }
-  lines.push(...ordered.map(factLine));
+  lines.push(...ordered.map(factLine).filter((l): l is string => l !== null));
   return ['# Profile', ...(lines.length > 0 ? lines.map(l => `- ${l}`) : ['- No profile data yet.'])].join('\n');
 }

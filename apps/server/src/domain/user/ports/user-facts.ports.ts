@@ -28,8 +28,7 @@ export type FactCategory =
   | 'equipment'
   | 'nutrition_preference'
   // load-plan plan D9 (ADR-0009 amendment): a pause in training — dates, reason class, the user's words.
-  // Short, expiring at the end of the return ladder; written only by the summariser + verifier pipeline
-  // (and the code's own "asked" marker), never by `manage_fact`.
+  // Short (the 14-day cap); written only by the summariser + verifier pipeline, never by `manage_fact`.
   | 'break'
   // load-plan plan D8 (ADR-0009 amendment): the user's chosen progression scheme — a registry id validated in
   // code; the newest active fact is the choice. Written only by the summariser + verifier, never by `manage_fact`.

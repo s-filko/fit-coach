@@ -113,7 +113,7 @@ export async function run(
     now: Date;
     lastUserMessageAt?: string | null;
     responses?: CannedResponse[];
-    /** A different phase spec (the real training spec with the LOAD_PLAN flags on) and its deps. */
+    /** A different phase spec (e.g. the real training spec) and its deps. */
     spec?: PhaseSpec<never>;
     deps?: ConversationGraphDeps;
   },

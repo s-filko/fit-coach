@@ -1,6 +1,6 @@
 import type { ConversationPhase } from '@domain/conversation/ports';
-import { BREAK_REASONS, SCHEMES } from '@domain/training/fact-formats';
 import type { UserFact } from '@domain/user/ports';
+import { BREAK_REASONS, SCHEMES } from '@domain/user/services/fact-formats';
 import { FACT_LIFECYCLE_BOUNDS } from '@domain/user/services/fact-lifecycle';
 
 import type { PromptModule, Section } from '@infra/ai/prompts/types';
@@ -13,10 +13,6 @@ export interface SummarizerV7Context {
   knownFacts: UserFact[];
   /** The episode's date (`YYYY-MM-DD`, the evidence clock) — relative dates in a break fact resolve against it. */
   episodeDate?: string;
-  /** The `break` category is on (LOAD_PLAN_BREAKS). Default true. */
-  breaks?: boolean;
-  /** The `progression_scheme` category is on (LOAD_PLAN_SUGGESTION). Default true. */
-  schemes?: boolean;
 }
 
 /** One known fact as the summariser must see it: the id comes first, verbatim. */
@@ -58,18 +54,17 @@ ${SCHEME_LINES}
 `;
 
 /**
- * Episode summariser v7 (load-plan plan Task 4 + Task 5a, A6 — with `LOAD_PLAN_BREAKS` or `LOAD_PLAN_SUGGESTION`
- * on): v6 plus two fact categories, each in one fixed text shape the code reads back — `break` (a pause in
- * training: dates, a reason class, the user's words; BREAK FACTS section and the episode date the dates resolve
- * against) and `progression_scheme` (the user's chosen scheme, a registry id; PROGRESSION SCHEME section).
- * `breaks` / `schemes` render only the sections whose flag is on. Everything else is v6 verbatim (PROVENANCE,
- * operations, durability). The verifier (`fact-verifier/v2`) checks both categories like any other claim.
+ * Episode summariser v7 (the live version): v6 (retired) plus two fact categories, each in one fixed text shape the
+ * code reads back — `break` (a pause in training: dates, a reason class, the user's words; BREAK FACTS section and
+ * the episode date the dates resolve against) and `progression_scheme` (the user's chosen scheme, a registry id;
+ * PROGRESSION SCHEME section). The rest is v6's text: PROVENANCE, operations, durability. The verifier
+ * (`fact-verifier/v2`) checks both categories like any other claim.
  */
 export const SUMMARIZER_V7: PromptModule<SummarizerV7Context> = {
   id: 'summarizer',
   version: 'v7',
   directives: [],
-  render({ phase, transcript, knownFacts, episodeDate, breaks = true, schemes = true }): Section[] {
+  render({ phase, transcript, knownFacts, episodeDate }): Section[] {
     const knownList =
       knownFacts.length > 0
         ? `\nKNOWN ACTIVE FACTS (reference these by their id, verbatim):\n${knownFacts.map(knownFactLine).join('\n')}\n`
@@ -113,8 +108,8 @@ Durability for add/update (pick by what the episode shows):
 
 What is NOT a durable fact — leave it out of fact_operations (it belongs in the five list fields, or nowhere): one session's numbers, momentary state, anything a plan or session record already captures, and anything only the Assistant said.
 
-Categories (use exactly one per add/update): physical_constraint, exercise_preference, exercise_dislike, physiological_pattern, coaching_preference, schedule_constraint, equipment, nutrition_preference${breaks ? ', break' : ''}${schemes ? ', progression_scheme' : ''}.
-${breaks ? BREAK_SECTION(episodeDate) : ''}${schemes ? SCHEME_SECTION : ''}For a physical_constraint, set muscleGroup to the affected muscle group when identifiable (e.g. shoulders_front, lower_back, quads). Omit it otherwise.
+Categories (use exactly one per add/update): physical_constraint, exercise_preference, exercise_dislike, physiological_pattern, coaching_preference, schedule_constraint, equipment, nutrition_preference, break, progression_scheme.
+${BREAK_SECTION(episodeDate)}${SCHEME_SECTION}For a physical_constraint, set muscleGroup to the affected muscle group when identifiable (e.g. shoulders_front, lower_back, quads). Omit it otherwise.
 
 An empty fact_operations array is the correct, expected answer most of the time — most episodes change nothing durable. Do not invent an operation to avoid an empty array.`,
       },

@@ -5,7 +5,7 @@
  * one mutating operation — receives the SAME transcript the summariser saw
  * plus the numbered candidate operations, and says per operation whether the
  * USER stated or explicitly confirmed it (the D3 rule lives in
- * `prompts/fact-verifier/v1.ts`). The call goes through the existing
+ * `prompts/fact-verifier/v2.ts`). The call goes through the existing
  * `llmGateway` with the `summarizer` profile, so it is logged/recorded like
  * every other call (D6, the audit trail).
  *
@@ -22,7 +22,7 @@ import type { ChatMsg } from '@domain/ai/types';
 import type { FactOperation } from '@domain/conversation/episode';
 import type { UserFact } from '@domain/user/ports';
 
-import { FACT_VERIFIER_V1, FACT_VERIFIER_V2, type FactVerifierOperation } from '@infra/ai/prompts/fact-verifier';
+import { FACT_VERIFIER_V2, type FactVerifierOperation } from '@infra/ai/prompts/fact-verifier';
 
 import { createLogger } from '@shared/logger';
 
@@ -68,8 +68,6 @@ export interface VerifyFactOperationsParams {
   knownFacts: UserFact[];
   runId: string;
   userId: string;
-  /** LOAD_PLAN_BREAKS: verify with v2 (adds the `break` category rule) instead of v1. */
-  breaks?: boolean;
 }
 
 /**
@@ -92,8 +90,7 @@ export async function verifyFactOperations(params: VerifyFactOperationsParams): 
     evidence: op.evidence,
   }));
 
-  const verifier = params.breaks === true ? FACT_VERIFIER_V2 : FACT_VERIFIER_V1;
-  const sections = verifier.render({ transcript, operations: verifierOps });
+  const sections = FACT_VERIFIER_V2.render({ transcript, operations: verifierOps });
   const messages: ChatMsg[] = sections.map(s => ({
     role: s.id === 'system' ? 'system' : 'user',
     content: s.text,

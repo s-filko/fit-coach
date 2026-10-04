@@ -51,7 +51,7 @@ function fact(category: FactCategory, text: string, over: Partial<UserFact> & { 
   } as UserFact;
 }
 
-/** Eleven facts shaped like a real client's: three on the lower back, a break and a scheme to drop. */
+/** Eleven facts shaped like a real client's: three on the lower back, a break to drop and a progression scheme. */
 const FACTS: UserFact[] = [
   fact('coaching_preference', 'Prefers machines and cables'),
   fact('physical_constraint', 'Lower back: dull heaviness, no acute pain', {
@@ -72,7 +72,7 @@ const FACTS: UserFact[] = [
   fact('equipment', 'Machine adds its own unknown weight', { muscleGroup: 'quads' }),
   fact('physiological_pattern', 'Reports effort as RPE himself'),
   fact('break', 'Pause after a trip, back on Sep 27'),
-  fact('progression_scheme', 'double_progression'),
+  fact('progression_scheme', 'progression_scheme id=double_progression — wants to progress by reps'),
   fact('coaching_preference', 'Speaks Russian'),
 ];
 
@@ -99,10 +99,18 @@ describe('renderTrainingProfile', () => {
     expect(renderTrainingProfile(USER, tie)).not.toContain('old wording');
   });
 
-  it('drops break and progression_scheme facts', () => {
+  it('drops break facts', () => {
+    expect(renderTrainingProfile(USER, FACTS)).not.toContain('Pause after a trip');
+  });
+
+  it("shows a progression scheme as the client's words (the description when none), never its machine shape", () => {
     const text = renderTrainingProfile(USER, FACTS);
-    expect(text).not.toContain('Pause after a trip');
+    expect(text).toContain('- Progression preference: wants to progress by reps');
     expect(text).not.toContain('double_progression');
+    const bare = renderTrainingProfile(USER, [fact('progression_scheme', 'progression_scheme id=linear_progression')]);
+    expect(bare).toContain('- Progression preference: Fixed sets and reps every workout.');
+    const malformed = renderTrainingProfile(USER, [fact('progression_scheme', 'progression_scheme id=unknown_one')]);
+    expect(malformed).not.toContain('unknown_one');
   });
 
   it('puts physical constraints first, then keeps the incoming order', () => {
@@ -114,6 +122,7 @@ describe('renderTrainingProfile', () => {
       '- Short endurance holds for core',
       '- Machine adds its own unknown weight',
       '- Reports effort as RPE himself',
+      '- Progression preference: wants to progress by reps',
       '- Speaks Russian',
     ]);
   });

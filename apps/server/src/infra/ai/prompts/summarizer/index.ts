@@ -8,8 +8,5 @@ export { SUMMARIZER_V4 } from './v4';
 export type { SummarizerV4Context } from './v4';
 export { SUMMARIZER_V5 } from './v5';
 export type { SummarizerV5Context } from './v5';
-export { SUMMARIZER_V6, SUMMARIZER_V6 as SUMMARIZER_PROMPT } from './v6';
-export type { SummarizerV6Context } from './v6';
-// load-plan Task 4: selected instead of v6 only with LOAD_PLAN_BREAKS on (compact.node).
-export { SUMMARIZER_V7 } from './v7';
+export { SUMMARIZER_V7, SUMMARIZER_V7 as SUMMARIZER_PROMPT } from './v7';
 export type { SummarizerV7Context } from './v7';

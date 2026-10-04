@@ -43,7 +43,7 @@ function findForbiddenHits(rendered: string): string[] {
  *   phase.plan_creation    1378-1385   (budget  8000)
  *   phase.session_planning 2199-2216   (budget 12000)
  *   phase.training         3391-3396   (budget  8000)
- *   summarizer               248       (budget  2000)
+ *   summarizer               248       (budget  2000; v7 measures 2170 → budget 3000, coach-simplification D14)
  *   block.*                  34-119    (default  8000)
  */
 export const PROMPT_TOKEN_BUDGET: Record<string, number> = {
@@ -52,7 +52,7 @@ export const PROMPT_TOKEN_BUDGET: Record<string, number> = {
   'phase.plan_creation': 8000,
   'phase.session_planning': 12000,
   'phase.training': 8000,
-  summarizer: 2000,
+  summarizer: 3000,
 };
 
 export const EVAL_PHASES = ['registration', 'chat', 'plan_creation', 'session_planning', 'training'];
