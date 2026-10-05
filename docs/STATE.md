@@ -9,10 +9,11 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-10-04 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-10-05 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 - `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
+- `plan-and-tool-fixes.md` — Plan and Tool Fixes — one active plan, empty search, weight carry-over tails (direct on integration branch)
 
 **Planned**
 - `coach-tone.md` — Coach Tone — the coach knows the trend and encourages progress Implementation Plan
@@ -39,7 +40,6 @@ _Generated 2026-10-04 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `now-line-last.md` — NOW Line Last — Move the Current-Time Line out of Block 1 for Prompt Caching Implementation Plan
-- `plan-and-tool-fixes.md` — Plan and Tool Fixes — one active plan, empty search, weight carry-over tails
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
 - `prompt-caching.md` — Prompt Caching (BUG-051) — Stable Prefix, Two Breakpoints, No Mid-Workout Rewrites Implementation Plan
 - `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan

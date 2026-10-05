@@ -1,7 +1,6 @@
 # Plan and Tool Fixes — one active plan, empty search, weight carry-over tails
 
-- Status: done
-- Review: 2026-10-04 | clean | R1,R2,R3,R4
+- Status: in progress
 - Parent: `docs/superpowers/plans/coach-simplification.md` (governing plan; this is a side plan of code-only fixes
   found in the D15 live review and the 2026-10-04/05 findings). Branch `plan/plan-and-tool-fixes`, cut from `dev`.
 - Executor: an autonomous orchestrator session (Opus) on the Orca host `finland-v4-8gb`, launched by the owner's
@@ -104,6 +103,28 @@ Verify: unit tests next to the existing D15 ones (`log-set.carry-over.unit.test.
 `update_last_set` tests): weighted pull-up 10 kg, then `log_set` reps 8 weight 0 → functional_reps 8, no carry;
 `update_last_set` weight 0 on a 10 kg set → functional_reps, same reps; reps-only still carries.
 `npm run test:unit`.
+
+### T5 — No algorithmic weight carry-over; the model sets the weight (AC-PTF-5)
+
+Owner decision (2026-10-05, after reading the T3 live check): the code must not decide a set's weight. The model reads
+the context; when the weight is clear it passes it (if it assumed it, it says so in a few words — "записал 8 повторов с
+тем же весом 55 кг"); when it is unclear it asks; the user corrects and the model applies the correction
+(`update_last_set`). This supersedes the carry-over half of D15 (`coach-simplification.md`) and T3 of this plan.
+
+Do:
+- `log_set` stores what the model passed: remove `carryWeight` and the `carried` confirmation sentence
+  ("… carried over from set N — correct it if different." — an instruction in a tool reply, against § 0 rule 4); reps
+  without a weight → `functional_reps` as before D15.
+- Revert T3's name pre-resolution in `log_set` (it existed only to find the set to carry from); the service resolves the
+  name once, as before T3.
+- Keep: T4 (explicit weight 0 = bodyweight), the D15 correction path in `updateLastSet` (a weight on a reps-only set
+  converts it to strength with the per-hand basis), and the factual confirmation ("8 reps" / "8 reps @ 55 kg").
+- Prompt/model behaviour (take the weight from context, ask when unclear, state an assumption briefly) is **not** in
+  this task: it goes through `prompt-doctor` (baseline on the eval set first; change only if the baseline shows a gap).
+
+Verify: unit — after a 60 kg set, `log_set` reps-only stores `functional_reps` (no weight), confirmation has no
+"carried over"; `log_set` with `exerciseName` calls the resolver zero times in the tool; existing carry-over tests are
+removed or inverted, not skipped. `npm run test:unit`, `npm run test:scenarios`.
 
 ## 2. Close (suites)
 
