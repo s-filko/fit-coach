@@ -368,3 +368,31 @@ Decisions:
 - Verification: `npm run check-all` → `✖ 1248 problems (0 errors, 1248 warnings)`, `tsc --noEmit` clean;
   `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1814 passed, 1814 total.
   DB suites not run on purpose — the orchestrator owns them this pass.
+
+### T5 — No algorithmic weight carry-over; the model sets the weight (AC-PTF-5)
+
+- Red first, recorded before the fix (`infra/ai/tools/__tests__/log-set.weight-input.unit.test.ts`, renamed from
+  `log-set.carry-over.unit.test.ts`):
+  - `60:47` 'stores functional_reps for reps without a weight even after weighted sets of the exercise (AC-PTF-5)' —
+    `logSetWithContext` received `setData: {"reps": 12, "type": "strength", "weight": 59, "weightUnit": "kg"}`,
+    expected `functional_reps`;
+  - `82:57` 'passes exerciseName through unresolved, resolver never called by the tool (AC-PTF-5)' —
+    `resolveExerciseIdByName`: Expected number of calls: 0, Received number of calls: 1.
+  - Summary: Tests: 2 failed, 2 passed, 4 total (the two AC-PTF-4 tests pass unchanged — T4 behaviour kept).
+- Implementation (`infra/ai/tools/log-set.tool.ts`): `carryWeight` and the `Carried` type removed — reps without a
+  weight store `functional_reps` exactly as given; the "… carried over from set N — correct it if different."
+  sentence is gone from the confirmation; T3's name pre-resolution reverted — the tool never calls
+  `resolveExerciseIdByName`, `exerciseName` passes through to `logSetWithContext` (the service resolves it once,
+  as before T3); `weightBasis` is a plain pass-through of the input. T4 (weight 0 = bodyweight, `.min(0)` schema)
+  and the D15 correction path in `updateLastSet` untouched; tool description and prompt files untouched.
+- Tests: the carry-over file is renamed `log-set.weight-input.unit.test.ts` (it no longer tests carry-over): the
+  two carry tests inverted (AC-PTF-5), the name-match / warm-up / total-basis carry tests removed (no carry left
+  to test; explicit `weightBasis: 'total'` passthrough stays covered in `log-set.tool.unit.test.ts`), both AC-PTF-4
+  tests kept verbatim — nothing skipped. Test-support fake unchanged (`resolveExerciseIdByName` stays on the port
+  mock — asserted never called by the tool).
+- Note for the orchestrator: `docs/BACKLOG.md:971` (T3 advisory — dead exact-name branch of `carryWeight`, double
+  resolution) is now moot: `carryWeight` no longer exists. Left untouched — outside this task's file ownership.
+- Verification (from `apps/server`):
+  - `npm run check-all` → `✖ 1247 problems (0 errors, 1247 warnings)`.
+  - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1809 passed, 1809 total.
+  - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.

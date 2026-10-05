@@ -6,7 +6,6 @@ import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
-import type { SetKind, WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { EFFORT_MAPPING_TEXT } from '@infra/ai/prompts/effort';
@@ -22,47 +21,6 @@ const log = createLogger('training-tools');
 
 export interface LogSetToolDeps {
   trainingService: ITrainingService;
-}
-
-type SetDataInput = z.infer<typeof SetDataSchema>;
-interface Carried {
-  weight: number;
-  weightUnit: 'kg' | 'lbs';
-  setNumber: number;
-}
-
-/**
- * D15: reps without a weight on an exercise already weighted in this session is shorthand ("did another 12"),
- * not a bodyweight set — carry the weight of the latest set of the same kind (a warm-up weight never reaches a
- * working set) and its total-weight basis; the confirmation says so.
- * AC-PTF-4: an explicit weight — 0 included — is never shorthand; weight 0 says bodyweight, so no carry.
- */
-function carryWeight(
-  base: SetDataInput,
-  input: { exerciseId?: string; exerciseName?: string; weight?: number; setKind?: SetKind; weightBasis?: 'total' },
-  session: WorkoutSessionWithDetails | null,
-): { setData: SetDataInput; weightBasis?: 'total'; carried?: Carried } {
-  if (base.type !== 'functional_reps' || input.weight != null) {
-    return { setData: base, weightBasis: input.weightBasis };
-  }
-  const wanted = input.exerciseName?.trim().toLowerCase();
-  // The same precedence as the service: an id wins over a name.
-  const sessionExercise = session?.exercises.find(se =>
-    input.exerciseId != null ? se.exerciseId === input.exerciseId : se.exercise.name.toLowerCase() === wanted,
-  );
-  const isWarmup = input.setKind === 'warmup';
-  const previous = [...(sessionExercise?.sets ?? [])]
-    .sort((a, b) => b.setNumber - a.setNumber)
-    .find(s => (s.setKind === 'warmup') === isWarmup && s.setData.type === 'strength' && (s.setData.weight ?? 0) > 0);
-  if (previous?.setData.type !== 'strength' || previous.setData.weight == null) {
-    return { setData: base, weightBasis: input.weightBasis };
-  }
-  const { weight, weightUnit = 'kg', perHand } = previous.setData;
-  return {
-    setData: { type: 'strength', reps: base.reps, weight, weightUnit },
-    weightBasis: input.weightBasis ?? (perHand === false ? 'total' : undefined),
-    carried: { weight, weightUnit, setNumber: previous.setNumber },
-  };
 }
 
 export function buildLogSetTool(deps: LogSetToolDeps) {
@@ -105,23 +63,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       try {
         const session = await trainingService.getSessionDetails(sessionId);
 
-        // AC-PTF-3: a name-only call resolves the id here, once, exactly as the service
-        // would inside logSetWithContext — the session exercise is then matched by that
-        // id, so an inexact name ("bench press" for "Barbell Bench Press") still carries.
-        // A failed resolution keeps today's behaviour: no carry, and logSetWithContext
-        // reports the error when it resolves the name itself.
-        let { exerciseId } = input;
-        if (exerciseId == null && input.exerciseName != null) {
-          try {
-            exerciseId = await trainingService.resolveExerciseIdByName(input.exerciseName);
-          } catch (resolveErr) {
-            log.debug({ err: resolveErr, exerciseName: input.exerciseName }, 'log_set: name pre-resolution failed');
-          }
-        }
-
-        const { setData, weightBasis, carried } = carryWeight(baseSetData, { ...input, exerciseId }, session);
-
-        const parsed = SetDataSchema.safeParse(setData);
+        const parsed = SetDataSchema.safeParse(baseSetData);
         if (!parsed.success) {
           return llmError(`Invalid set data: ${parsed.error.message}`);
         }
@@ -135,7 +77,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         }
 
         const { set, setNumber, autoCompleted } = await trainingService.logSetWithContext(sessionId, {
-          exerciseId,
+          exerciseId: input.exerciseId,
           exerciseName: input.exerciseName,
           setData: parsed.data,
           rpe,
@@ -143,7 +85,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           createdAt: retroCreatedAt,
           skipActivityUpdate: isRetro,
           setKind: input.setKind,
-          weightBasis,
+          weightBasis: input.weightBasis,
         });
 
         // Named for the summariser (renderTranscript over this tool's own confirmation) as much
@@ -167,10 +109,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         const rpeNote = rpe != null ? ` | RPE ${rpe}` : '';
         const retroNote = isRetro ? ' (retro-logged)' : '';
         const namePart = exerciseName ? ` — ${exerciseName}` : '';
-        const carriedNote = carried
-          ? ` Weight ${carried.weight} ${carried.weightUnit} carried over from set ${carried.setNumber} — correct it if different.`
-          : '';
-        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.${carriedNote}`;
+        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.`;
 
         log.info(
           {
@@ -178,7 +117,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             userId,
             sessionId,
             setId: set.id,
-            exerciseId,
+            exerciseId: input.exerciseId,
             setNumber,
             setData: set.setData,
             rpe: set.rpe,
