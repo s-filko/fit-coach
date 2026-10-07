@@ -2331,31 +2331,47 @@ plan_creation offers no `log_set` (its tools: search, save plan, transition, sha
 A plan_creation rule for reported sets (say they are not logged yet and offer to start the session), and/or a
 post-reply check of "записал/logged" claims against the run's tool calls; the owner decides.
 
-## BUG-053 — A plain «привет» a day after a workout is answered as a continuation of that workout
+## BUG-053 — A plain «привет» three days after a workout is answered as a continuation of that workout
 
-**Status:** Open — investigation pending (no transcript yet)
-**Severity:** High — the first message of a new day reads as nonsense to the user; it is the entry point of every workout
-**Found during:** owner's own use of the dev bot (@MyFitAiCoachDevBot), reported 2026-10-07: before going to the gym
-the owner wrote «привет» and the coach tried to continue the previous workout
-**Component:** unknown until the exact request is read — candidates below
+**Status:** Open — cause found 2026-10-08, fix needs an owner decision
+**Severity:** High — the first message of a new day reads as nonsense; it is the entry point of every workout
+**Found during:** owner's own use of the dev bot, 2026-10-07 11:49 UTC (run `cf44f1fe-a77f-491c-a5f5-4a6f93ba2a97`,
+user `60af022f…`, `anthropic/claude-sonnet-5.5`; read from dev with `print-transcript --run … --payloads`)
+**Component:** `infra/ai/graph/nodes/prepare.node.ts:69-95`, `infra/ai/prompts/blocks/training-facts.ts` (`# Today`
+block), `docs/domain/training.spec.md` INV-TRAINING-005 / BR-TRAINING-011
 
-### Description
+### What happened
 
-Owner report only; the run has not been located. The local stand has no run from the owner after 2026-10-04, so it was
-dev; from the orchestrator host dev is reachable only through the restricted gate (`ssh filko.dev logs server N`, at
-most 2000 lines ≈ 1 h of health checks) — the run and its request are not visible from here.
+The workout of Sun 2026-10-04 (session `9a24d418…`, started 09:54, last activity 11:31 UTC) was never finished; on
+2026-10-08 it is still `status = in_progress`. Three days later the owner wrote «привет»; the run entered phase
+`training` with that session, and the coach answered «Привет! Тренировка почти закончена. Остались трицепс … и планка.
+Планка 2×45–50 секунд …». The run took 252 s: summariser 174 s + course check 73 s on `anthropic/claude-haiku-4.5`
+before the 3.6 s coach call (the BUG-046 latency class again).
 
-### Hypotheses (to check against the exact request, nothing fixed before that)
+### Cause, in the exact request
 
-- The previous session was never finished: `workout_sessions.status = in_progress` and/or the graph phase stayed
-  `training`; the 2 h auto-close (`SESSION_TIMEOUT_MS`, `training.service.ts:564`) runs only inside training-service
-  calls, so the first message of the next day may be routed into the training phase with yesterday's session.
-- The context shows yesterday as current: BUG-047 (episode summaries labelled with the compaction time, a finished
-  session's open items reappearing as "today"); the time-gap note (`time-gap.v1.ts`, "Reply to their new message
-  first") present or not.
-- Model: given an open session in context, it continues it instead of answering the greeting.
+1. **The session is never closed on return.** `prepare.node.ts:69-71` by design: "NO idle timeout: a session stays
+   in_progress until explicitly closed (the training loader lets the model decide on stale sessions)". It leaves
+   training only when the session is completed/skipped. No daily cron exists either.
+2. **The durable spec says the opposite.** INV-TRAINING-005 "Sessions with last_activity_at > 2 hours and
+   status='in_progress' are auto-closed"; BR-TRAINING-011 "auto-close after 2 hours inactivity (lazy on interaction +
+   daily cron)". The lazy close runs only inside `getActiveSession` / `startSession` / `assertNoActiveSession`, never
+   on the training entry path. BR-TRAINING-030 (retro-logging into an in_progress session idle > 2 h) depends on the
+   session staying open — the two rules conflict.
+3. **The context presents the 3-day-old session as today.** The coach's `<context>` opens with `# Today (sets as
+   reps×kg)` and `Plan and sets so far:` with the Oct 4 sets; the session's own date appears nowhere. The only hint is
+   `No activity for 3 days; a set logged now is dated to the session's last activity.` — a retro-logging line that
+   frames the gap as "continue logging". `Previous workout: 6 days ago, Thursday Oct 1` refers to the workout *before*
+   the open one, which makes "today" look even more current.
+4. **Model:** with "Today … sets so far" and nothing saying the session is from Oct 4, continuing it is the reading the
+   context invites.
 
-### Next step
+### Fix (owner decides the behaviour; red test first in either case)
 
-Read the run with `print-transcript --user <ownerId> --since <today> --until <today> --payloads` on the dev data
-(needs owner access or a gate command), find the cause in the exact request, then a red test before any fix.
+- (a) Close a stale session on return in code — e.g. when the gap exceeds a threshold (next calendar day in the user's
+  time zone, or INV-TRAINING-005's 2 h), finish it as `completed` with `auto_close_reason = 'timeout'` in `prepare`
+  and answer in chat. Matches INV-005/BR-011; conflicts with BR-030 retro-logging after the close.
+- (b) Keep the model's decision, give it honest facts — the block names the open session by its date ("Open workout
+  from Sun Oct 4, started 09:54, last activity 11:31 — 3 days ago") instead of `# Today`; any behaviour rule
+  (ask whether to finish it) through `prompt-doctor`.
+- In any case the spec/code conflict (INV-005/BR-011 vs `prepare.node.ts` vs BR-030) needs one owner-approved rule.
