@@ -2375,3 +2375,49 @@ before the 3.6 s coach call (the BUG-046 latency class again).
   from Sun Oct 4, started 09:54, last activity 11:31 — 3 days ago") instead of `# Today`; any behaviour rule
   (ask whether to finish it) through `prompt-doctor`.
 - In any case the spec/code conflict (INV-005/BR-011 vs `prepare.node.ts` vs BR-030) needs one owner-approved rule.
+
+## BUG-054 — An off-plan exercise name auto-completes the current exercise below target, via an unthresholded catalog match
+
+**Status:** Open — cause found 2026-10-08; fix owner-gated (ADR-0011 behaviour + a missing BR)
+**Severity:** Medium — an exercise is closed at 2 of 4 sets without the user's intent; the next set lands on a wrong exercise
+**Found during:** plan-and-tool-fixes live check on the stand, 2026-10-04 (run `e71fc6b3…`, user `d53bcdc4…`, `glm-5.3-flash`)
+**Component:** `domain/training/services/training.service.ts:536-562` (`resolveExerciseIdByName`), `:209-217`
+(`ensureCurrentExercise`), `infra/ai/tools/format-exercise-summary.ts:44-49`
+
+### Description
+
+«Добавил вне плана сгибания штанги на бицепс: 30 кг на 10» → `log_set {exerciseName: "Barbell Curl"}`. No catalog row
+matches; the semantic fallback takes the embedding top-1 with no similarity floor → Dumbbell Hammer Curl. Switching to it
+auto-completes the in-progress Barbell Bench Press at 2 of 4 planned sets (ADR-0011 Fix 1b/1.3 — the ADR's own risk
+note, line 208). The summary text says `Exercise '<name>' completed.` even for 0 sets (no status carried). No BR in
+`training.spec.md` covers auto-complete on switch. Full evidence, red tests and fix options:
+`data/investigations/2026-10-08-stand-defects-b-d.md` (local, gitignored) § (b).
+
+### Fix plan (owner decides)
+
+- Deterministic: a cosine-similarity floor in `resolveExerciseIdByName` (far names → `ExerciseNotFoundError`, the model
+  searches/asks).
+- Auto-complete below target: keep the switch but report "left at 2/4", or require an explicit
+  `complete_current_exercise` before an off-plan switch — product decision; update ADR-0011 and add the BR.
+- Cosmetic: carry `newStatus` into the summary (`skipped` for 0 sets).
+
+## BUG-055 — Two log_set calls in one response are stored in reverse order when only the later one carries `order`
+
+**Status:** Open — cause found 2026-10-08; fix owner-gated (ADR-0011-tested behaviour)
+**Severity:** Medium — set numbers no longer reflect what the user did (weighted set #2, bodyweight set #1)
+**Found during:** plan-and-tool-fixes live check on the stand, 2026-10-04 (run `41b295bc…`, `glm-5.3-flash`)
+**Component:** `infra/ai/graph/tool-policy.ts:66-80` (`sortToolCallsByPriority`, line 76 `order ?? 999`),
+`infra/db/repositories/session-set.repository.ts:17-22` (`set_number = MAX + 1`)
+
+### Description
+
+The model sent `[log_set(10 kg × 6, no order), log_set(0 × 8, order: 2)]`. A missing `order` sorts as 999, so the
+`order: 2` call ran first and became set #1. `order` is described as required for several sets per response but
+nothing enforces it; `tool-policy.unit.test.ts:104-117` pins the "default to end" semantics that produced this. No BR on
+set numbering. Evidence and red test: `data/investigations/2026-10-08-stand-defects-b-d.md` § (d).
+
+### Fix plan (owner decides)
+
+- Executor guard: in a batch with ≥ 2 `log_set` calls, reject the calls lacking `order` (the model re-sends ordered), or
+- sort fix: a missing `order` takes the call's emitted position (flips the pinned "default to end" test and ADR-0011 text).
+- Either way add a BR: sets of one exercise are numbered in the order the user performed them.
