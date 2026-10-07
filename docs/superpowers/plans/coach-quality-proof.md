@@ -151,3 +151,34 @@ Suites, close-out review (four zones, GLM — owner accent), report committed, `
   `Tests: 1830 passed, 1830 total` (the merged tree itself confirmed green first: 183/1829 before any change);
   flock-wrapped `npm run test:scenarios` → `Test Suites: 25 passed, 25 total`, `Tests: 1 todo, 484 passed, 485 total`
   (+32 from the five journeys).
+
+### T3 preparation — the rubric and the judge, no live run (worker, 2026-10-07)
+
+- **Rubric** `evals/rubrics/coach-quality.md`: friendly/supportive 0–2, honest 0/1 with the offending span quoted,
+  coaching logic 0–2 judged against the request's history facts and the weight oracle's expectation, brevity 0–1,
+  plus the T2 extraction {exercise, proposedKg | null, asked} — with the exact JSON output contract the judge must
+  answer (one object, fixed ranges, span a verbatim substring).
+- **Transcripts now carry the run id**: `formatScenarioTranscript` (evals/lib/reporter.ts) prints `run: <runId>` per
+  user step — the judge's join key into `llm_calls` (the stored request of the last model call of the run: the
+  `<context>`-carrying user message, and every response's tool calls with arguments). The L3 md was previously
+  run-id-less, so no stored-request evidence could be joined to a step.
+- **Judge** `evals/judge/coach-quality-judge.ts` (`npm run judge:coach-quality`): reads the L3 transcripts
+  (`--transcript <path>` repeatable, or `--reports-dir` + `--stamp`), judges every user step through env `JUDGE_CMD`
+  (default `claude-glm -p --model glm-5.3`; prompt on stdin, reply on stdout; bad JSON retried exactly once), computes
+  the T2 weight hits for the n-load ask steps against `nLoadExpectations()` (ask expects `asked`; otherwise
+  `proposedKg` must be in `acceptableKg`; a wrong-exercise extraction does not score), and writes
+  `evals/reports/judge/coach-quality-<stamp>.json` + `.md` (rubric means, every honesty failure quoted, hits/misses,
+  unparseable outputs). `--dry-run` judges 2 canned replies through a stub JUDGE_CMD (printf) — no DB, no model.
+- Red first, recorded: reporter — `reporter.unit.test.ts:24:19 - error TS2353: 'runId' does not exist in type
+  '{ toolCalls: ... }'` (the transcript had no run line at all) → implemented → 9/9. Judge —
+  `coach-quality-judge.unit.test.ts:16:8 - error TS2307: Cannot find module '../coach-quality-judge'` → implemented →
+  2 real bugs the tests then caught red (the parser dropped the second line of a multi-line delivered reply; weightHit
+  ignored an extraction naming another exercise) → 11/11.
+- Dry-run verified offline: `npm run judge:coach-quality -- --dry-run --out-dir /tmp/coach-quality-dryrun` →
+  "Replies judged: 2 of 2 steps (0 unparseable judge outputs)", "weight hit rate (T2) | 1 (1/1)",
+  "✓ proposed 82.5 kg — up → any of [82.5] kg (2-for-2 … (BR-TRAINING-042))" — the canned verdict flows through the
+  full spawn/parse/summarise path and the hit is computed against the REAL oracle expectation.
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 184 passed, 184 total`,
+  `Tests: 1841 passed, 1841 total`. DB suites not needed (no runtime code touched; reporter's md is L3-only output —
+  asserted only by its unit test). The live run itself (L3 × GLM + judge over its transcripts, Opus spot-check) stays
+  with the orchestrator.

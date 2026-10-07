@@ -14,14 +14,14 @@ function fabrication(): ScenarioTranscript {
       {
         action: 'user',
         delivered: 'Привет! Начнём с верха?\nКакой режим?',
-        runRow: { toolCalls: [{ name: 'start_training_session' }] },
+        runRow: { runId: 'run-aaa', toolCalls: [{ name: 'start_training_session' }] },
         phase: 'training',
       },
       { action: 'advance', delivered: '', runRow: null, phase: 'training' },
       {
         action: 'user',
         delivered: 'Молодец! Тренировка завершена.',
-        runRow: { toolCalls: [{ name: 'log_set' }, { name: 'finish_training' }] },
+        runRow: { runId: 'run-bbb', toolCalls: [{ name: 'log_set' }, { name: 'finish_training' }] },
         phase: 'chat',
       },
     ],
@@ -49,6 +49,8 @@ describe('formatScenarioTranscript (AC-SM-2)', () => {
     expect(text).toContain('       Какой режим?');
     expect(text).toContain('tools: start_training_session');
     expect(text).toContain('phase: training');
+    // coach-quality T3: the run id lets the judge join the stored request from llm_calls.
+    expect(text).toContain('run: run-aaa');
   });
 
   it('lists several tool calls comma-separated on one line', () => {
