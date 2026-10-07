@@ -201,3 +201,41 @@ Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lo
 - `npm run test:scenarios` → Tests: 400 passed, 1 todo, 401 total (Suites: 24/24).
 - `node scripts/state.mjs --check` → state check: OK.
 
+
+## Review
+
+Close-out review 2026-10-08 — four independent zones run as subagents by a GLM reviewer session (owner order
+2026-10-08: everything on GLM until the weekly GLM reset; (D) instead of the host rule's Opus), over
+`git diff $(merge-base origin/dev)...HEAD` at `71d4d276`+`d99846bf`. Raw findings:
+`data/investigations/2026-10-08-review-stale-session-autoclose.md` (local, gitignored). **Verdict: blocked — one
+owner-gated blocker open.**
+
+Blocking:
+
+1. `blocking | R2 | training.service.ts:597-600 | DRY | reopenLastSession re-implements the INV-TRAINING-002 guard
+   inline` — closed in `5005d057` (uses `assertNoActiveSession`).
+2. `blocking | R2 | chat-context.v2.ts:16-37 | DRY | buildRecentSessionsSectionV2 copies v1's builder` — closed in
+   `5005d057` (one shared builder with a `markAutoClosed` option; v1 byte-identical).
+3. `blocking | R1 | reopen-workout.tool.ts:64 | ADR-0013 §6 | business refusals mapped to llm_error` — closed in
+   `5005d057` (`userError`, as `start_training_session`).
+4. `blocking | R4 | stale-session-autoclose.md:4 | SUPERPOWERS_INTEGRATION § Branch header | prose in the Branch line
+   breaks state.mjs --check` — closed in `5005d057`.
+5. `blocking | R1/R3/R4 | docs/domain/training.spec.md:17,31,34 | SUPERPOWERS_INTEGRATION rules 1, 2, 7 | the shipped
+   behaviour drifts from INV-TRAINING-005 / BR-TRAINING-011 / BR-TRAINING-030; no BR for reopen_workout; the chat →
+   training edge has no BR-CONV-015 amendment` — **open, owner-gated (T4)**. Proposed texts are in T4 above plus:
+   BR-CONV-015 amendment "chat → training is allowed only through reopen_workout (a model-requested transition cannot
+   target training from chat)".
+
+Advisories (→ `docs/BACKLOG.md` § stale-session-autoclose close-out review advisories): `timeOf` reinvents
+`formatInUserTz`; unused barrel export; prepare.node.ts header contract now has a third (auto-close) case;
+training.service.ts keeps growing; FEAT-0010 still promises a 3 AM cron (S-0114, BR-TRAINING-024, AC-0207);
+ITrainingService port list in training.spec.md:49 lacks the two new methods; ARCHITECTURE.md:128 prepare map stale;
+API_SPEC.md training flow lacks the reopen path; `AC-SSA_3` typo in chat-context.v2.ts:2; two "now" sources in the stale
+gate (ctx.now vs Date.now()); `reopened_at` is `timestamptz` while the other session moments are `timestamp` (implicit
+cast inside `greatest()` depends on the DB time zone); T1's "reopened 10 min ago" prepare case never written (covered at
+the service/repository level); a reopen from chat reaches training in the same run only with
+`TRANSITION_HANDOFF_TARGETS` containing `training` (dev has it; the local stand env does not); BACKLOG.md:391 planning
+item's facts rotted.
+
+Suites after the fixes (`5005d057`): check-all 0 errors; unit 1832/1832; integration 670 + 1 todo; scenarios 400 + 1
+todo; `state.mjs --check` OK. Live evidence: journeys g/h of `coach-quality-proof` (see that plan's report).
