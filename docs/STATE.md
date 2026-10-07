@@ -9,7 +9,7 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-10-04 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-10-07 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 - `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
@@ -21,6 +21,7 @@ _Generated 2026-10-04 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 - `restart-ladder.md` — Restart Ladder — the return ladder closes on fresh workouts Implementation Plan
+- `stale-session-autoclose.md` — Stale Session Auto-Close — a forgotten workout closes on return; the model can reopen it (BUG-053)
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
