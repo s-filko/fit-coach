@@ -2,14 +2,20 @@
  * Journey C, deterministic layer (training-journey-scenarios plan, Task 5b /
  * AC-TJ-2, AC-TJ-3): catch-up logging after a +3.5 h pause over the real test
  * database — journey B's setup steps (imported, not copied) → two bench sets →
- * a text-only rest question → a +3.5 h pause (past EPISODE_GAP_HOURS) → the
- * missed pull-ups logged retro into the PREVIOUS session → `finish_training`
- * closing it AT the pre-pause time (owner ruling 2026-09-20: a long gap means
- * the user is catching up an old workout later, not continuing it). Both
- * catch-up wordings — implicit ("забыл дописать…") and explicit ("добавь к
- * последней тренировке…") — come from one journey builder in the scenario
- * module; this file runs each variant end to end and asserts the SAME
- * persisted outcome for both.
+ * a text-only rest question → a +3.5 h pause (past EPISODE_GAP_HOURS and the
+ * 2 h session timeout) → the catch-up message.
+ *
+ * BUG-053 (stale-session-autoclose plan, owner decision 2026-10-08): at the
+ * catch-up message the stale session is COMPLETED by the timeout auto-close
+ * (`auto_close_reason = 'timeout'`, `completed_at` = the last pre-pause
+ * activity), then chat REOPENS it (`reopen_workout`, the chat → training
+ * hand-off — hence `TRANSITION_HANDOFF_TARGETS` in beforeAll) and the missed
+ * pull-ups land RETRO in the reopened previous session; `finish_training`
+ * closes it AT the last pre-pause activity. Both catch-up wordings —
+ * implicit ("забыл дописать…") and explicit ("добавь к последней
+ * тренировке…") — come from one journey builder in the scenario module; this
+ * file runs each variant end to end and asserts the SAME persisted outcome
+ * for both.
  *
  * `beforeAll` (per variant) runs the journey once (real wiring via
  * `runScenario`, Date-only fake timers); per-step `seen` is attributed through
@@ -132,10 +138,16 @@ describe.each([
   /** Everything the model was handed, per user step (one string per step). */
   const seenByStep = new Map<number, string>();
   let model: ScriptedModelHandle;
+  let previousHandoff: string | undefined;
 
   beforeAll(async () => {
     jest.useFakeTimers({ advanceTimers: true, doNotFake: REAL_TIMER_APIS });
     jest.setSystemTime(T0);
+    // BUG-053 T2: the catch-up turn reopens the closed workout in chat and hands
+    // the SAME run to training (reopen_workout → training), so the hand-off
+    // targets must include training for the deterministic layer's script queue.
+    previousHandoff = process.env.TRANSITION_HANDOFF_TARGETS;
+    process.env.TRANSITION_HANDOFF_TARGETS = 'training,session_planning';
     const run = await runJourney(scenarioDef);
     result = run.result;
     model = run.model;
@@ -144,6 +156,11 @@ describe.each([
 
   afterAll(() => {
     jest.useRealTimers();
+    if (previousHandoff === undefined) {
+      delete process.env.TRANSITION_HANDOFF_TARGETS;
+    } else {
+      process.env.TRANSITION_HANDOFF_TARGETS = previousHandoff;
+    }
   });
 
   // `stepAt` reads the scenario itself, so it is safe at describe-definition
@@ -313,17 +330,28 @@ describe.each([
     });
   });
 
-  // --- step 9: the catch-up after +3.5 h — the owner-ruling turn ---
+  // --- step 9: the catch-up after +3.5 h — BUG-053: auto-close, reopen, retro sets ---
   describe('step 9 — the catch-up message (after the +3.5 h pause)', () => {
     itEntries('seen', 9, stepAt(9).expect?.seen?.mustMatch, () => seenOf(9));
     itEntries('delivered', 9, stepAt(9).expect?.delivered?.mustMatch, () => observationOf(9).delivered);
 
-    it('the model saw the stale-session fact in # Today (the training phase re-read the session)', () => {
+    it('the model saw the stale-session fact in # Today (the training phase re-read the reopened session)', () => {
       expect(seenOf(9)).toContain("No activity for 3 h; a set logged now is dated to the session's last activity.");
     });
 
-    it('log_set was called for the pull-ups', () => {
-      expect(observationOf(9).runRow?.toolCalls?.map(c => c.name)).toContain('log_set');
+    it('reopen_workout was called, then log_set for the pull-ups (the chat → training hand-off)', () => {
+      const tools = observationOf(9).runRow?.toolCalls?.map(c => c.name) ?? [];
+      expect(tools).toContain('reopen_workout');
+      expect(tools).toContain('log_set');
+      expect(tools.indexOf('reopen_workout')).toBeLessThan(tools.indexOf('log_set'));
+    });
+
+    it('the reopened session is in_progress again (the close cleared, then reopen undid it)', () => {
+      const session = upperASessionOf(9);
+      expect(session.status).toBe('in_progress');
+      expect(session.autoCloseReason).toBeNull();
+      expect(session.completedAt).toBeNull();
+      expect(session.reopenedAt).not.toBeNull();
     });
 
     it('the pull-up sets land in the PREVIOUS session (same row — no new session opened)', () => {
@@ -367,7 +395,7 @@ describe.each([
       expect(await turnCountOf(9)).toBeGreaterThan(0);
     });
 
-    it('phase stays training (prepare did not bounce the run to chat)', () => {
+    it('phase is training again (the reopen handed the run back)', () => {
       expect(observationOf(9).phase).toBe('training');
     });
   });

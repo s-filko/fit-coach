@@ -78,6 +78,9 @@ _Generated 2026-10-07 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **Close-out debt (merged but plan not done)**
 — none —
+
+**Warnings**
+- `stale-session-autoclose.md` — Status: in progress but branch ``plan/stale-session-autoclose`, cut from `dev`.` no longer exists
 <!-- AUTO:status END -->
 
 ## Scope now

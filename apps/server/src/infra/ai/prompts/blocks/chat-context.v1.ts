@@ -35,7 +35,17 @@ export function buildRecentSessionsSection(
     : 'No recent sessions.';
 }
 
-export function buildChatContextText(data: ChatContextData, ctx: ContextBlockCtx, depth: number): string {
+export function buildChatContextText(
+  data: ChatContextData,
+  ctx: ContextBlockCtx,
+  depth: number,
+  /** v2 (BUG-053 T3) injects its own recent-sessions section; absent = v1's, byte-identical. */
+  buildRecentSessions: (
+    recentSessions: WorkoutSessionWithDetails[],
+    ctx: ContextBlockCtx,
+    depth: number,
+  ) => string = buildRecentSessionsSection,
+): string {
   const { user } = ctx;
   const profile = [
     user?.age && `Age: ${user.age}`,
@@ -52,7 +62,7 @@ export function buildChatContextText(data: ChatContextData, ctx: ContextBlockCtx
     ? 'User HAS an active workout plan. They can start planning workout sessions.'
     : 'User DOES NOT have a workout plan yet. Suggest creating one when appropriate.';
 
-  const recentSessionsSection = buildRecentSessionsSection(data.recentSessions, ctx, depth);
+  const recentSessionsSection = buildRecentSessions(data.recentSessions, ctx, depth);
 
   const clientName = user?.firstName ?? null;
 

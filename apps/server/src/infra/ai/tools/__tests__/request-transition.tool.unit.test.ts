@@ -122,6 +122,14 @@ describe('request-transition.tool — chat variant', () => {
     expect(isToolReturnWithUpdate(a) ? a.update.pendingTransition?.toPhase : undefined).toBe('plan_creation');
     expect(isToolReturnWithUpdate(b) ? b.update.pendingTransition?.toPhase : undefined).toBe('session_planning');
   });
+
+  it('BUG-053 T2: still refuses "training" as a target (the schema enum excludes it)', async () => {
+    // The matrix gained chat → training for reopen_workout only (owner decision
+    // 2026-10-08); request_transition's chat schema must keep it unreachable.
+    const requestTransition = buildTool('chat');
+
+    await expect(requestTransition.invoke({ toPhase: 'training' }, makeConfig())).rejects.toThrow();
+  });
 });
 
 describe('request-transition.tool — chat variant, D-5 hand-off wording', () => {

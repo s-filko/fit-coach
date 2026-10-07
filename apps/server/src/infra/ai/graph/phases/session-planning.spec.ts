@@ -24,6 +24,7 @@ import {
 } from '@infra/ai/prompts/blocks';
 import {
   buildRequestTransitionTool,
+  buildReopenWorkoutTool,
   buildSearchExercisesTool,
   buildSharedTools,
   buildStartTrainingSessionTool,
@@ -73,6 +74,9 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
         userFactsService: deps.userFacts,
         transitionHandoffTargets: deps.transitionHandoffTargets,
       }),
+      // BUG-053 T2 (AC-SSA-2): planning can also reopen the last finished workout instead of
+      // starting a new one — it enters training with the reopened session.
+      buildReopenWorkoutTool({ trainingService }),
       buildRequestTransitionTool('session_planning'),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],

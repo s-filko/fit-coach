@@ -51,6 +51,7 @@ export { EPISODE_SUMMARIES_HEADER } from './episode-summaries.v2';
 export type { ContextBlock, ContextBlockCtx, RenderableBlock, RenderedBlock } from './types';
 
 export { CHAT_CONTEXT_V1, type ChatContextData } from './chat-context.v1';
+export { CHAT_CONTEXT_V2, buildRecentSessionsSectionV2 } from './chat-context.v2';
 export {
   buildClientProfileText,
   PLAN_CREATION_CLIENT_PROFILE_V1,

@@ -495,6 +495,9 @@ export const workoutSessions = pgTable(
     place: text('place'),
     lastActivityAt: timestamp('last_activity_at').defaultNow().notNull(),
     autoCloseReason: text('auto_close_reason'),
+    // BUG-053 T2 (INV-TRAINING-005): when reopen_workout last returned this session to training —
+    // the auto-close idleness base is max(last_activity_at, reopened_at). NULL = never reopened.
+    reopenedAt: timestamp('reopened_at', { withTimezone: true }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

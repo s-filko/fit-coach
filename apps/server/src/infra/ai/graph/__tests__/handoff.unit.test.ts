@@ -33,7 +33,11 @@ describe('isAcceptedHandoff', () => {
   });
 
   it('rejects when evaluateTransition would block it (target not in the matrix for this phase)', () => {
-    expect(isAcceptedHandoff(TRAINING_TARGET, 'chat', 's-1', { toPhase: 'training', reason: 'x' }, false)).toBe(false);
+    // BUG-053 T2 made chat → training a matrix edge (reopen_workout); registration → training
+    // stays outside the matrix, so it is the blocked example.
+    expect(isAcceptedHandoff(TRAINING_TARGET, 'registration', 's-1', { toPhase: 'training', reason: 'x' }, false)).toBe(
+      false,
+    );
   });
 
   it('rejects when there is no pending transition', () => {

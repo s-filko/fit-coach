@@ -26,6 +26,11 @@ export {
   type GetExerciseHistoryToolDeps,
 } from '@infra/ai/tools/get-exercise-history.tool';
 export { buildLogSetTool, type LogSetToolDeps } from '@infra/ai/tools/log-set.tool';
+export {
+  buildReopenWorkoutTool,
+  type ReopenWorkoutToolDeps,
+  reopenWorkoutSummary,
+} from '@infra/ai/tools/reopen-workout.tool';
 export { buildRequestTransitionTool, type RequestTransitionVariant } from '@infra/ai/tools/request-transition.tool';
 export { buildSaveProfileFieldsTool, type SaveProfileFieldsToolDeps } from '@infra/ai/tools/save-profile-fields.tool';
 export { buildSaveWorkoutPlanTool, type SaveWorkoutPlanToolDeps } from '@infra/ai/tools/save-workout-plan.tool';
