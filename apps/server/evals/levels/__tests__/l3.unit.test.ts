@@ -141,6 +141,21 @@ describe('loadScenarios', () => {
     expect(defaults.some(id => id.startsWith('fl-'))).toBe(false);
   });
 
+  it('the n-load group is selectable by name and by id, and NOT part of the default run (call ceiling)', () => {
+    const group = loadScenarios('n-load');
+    expect(group.map(s => s.id)).toEqual([
+      'n-load-up',
+      'n-load-miss',
+      'n-load-early-stop',
+      'n-load-break',
+      'n-load-uneven',
+      'n-load-ask',
+    ]);
+    expect(loadScenarios('n-load-break').map(s => s.id)).toEqual(['n-load-break']);
+    const defaults = loadScenarios().map(s => s.id);
+    expect(defaults.some(id => id.startsWith('n-load'))).toBe(false);
+  });
+
   it('evaluates the database plane: a wrong fact row fails, the right one passes', () => {
     const scenario = loadScenarios('fl-b-closed-not-resurrected')[0]!;
     const t0 = new Date();

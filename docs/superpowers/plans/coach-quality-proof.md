@@ -84,3 +84,40 @@ into a prompt patch inside this plan.
 Suites, close-out review (four zones, GLM — owner accent), report committed, `Status: done`. Merge/deploy — owner.
 
 ## 3. Worker log (append; newest last)
+
+### T2 — weight-recommendation journeys (worker, 2026-10-07)
+
+- **(D) The load-plan engine does not exist on this branch.** Coach-simplification-i1 Task 3 (commit `2f3b22be`,
+  merged into dev 2026-10-04) deleted `domain/training/load-plan`, `get_load_plan`, the LOAD PLAN context row and the
+  `LOAD_PLAN_*` flags; dev, this branch and both sibling plan branches carry none of it. Per the coordinator's ruling
+  (worker ask, 2026-10-07): T2 was built against the current facts-only architecture — a compact TEST-ONLY oracle
+  (`evals/lib/weight-oracle.ts`) computes the expected load from the seeded history by the rules still stated in
+  `docs/domain/training.spec.md` (BR-TRAINING-036/038/041/042/043/045, cited in its comments). The oracle is the
+  measurement yardstick for T3, never product code; the plan's `LOAD_PLAN_SUGGESTION=true LOAD_PLAN_PLANNER_REBIND=true
+  LOAD_PLAN_BREAKS=true` command-line flags do nothing on this branch (no code reads them) and were not added.
+- **(D) The break pattern's rule is owner-unconfirmed.** A 3-week gap → BR-TRAINING-038's `return` tier → the first
+  workout back one step down (matching the deleted engine's `gap-tier.ts`), with the coordinator's ~10 %-lighter
+  alternative (rounded to the equipment step) as an additional acceptable load: expected 97.5, acceptable [90, 97.5].
+- The scripted layer asserts the `# History` rows the request actually carries (dates, sets, loads used) — the dated
+  facts a live coach needs — plus the persisted report set at the oracle-computed load; the scripted reply text is
+  built from the verdict, so the number is computed, never hand-typed. Live-number checking is T3's, against
+  `nLoadExpectations()` (`evals/scenarios/n-load-shared.ts`): {exercise, direction: up|hold|down|ask, expectedKg,
+  acceptableKg} per case. The six journeys run on the test setup's two fixed barbell exercises (scripted
+  `start_training_session` needs fixed ids); distinctness lives in the histories, and every run seeds a fresh user.
+  Selectable live as the `n-load` group (`--scenario n-load`), not in the default L3 run (call ceiling, like
+  fact-lifecycle).
+- Computed loads: up → **82.5** (bench, 2-for-2 via capacity); miss → **97.5** (squat, below floor even by capacity);
+  early stop → **hold 80** (bench, RPE 7); break → **97.5** acceptable [90, 97.5] (squat, 21 d); uneven → **hold 80**
+  (bench, drop-off 6 > 4, no norm); no history → **ask**.
+- Red first, recorded: oracle — `evals/lib/__tests__/weight-oracle.unit.test.ts:11:33 - error TS2307: Cannot find
+  module '../weight-oracle'` (1 suite failed, 179 passed); journeys — first run failed on
+  `n-load-shared.ts:137:5 - error TS2741: Property 'facts' is missing` and, after that fix, 6 ×
+  `✕ consumed the whole script (no fallback answer leaked in)` (leftover checked mid-queue — harness bug, fixed to
+  check after the run). The pinned `# History` row expectations passed unchanged-code rendering on the first green
+  run (characterization pins; T2 changes no product code).
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 182 passed, 182 total`,
+  `Tests: 1816 passed, 1816 total`; `npm run test:scenarios` → `Test Suites: 24 passed, 24 total`,
+  `Tests: 1 todo, 452 passed, 453 total` (was 392 + 1 todo; +60 from this task).
+- Operational note for the orchestrator: the plan-and-tool-fixes worker's DB-suite wrapper (PID 1338826/1338827) is
+  self-deadlocked — its `while pgrep -f "node .*jest"` matches its own shell's command line, so it never reaches its
+  `flock /tmp/fitcoach-testdb.lock` stage. This task's DB runs took the same lock and released it.

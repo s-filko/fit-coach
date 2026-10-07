@@ -84,6 +84,12 @@ import { scenario as journeyFlC } from '../scenarios/fl-c-short-states.scenario'
 import { scenario as journeyFlD } from '../scenarios/fl-d-recurring-short-state.scenario';
 import { scenario as journeyFlE } from '../scenarios/fl-e-advisory-plan.scenario';
 import { scenario as journeyFlF } from '../scenarios/fl-f-remembered-corrected-deleted.scenario';
+import { scenario as journeyNLoadAsk } from '../scenarios/n-load-ask.scenario';
+import { scenario as journeyNLoadBreak } from '../scenarios/n-load-break.scenario';
+import { scenario as journeyNLoadEarlyStop } from '../scenarios/n-load-early-stop.scenario';
+import { scenario as journeyNLoadMiss } from '../scenarios/n-load-miss.scenario';
+import { scenario as journeyNLoadUneven } from '../scenarios/n-load-uneven.scenario';
+import { scenario as journeyNLoadUp } from '../scenarios/n-load-up.scenario';
 import { scenario as smokeScenario } from '../scenarios/smoke.scenario';
 
 /** Every authored training journey, in run order — what a plain L3 run executes. */
@@ -104,6 +110,24 @@ export const FACT_LIFECYCLE_GROUP = 'fact-lifecycle';
 const FACT_LIFECYCLE_SCENARIOS: Scenario[] = [journeyFlA, journeyFlB, journeyFlC, journeyFlD, journeyFlE, journeyFlF];
 
 /**
+ * The weight-recommendation journeys (coach-quality-proof T2, AC-CQ-2). Selectable by id or as a
+ * group (`n-load`), NOT part of the default run — 24 user steps would cross the shared call
+ * ceiling of a plain L3 run; the T3 live measurement selects the group explicitly (EVALS_FULL_RUN
+ * allowed). What the live judge compares the replies against is `nLoadExpectations()`
+ * (evals/scenarios/n-load-shared.ts) — the loads the weight oracle computes from the seeded
+ * histories.
+ */
+export const N_LOAD_GROUP = 'n-load';
+const N_LOAD_SCENARIOS: Scenario[] = [
+  journeyNLoadUp,
+  journeyNLoadMiss,
+  journeyNLoadEarlyStop,
+  journeyNLoadBreak,
+  journeyNLoadUneven,
+  journeyNLoadAsk,
+];
+
+/**
  * The smoke scenario (smoke-test plan, AC-SM-3) — selectable ONLY by id
  * (`--scenario smoke`, what `npm run smoke` passes), never part of
  * `ALL_SCENARIOS`'s default run: it has no deterministic twin and is meant
@@ -119,7 +143,10 @@ export function loadScenarios(scenarioId?: string): Scenario[] {
   if (scenarioId === FACT_LIFECYCLE_GROUP) {
     return FACT_LIFECYCLE_SCENARIOS;
   }
-  const everyScenario = [...ALL_SCENARIOS, ...FACT_LIFECYCLE_SCENARIOS, ...SMOKE_SCENARIOS];
+  if (scenarioId === N_LOAD_GROUP) {
+    return N_LOAD_SCENARIOS;
+  }
+  const everyScenario = [...ALL_SCENARIOS, ...FACT_LIFECYCLE_SCENARIOS, ...N_LOAD_SCENARIOS, ...SMOKE_SCENARIOS];
   const found = everyScenario.filter(s => s.id === scenarioId);
   if (found.length === 0) {
     const available = everyScenario.map(s => s.id).join(', ');
