@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 
+import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
 import { rejectWithoutLoggedSet } from '@infra/ai/tools/set-preconditions';
 
@@ -34,8 +35,10 @@ export function buildDeleteLastSetsTool(deps: DeleteLastSetsToolDeps) {
           return rejection;
         }
         const result = await trainingService.deleteLastSets(sessionId, input.exercise_id, count);
+        // T6: the deleted sets render through the shared set formatter — a bodyweight set is named
+        // "bodyweight" (BR-TRAINING-047), not shown as raw setData JSON.
         const deleted = result.deletedSets
-          .map(s => `Set ${s.setNumber}: ${JSON.stringify(s.setData)}${s.rpe != null ? ` RPE ${s.rpe}` : ''}`)
+          .map(s => `Set ${s.setNumber}: ${formatSetData(s.setData)}${s.rpe != null ? ` RPE ${s.rpe}` : ''}`)
           .join(', ');
         log.info(
           {

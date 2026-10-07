@@ -492,8 +492,8 @@ describe('formatSetShort', () => {
   it.each<[string, SetData, string]>([
     ['strength', { type: 'strength', reps: 12, weight: 130, weightUnit: 'kg' }, '12×130'],
     ['per hand', { type: 'strength', reps: 10, weight: 12, weightUnit: 'kg', perHand: true }, '10×12 per hand'],
-    ['no weight', { type: 'strength', reps: 12 }, '12 reps'],
-    ['functional', { type: 'functional_reps', reps: 20 }, '20 reps'],
+    ['no weight', { type: 'strength', reps: 12 }, '12×bodyweight'],
+    ['functional', { type: 'functional_reps', reps: 20 }, '20×bodyweight'],
     ['isometric', { type: 'isometric', duration: 45 }, '45 s'],
     ['cardio minutes', { type: 'cardio_duration', duration: 540 }, '9 min'],
     ['cardio short', { type: 'cardio_duration', duration: 40 }, '40 s'],

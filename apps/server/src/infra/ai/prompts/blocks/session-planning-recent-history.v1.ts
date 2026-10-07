@@ -10,6 +10,7 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { humanTimeAgo } from '@shared/date-utils';
 
+import { formatBodyweightShort } from './set-format';
 import type { ContextBlock, ContextBlockCtx } from './types';
 
 export function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date, tz?: string | null): string {
@@ -27,8 +28,13 @@ export function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: 
           const setsInfo = ex.sets
             .map(s => {
               if (s.setData.type === 'strength') {
-                const w = s.setData.weight ?? 'BW';
-                return `${s.setData.reps}x${w}${s.setData.weightUnit ?? 'kg'}`;
+                // A null weight (legacy row) is a bodyweight set — named in full, never "BW".
+                return s.setData.weight != null
+                  ? `${s.setData.reps}x${s.setData.weight}${s.setData.weightUnit ?? 'kg'}`
+                  : formatBodyweightShort(s.setData.reps);
+              }
+              if (s.setData.type === 'functional_reps') {
+                return formatBodyweightShort(s.setData.reps);
               }
               return `${s.setData.type}`;
             })

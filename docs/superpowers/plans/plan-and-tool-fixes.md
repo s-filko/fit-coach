@@ -441,3 +441,57 @@ Decisions:
   - `npm run check-all` → `✖ 1247 problems (0 errors, 1247 warnings)`.
   - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1809 passed, 1809 total.
   - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.
+
+### T6 — Weight is required with reps; bodyweight is named "bodyweight" everywhere (AC-PTF-6)
+
+- Ownership extended by the orchestrator (ask → answer C, 2026-10-07): besides the four named files, also
+  `infra/ai/tools/update-last-set.tool.ts` (Before/After through the shared formatter instead of raw
+  `JSON.stringify(setData)`), `infra/ai/tools/format-exercise-summary.ts` (auto-complete notes), and — from the
+  pre-commit sweep the answer ordered — `infra/ai/tools/delete-last-sets.tool.ts` (deleted-set lines, also raw JSON
+  before). Sweep result: no other renderer prints a logged set to the model (`grep` over `setData` consumers and
+  `reps` template strings in tools/blocks; the `reps` hits left in `prompts/phases/*` are plan-template prompt text,
+  not logged-set renderings — untouched per "no prompt files"). `session-planning.types.ts:25` mentions "BW" only in
+  a comment about normalizing model *input* (planned weight), not a rendering — left as is.
+- Red first, recorded before the fix:
+  - `log-set.weight-input.unit.test.ts:59` 'rejects reps without a weight at the schema level, nothing stored
+    (AC-PTF-6)' — `expect(...).rejects.toThrow()` → `Received promise resolved instead of rejected`;
+  - `log-set.weight-input.unit.test.ts` (AC-PTF-4/6 weight-0 reply) — `Expected substring: "8 reps @ bodyweight"`,
+    `Received string: "Set 2 logged — Barbell Bench Press: 8 reps."`;
+  - `set-format.unit.test.ts` (new) — `Expected: "8 reps @ bodyweight" / "12 reps @ bodyweight"`, `Received: "8 reps"
+    / "12 reps"`;
+  - `training-facts.unit.test.ts` formatSetShort table — `Expected: "12×bodyweight" / "20×bodyweight"`, `Received:
+    "12 reps" / "20 reps"`;
+  - `session-planning-blocks.v1.unit.test.ts` — `Expected substring: "8×bodyweight"` (rendered `8xBW` / the bare type
+    name `functional_reps`);
+  - `update-last-set.tool.unit.test.ts` — `Before: {"type":"strength","reps":10,"weight":10,…} After:
+    {"type":"functional_reps","reps":10}` (raw JSON);
+  - `delete-last-sets.tool.unit.test.ts` — `Set 2: {"type":"functional_reps","reps":8}` (raw JSON);
+  - `format-exercise-summary.unit.test.ts` — bodyweight lines rendered bare (`Set 1: 8 reps`).
+  - Summary of the red run over the six files: Tests: 11 failed, 89 passed (plus the set-format file's 3).
+- Implementation:
+  - `set-format.ts`: one wording in one place — `BODYWEIGHT_LABEL` + `formatBodyweightLong(reps)` = `8 reps @
+    bodyweight` and `formatBodyweightShort(reps)` = `8×bodyweight`; `formatSetData` uses the long form for
+    `functional_reps` and for a `strength` set with a null weight (legacy rows); weighted/cardio forms unchanged.
+  - `log-set.tool.ts`: schema refine `reps → weight !== undefined` with message `weight is required with reps
+    (0 = a bodyweight set)` — a reps-only call is rejected before the handler, nothing stored; duration/distance calls
+    keep weight optional; `weight: 0` → `functional_reps` unchanged (T4); handler and description untouched.
+  - `training-facts.ts` `formatSetShort`: `8×bodyweight` for `functional_reps` and null-weight `strength`.
+  - `session-planning-recent-history.v1.ts`: `8×bodyweight` for null-weight `strength` and for `functional_reps`
+    (previously `8xBW` / the bare type name); weighted `8x80kg` shape unchanged.
+  - `update-last-set.tool.ts` / `delete-last-sets.tool.ts`: Before/After and deleted-set lines render through
+    `formatSetData` — no more raw setData JSON to the model.
+  - `format-exercise-summary.ts`: a set with reps and no external load prints `8 reps @ bodyweight` in the
+    sets-performed lines.
+  - Scenario fixtures (DB suites — orchestrator runs them): the five scripted bodyweight pull-up `log_set` calls
+    (`evals/scenarios/b-full-workout.scenario.ts` ×2, `c-catch-up-logging.scenario.ts` ×3) gained `weight: 0` —
+    same stored `functional_reps` set, now schema-valid. No other scripted `log_set` call passes reps without a weight.
+  - Snapshots: **none updated, deliberately** — `tool-surface` (log_set schema) is unchanged because a zod `.refine`
+    does not serialize into the JSON schema, and no snapshot contains a bodyweight rendering (62 snapshots pass
+    untouched). The `log-set.tool.repro.test.ts` W-3 probe (excluded from the default run) now fails one step
+    earlier — its `reps`-only plank call is schema-rejected instead of stored — left as is: still red by design.
+- Verification (from `apps/server`):
+  - `npm run check-all` → `✖ 1256 problems (0 errors, 1256 warnings)` (2 import-order errors introduced and fixed
+    before the final run).
+  - `npm run test:unit` → Test Suites: 182 passed, 182 total / Tests: 1817 passed, 1817 total.
+  - `DB_PORT=5999 npm run test:unit` (CI parity, no DB) → 182/182 suites, 1817/1817 tests.
+  - DB suites not run by the worker (shared test DB) — orchestrator's § 2 run covers them.

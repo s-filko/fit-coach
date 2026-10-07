@@ -240,6 +240,11 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         })
         .refine(d => d.reps !== undefined || d.durationSeconds !== undefined || d.distanceKm !== undefined, {
           message: 'Either reps, durationSeconds, or distanceKm must be provided',
+        })
+        // T6 (BR-TRAINING-047): the weight has no default — with reps it is the coach's explicit
+        // decision (0 = no external load, a bodyweight set), never an implied "unknown".
+        .refine(d => d.reps === undefined || d.weight !== undefined, {
+          message: 'weight is required with reps (0 = a bodyweight set)',
         }),
     },
   );
