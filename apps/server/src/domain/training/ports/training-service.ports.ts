@@ -96,6 +96,16 @@ export interface ITrainingService {
    */
   autoCloseTimedOutSessions(userId: string): Promise<void>;
 
+  /**
+   * BUG-053 T2 (AC-SSA-2): returns the user's most recent `completed` session (any close reason)
+   * to training — `status = in_progress`, `completed_at = null`, `auto_close_reason = null`,
+   * `reopened_at = now`; `last_activity_at` is not touched, so sets logged into it stay
+   * retro-dated to the session's last activity (BR-TRAINING-030). Refuses with
+   * `ActiveSessionExistsError` when another session is active (INV-TRAINING-002) and with
+   * `NoCompletedSessionError` when there is no completed session.
+   */
+  reopenLastSession(userId: string): Promise<WorkoutSessionWithDetails>;
+
   // Exercise management during training
   completeCurrentExercise(sessionId: string): Promise<AutoCompletedExercise>;
 

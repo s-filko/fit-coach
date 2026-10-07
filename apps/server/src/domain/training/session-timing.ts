@@ -12,6 +12,11 @@ interface TimedSession {
   exercises: ReadonlyArray<{ sets: ReadonlyArray<Pick<SessionSet, 'id'>> }>;
 }
 
+/** The idle base inputs: the activity fallback chain plus the reopening moment (BUG-053 T2). */
+type AutoCloseTimedSession = Pick<TimedSession, 'lastActivityAt' | 'updatedAt' | 'createdAt'> & {
+  reopenedAt?: Date | string | null;
+};
+
 /** The session's last activity moment: `lastActivityAt`, falling back to `updatedAt` / `createdAt`. */
 export function lastActivityOf(session: Pick<TimedSession, 'lastActivityAt' | 'updatedAt' | 'createdAt'>): Date {
   return new Date(session.lastActivityAt ?? session.updatedAt ?? session.createdAt);
@@ -28,13 +33,15 @@ export function isStale(session: Pick<TimedSession, 'lastActivityAt' | 'updatedA
 
 /**
  * BUG-053 (INV-TRAINING-005): the moment an in_progress session's idleness is measured from for
- * the lazy auto-close at the user's next message — the last activity (`lastActivityOf`'s fallback
- * chain). Distinct from `isStale` on purpose: T2's `reopen_workout` extends THIS base to
- * `max(last_activity_at, reopened_at)` (a reopened workout is idle from its reopening), while
- * retro-dating keeps measuring from the last activity (BR-TRAINING-030).
+ * the lazy auto-close at the user's next message — `max(last_activity_at, reopened_at)` (the
+ * activity via `lastActivityOf`'s fallback chain): a session returned by `reopen_workout` is idle
+ * from its reopening, not from the activity that preceded the close. Distinct from `isStale` on
+ * purpose: retro-dating keeps measuring from the last activity (BR-TRAINING-030).
  */
-export function autoCloseIdleSince(session: Pick<TimedSession, 'lastActivityAt' | 'updatedAt' | 'createdAt'>): Date {
-  return lastActivityOf(session);
+export function autoCloseIdleSince(session: AutoCloseTimedSession): Date {
+  const base = lastActivityOf(session);
+  const reopened = session.reopenedAt ? new Date(session.reopenedAt) : null;
+  return reopened && reopened.getTime() > base.getTime() ? reopened : base;
 }
 
 /**

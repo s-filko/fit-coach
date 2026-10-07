@@ -168,6 +168,9 @@ export interface WorkoutSession {
   sessionPlanJson: SessionRecommendation | null;
   lastActivityAt: Date;
   autoCloseReason: 'timeout' | 'new_session_started' | 'manual' | null;
+  // BUG-053 T2: when reopen_workout last returned this session to training — the auto-close
+  // idleness base is max(last_activity_at, reopened_at) (INV-TRAINING-005). NULL = never reopened.
+  reopenedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

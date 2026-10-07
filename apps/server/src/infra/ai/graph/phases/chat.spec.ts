@@ -13,7 +13,12 @@ import type {
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
 import { CHAT_CONTEXT_V1 } from '@infra/ai/prompts/blocks';
-import { buildRequestTransitionTool, buildSharedTools, buildUpdateProfileTool } from '@infra/ai/tools';
+import {
+  buildReopenWorkoutTool,
+  buildRequestTransitionTool,
+  buildSharedTools,
+  buildUpdateProfileTool,
+} from '@infra/ai/tools';
 
 import { NO_POLICY, type ToolPolicy } from '../tool-policy';
 
@@ -35,6 +40,9 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
     tools: [
       buildUpdateProfileTool({ userService }),
       buildRequestTransitionTool('chat', deps.transitionHandoffTargets),
+      // BUG-053 T2 (AC-SSA-2): the one chat → training edge — reopen_workout enters training
+      // with the reopened session; request_transition's schema keeps 'training' unreachable.
+      buildReopenWorkoutTool({ trainingService: deps.trainingService }),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],
     toolPolicy: CHAT_TOOL_POLICY,

@@ -125,3 +125,32 @@ Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lo
 - `npm run test:scenarios` → Tests: 365 passed, 1 todo, 366 total (Suites: 24/24).
 - Caveat: before the flock instruction arrived (mid-run), my unlocked DB runs raced the other worker once — one c-catch-up run failed 40 tests transiently; everything above was re-verified under the lock.
 
+### T2 — `reopen_workout`: the model can return the last closed workout to training (AC-SSA-2) — 2026-10-08, worker
+
+Red first (failing lines recorded before implementation):
+- `src/domain/training/__tests__/session-timing.unit.test.ts:45` (also `:53`, `:60`) — TS2353: `reopenedAt` does not exist in `autoCloseIdleSince`'s input type.
+- `src/domain/training/services/__tests__/training-service-reopen.unit.test.ts:8` — TS2305: no exported member `NoCompletedSessionError`; `:47`/`:71`/`:82` — `reopenLastSession` does not exist on `TrainingService`; `:36`/`:80` — `findLastCompletedByUserId` not on the repo port.
+- `src/infra/ai/tools/__tests__/reopen-workout.tool.unit.test.ts:10` — TS2305 `NoCompletedSessionError`; `:18` — TS2307: module `../reopen-workout.tool` not found.
+- `src/domain/conversation/__tests__/transitions.unit.test.ts` — ✕ 'BR-CONV-015: matches today's guard matrix verbatim', ✕ 'BUG-053 T2: allows chat → training with an active session', ✕ 'BUG-053 T2: chat → training without a session is still blocked'.
+
+Code:
+- Migration `0024_panoramic_adam_destine.sql` (`npm run drizzle:generate`): `workout_sessions.reopened_at timestamptz null`; `schema.ts` + `types.ts` (`reopenedAt: Date | null`) follow. Applied to the shared test DB with `NODE_ENV=test npx drizzle-kit migrate` under the flock.
+- `session-timing.ts`: `autoCloseIdleSince` now returns `max(last_activity_at, reopened_at)` (activity via `lastActivityOf`'s fallbacks); `isStale` untouched (retro-dating keeps the last-activity base, BR-TRAINING-030).
+- `workout-session.repository.ts`: `findTimedOut`/`autoCloseTimedOut` use the same base — `greatest(last_activity_at, reopened_at) < cutoff` (Postgres GREATEST ignores NULLs) — so a just-reopened workout is not closed at the next sweep; new `findLastCompletedByUserId` (most recent `completed`, any close reason, `completed_at` DESC) on the repo + port.
+- `training.service.ts` + port: `reopenLastSession(userId)` — timeout sweep first (a stale leftover never refuses the reopen), typed refusals `ActiveSessionExistsError` (live session, INV-TRAINING-002) and the new `NoCompletedSessionError` (nothing completed); the write sets `status = in_progress`, `completed_at = null`, `auto_close_reason = null`, `reopened_at = now` and deliberately not `last_activity_at` (BR-TRAINING-030).
+- `infra/ai/tools/reopen-workout.tool.ts` (+ index export): no arguments, calls the service, returns `{ pendingTransition: training/'workout_reopened', activeSessionId }`; the result states facts only — `Workout <name> (<weekday mon day>) reopened (started HH:MM, last activity HH:MM; N of M exercises logged).` — times in the user's timezone via `maybeCtxOf`. Wired into the chat and session_planning tool lists (`chat.spec.ts`, `session-planning.spec.ts`).
+
+(D) TRANSITION_MATRIX gained `chat → training` (owner decision 2026-10-08, coordinator ruling '(a), narrowly' on ask of 2026-10-08): only `reopen_workout` can take the edge — the chat `request_transition` schema still excludes 'training' (pinned by a new test), and BR-CONV-016's no-active-session guard still blocks a sessionless chat → training (pinned). The BR-CONV-015 amendment goes to T4's spec texts for owner approval before merge.
+
+Journeys re-enabled ('restored in T2 via reopen_workout' blocks from T1):
+- `c-catch-up-logging` (scenario + test): step 9's script is `reopen_workout` → 3× `log_set` → the ruling's reply (the chat → training hand-off, so the deterministic layer sets `TRANSITION_HANDOFF_TARGETS=training,session_planning` in beforeAll); the T1-era text-only assertions were replaced by the restored ones — stale `# Today` fact line, retro sets + timestamps (last activity + `RETRO_SET_OFFSET_MS`), same-session check, plus new reopen facts (in_progress again, `auto_close_reason`/`completed_at` cleared, `reopened_at` set, reopen before log_set in the run row). Steps 10–11 (advance +3.75 h, `finish_training`, completed AT the last activity, duration 11) restored verbatim with their assertions.
+- `retro-timestamps` (test): the gym turn (+180 m) now scripts `reopen_workout` then the first `log_set` — prepare's auto-close fires on the empty session, the reopen returns it, the first set is a late start (`started_at` re-anchors), and all 16 sets + finish + AC-RT-3/AC-RT-4 assertions are restored verbatim; `TRANSITION_HANDOFF_TARGETS` set in beforeAll.
+- Pins updated for the new tool lists: `phase-specs.unit.test.ts` (chat, session_planning), `handoff.unit.test.ts` (registration → training is the blocked example now), test-support/fixtures gained `reopenedAt`.
+- New: `training-service-reopen.unit.test.ts` (3 cases), `reopen-workout.tool.unit.test.ts` (4 cases incl. factual-text and no-instruction checks), `tests/integration/services/reopen-workout.integration.test.ts` (5 cases: migration round-trip, both refusals, the `max()` idle base keeping a just-reopened workout open while an old reopening closes it with `completed_at = last_activity_at`, newest-completed wins).
+
+Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lock`):
+- `npm run check-all` → 0 errors (lint + format:check + tsc --noEmit).
+- `npm run test:unit` → Tests: 1826 passed, 1826 total (Suites: 185/185).
+- `npm run test:integration` → Tests: 669 passed, 1 todo, 670 total (Suites: 56/56).
+- `npm run test:scenarios` → Tests: 399 passed, 1 todo, 400 total (Suites: 24/24).
+

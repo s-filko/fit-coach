@@ -21,6 +21,7 @@ describe('SessionPlanningContextBuilder', () => {
     findRecentByUserId: jest.fn(),
     findRecentByUserIdWithDetails: jest.fn(),
     findActiveByUserId: jest.fn(),
+    findLastCompletedByUserId: jest.fn(),
     update: jest.fn(),
     complete: jest.fn(),
     updateActivity: jest.fn(),
@@ -66,6 +67,7 @@ describe('SessionPlanningContextBuilder', () => {
     sessionPlanJson: null,
     lastActivityAt: completedAt,
     autoCloseReason: null,
+    reopenedAt: null,
     createdAt: completedAt,
     updatedAt: completedAt,
     exercises: [

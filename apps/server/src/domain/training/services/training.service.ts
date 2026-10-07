@@ -1,4 +1,4 @@
-import { ActiveSessionExistsError, ExerciseNotFoundError } from '@domain/training/errors';
+import { ActiveSessionExistsError, ExerciseNotFoundError, NoCompletedSessionError } from '@domain/training/errors';
 import { isValidExerciseId } from '@domain/training/plan-exercise-id';
 import type {
   AutoCompletedExercise,
@@ -583,6 +583,40 @@ export class TrainingService implements ITrainingService {
       }
     }
     await this.sessionRepo.autoCloseTimedOut(userId, cutoffTime);
+  }
+
+  /**
+   * BUG-053 T2 (AC-SSA-2): the user's most recent completed session (any close reason) returns
+   * to training — in_progress, completion fields cleared, `reopened_at` stamped; the timeout
+   * sweep runs first so a stale leftover does not refuse the reopen (INV-TRAINING-002 still
+   * refuses a live one). `last_activity_at` is deliberately untouched: sets logged into the
+   * reopened session stay retro-dated to the session's last activity (BR-TRAINING-030), and the
+   * auto-close measures idleness from `max(last_activity_at, reopened_at)` (INV-TRAINING-005).
+   */
+  async reopenLastSession(userId: string): Promise<WorkoutSessionWithDetails> {
+    await this.autoCloseTimedOutSessions(userId);
+    const active = await this.sessionRepo.findActiveByUserId(userId);
+    if (active) {
+      throw new ActiveSessionExistsError();
+    }
+
+    const last = await this.sessionRepo.findLastCompletedByUserId(userId);
+    if (!last) {
+      throw new NoCompletedSessionError();
+    }
+
+    await this.sessionRepo.update(last.id, {
+      status: 'in_progress',
+      completedAt: null,
+      autoCloseReason: null,
+      reopenedAt: new Date(),
+    });
+
+    const reopened = await this.sessionRepo.findByIdWithDetails(last.id);
+    if (!reopened) {
+      throw new Error('Session not found');
+    }
+    return reopened;
   }
 
   /**

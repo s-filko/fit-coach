@@ -11,10 +11,14 @@ export interface TransitionRequest {
   reason?: string;
 }
 
-/** Today's guard matrix, verbatim (BR-CONV-015). */
+/**
+ * Today's guard matrix, verbatim (BR-CONV-015). BUG-053 T2 (owner decision 2026-10-08): chat →
+ * training exists for `reopen_workout` only — the chat `request_transition` schema keeps
+ * excluding 'training', so the model cannot request this edge itself.
+ */
 export const TRANSITION_MATRIX: Readonly<Record<ConversationPhase, readonly ConversationPhase[]>> = {
   registration: ['chat', 'plan_creation'],
-  chat: ['plan_creation', 'session_planning'],
+  chat: ['plan_creation', 'session_planning', 'training'],
   plan_creation: ['chat', 'session_planning'],
   session_planning: ['training', 'chat'],
   training: ['chat'],
