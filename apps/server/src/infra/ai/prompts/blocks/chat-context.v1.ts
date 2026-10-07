@@ -17,10 +17,17 @@ export interface ChatContextData {
   recentSessions: WorkoutSessionWithDetails[];
 }
 
+/** Options for {@link buildRecentSessionsSection}; absent = v1's byte-identical render. */
+export interface RecentSessionsSectionOptions {
+  /** v2 (BUG-053 T3): mark `auto_close_reason = 'timeout'` lines with `closed automatically after inactivity`. */
+  markAutoClosed?: boolean;
+}
+
 export function buildRecentSessionsSection(
   recentSessions: WorkoutSessionWithDetails[],
   ctx: ContextBlockCtx,
   depth: number,
+  opts?: RecentSessionsSectionOptions,
 ): string {
   const sessions = recentSessions.slice(0, depth);
   return sessions.length > 0
@@ -28,8 +35,12 @@ export function buildRecentSessionsSection(
         .map(s => {
           const date = s.completedAt ?? s.startedAt ?? s.createdAt;
           const when = humanTimeAgo(new Date(date), ctx.now, ctx.user?.timezone);
+          const autoClosed =
+            opts?.markAutoClosed && s.autoCloseReason === 'timeout' ? 'closed automatically after inactivity, ' : '';
           const exercises = s.exercises.map(ex => `${ex.exercise.name} (${ex.sets.length} sets)`).join(', ');
-          return `- ${s.sessionKey ?? 'session'} — ${when}, ${s.durationMinutes ?? '?'} min: ${exercises || 'no exercises logged'}`;
+          return `- ${s.sessionKey ?? 'session'} — ${when}, ${autoClosed}${s.durationMinutes ?? '?'} min: ${
+            exercises || 'no exercises logged'
+          }`;
         })
         .join('\n')
     : 'No recent sessions.';

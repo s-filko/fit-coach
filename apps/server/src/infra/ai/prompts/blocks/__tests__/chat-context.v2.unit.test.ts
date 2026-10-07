@@ -7,8 +7,8 @@
  */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
-import { CHAT_CONTEXT_V1 } from '../chat-context.v1';
-import { CHAT_CONTEXT_V2, buildRecentSessionsSectionV2 } from '../chat-context.v2';
+import { buildRecentSessionsSection, CHAT_CONTEXT_V1 } from '../chat-context.v1';
+import { CHAT_CONTEXT_V2 } from '../chat-context.v2';
 import type { ContextBlockCtx } from '../types';
 
 const ctx: ContextBlockCtx = {
@@ -108,9 +108,10 @@ describe('chat.context v2 — the auto-close fact (BUG-053 T3, AC-SSA-3)', () =>
     expect(CHAT_CONTEXT_V2.render(dataOf(sessions), ctx, 5)).toBe(CHAT_CONTEXT_V1.render(dataOf(sessions), ctx, 5));
   });
 
-  it('the marker sits on the section line itself (the builder the phase renders)', () => {
-    const section = buildRecentSessionsSectionV2([sessionWith('timeout')], ctx, 5);
+  it('the marker sits on the section line itself (v1’s shared builder with markAutoClosed)', () => {
+    const section = buildRecentSessionsSection([sessionWith('timeout')], ctx, 5, { markAutoClosed: true });
     expect(section).toMatch(/- upper_a — [^,\n]+, closed automatically after inactivity, 97 min:/);
+    expect(buildRecentSessionsSection([sessionWith('timeout')], ctx, 5)).not.toContain('closed automatically');
   });
 
   it('same block id as v1, version bumped (BR-LLM-008)', () => {

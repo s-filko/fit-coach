@@ -13,6 +13,7 @@ _Generated 2026-10-07 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **In progress**
 - `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
+- `stale-session-autoclose.md` — Stale Session Auto-Close — a forgotten workout closes on return; the model can reopen it (BUG-053) (branch: `plan/stale-session-autoclose`, last commit 2026-10-07)
 
 **Planned**
 - `coach-tone.md` — Coach Tone — the coach knows the trend and encourages progress Implementation Plan
@@ -77,9 +78,6 @@ _Generated 2026-10-07 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **Close-out debt (merged but plan not done)**
 — none —
-
-**Warnings**
-- `stale-session-autoclose.md` — Status: in progress but branch ``plan/stale-session-autoclose`, cut from `dev`.` no longer exists
 <!-- AUTO:status END -->
 
 ## Scope now

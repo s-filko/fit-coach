@@ -1,7 +1,8 @@
 # Stale Session Auto-Close — a forgotten workout closes on return; the model can reopen it (BUG-053)
 
 - Status: in progress
-- Branch: `plan/stale-session-autoclose`, cut from `dev`.
+- Branch: plan/stale-session-autoclose
+- Cut from `dev` (the § 0 base rule keeps the branch on the origin/dev merge-base).
 - Source: BUG-053 (`docs/BUGS.md` on `plan/plan-and-tool-fixes`; cause read from dev run `cf44f1fe`): a workout left
   `in_progress` (phone died, never finished) is still open days later; the next «привет» enters `training` with it,
   the context labels it `# Today`, and the coach continues it.
@@ -173,4 +174,30 @@ Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lo
 - `npm run check-all` → 0 errors (lint + format:check + tsc --noEmit).
 - `npm run test:unit` → Tests: 1832 passed, 1832 total (Suites: 186/186).
 - `npm run test:scenarios` → Tests: 400 passed, 1 todo, 401 total (Suites: 24/24).
+
+### Review fixes — the code-level blocking findings of the close-out review — 2026-10-08, worker
+
+Report: `data/investigations/2026-10-08-review-stale-session-autoclose.md`. The T4 spec texts stay owner-gated (untouched here).
+
+Red first (failing lines recorded before implementation):
+- `src/infra/ai/tools/__tests__/reopen-workout.tool.unit.test.ts:103` — `expect(outcome).toMatchObject({ ok: false, kind: 'user_error' })` — Received `"kind": "llm_error"`; same diff at `:117` (NoCompletedSession case).
+- `src/infra/ai/prompts/blocks/__tests__/chat-context.v2.unit.test.ts:112` — TS2554: Expected 3 arguments, but got 4 (`buildRecentSessionsSection(…, { markAutoClosed: true })`).
+- The INV-002 guard reuse and the Branch header fix change no behaviour — the existing green pins cover them (reopen unit tests, v1 byte-identity tests), so no red line applies.
+
+Changes:
+- R2 `training.service.ts` — `reopenLastSession` calls the private `assertNoActiveSession` (the one place the INV-TRAINING-002 refusal is written) instead of the inline sweep+check+throw copy.
+- R2 `chat-context.v2.ts` — the copied `buildRecentSessionsSectionV2` is deleted; v1's `buildRecentSessionsSection` gained `opts.markAutoClosed` (the `buildActivePlanSection({ omitTargetWeights })` precedent) and v2's render delegates to it through `buildChatContextText`'s section injection; v1's output stays byte-identical (its tests prove it). Barrel export of the v2 builder removed with the function.
+- R1 `reopen-workout.tool.ts` — `ActiveSessionExistsError`/`NoCompletedSessionError` return `userError(err.message)` (ADR-0013 §6: a valid call the business rule says no to — the model relays it; `llm_error` stays for model-fixable argument errors); factual texts unchanged; the two unit refusals now pin the kind.
+- R4 plan header — the `- Branch:` line is the bare branch name (`state.mjs` parses the whole rest of the line); the "cut from `dev`" prose moved to its own bullet; `node scripts/state.mjs --write` regenerated the AUTO block (the false "branch no longer exists" warning is gone) and `--check` passes.
+
+Class-closing search (same shapes elsewhere):
+- Inline INV-002 guard copies: every other `findActiveByUserId` use in the service is the guard helper itself (`:525`) or a lookup that returns instead of refusing (`getActiveSession:286`; the plan-repo variants are a different aggregate) — `reopenLastSession` was the only copy.
+- Business refusals mapped to `llmError` in tools: of the 14 `llmError(` sites in `src/infra/ai/tools`, only reopen-workout mapped typed domain refusals; `get-exercise-history`'s `ExerciseNotFoundError` → llmError is deliberate and documented on the spot (the model recovers via `search_exercises` — a prior close-out's ruling). The remaining sites wrap generic catch messages in tools this branch did not touch (finish-training, delete-last-sets, update-last-set, log-set, complete-current-exercise, set-session-place) — pre-existing shape, left as is.
+
+Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lock`):
+- `npm run check-all` → 0 errors (lint 0 errors, format:check clean, tsc --noEmit).
+- `npm run test:unit` → Tests: 1832 passed, 1832 total (Suites: 186/186).
+- `npm run test:integration` → Tests: 670 passed, 1 todo, 671 total (Suites: 56/56).
+- `npm run test:scenarios` → Tests: 400 passed, 1 todo, 401 total (Suites: 24/24).
+- `node scripts/state.mjs --check` → state check: OK.
 
