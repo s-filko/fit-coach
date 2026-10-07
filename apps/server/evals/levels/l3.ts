@@ -96,6 +96,8 @@ import { scenario as journeyJBodyweight } from '../scenarios/j-bodyweight.scenar
 import { scenario as journeyKWeightUnknown } from '../scenarios/k-weight-unknown.scenario';
 import { scenario as journeyLCorrection } from '../scenarios/l-correction.scenario';
 import { scenario as journeyMNoFalseLog } from '../scenarios/m-no-false-log.scenario';
+import { scenario as journeyGGreeting } from '../scenarios/g-greeting-after-open-session.scenario';
+import { scenario as journeyHPlank } from '../scenarios/h-forgot-plank-reopen.scenario';
 
 /** Every authored training journey, in run order — what a plain L3 run executes. */
 const ALL_SCENARIOS: Scenario[] = [journeyA, journeyB, journeyC, journeyCExplicit];
@@ -133,14 +135,15 @@ const N_LOAD_SCENARIOS: Scenario[] = [
 ];
 
 /**
- * The 2026-10 findings journeys (coach-quality-proof T1, AC-CQ-1) — i…m today; g and h join this
- * group once plan/stale-session-autoclose merges. Selectable by id or as a group (`new-journeys`),
- * NOT part of the default run (the shared call ceiling, like the two groups above). m-no-false-log
- * carries a BUG-052 knownBug assertion — the live reporter counts it as a reproduction, never a
- * regression.
+ * The 2026-10 findings journeys (coach-quality-proof T1, AC-CQ-1) — g…m in run order. Selectable
+ * by id or as a group (`new-journeys`), NOT part of the default run (the shared call ceiling, like
+ * the two groups above). m-no-false-log carries a BUG-052 knownBug assertion — the live reporter
+ * counts it as a reproduction, never a regression.
  */
 export const NEW_JOURNEYS_GROUP = 'new-journeys';
 const NEW_JOURNEYS_SCENARIOS: Scenario[] = [
+  journeyGGreeting,
+  journeyHPlank,
   journeyIWeightShorthand,
   journeyJBodyweight,
   journeyKWeightUnknown,
@@ -204,6 +207,7 @@ function sessionProjection(session: WorkoutSessionWithDetails): {
   status: string;
   hasStartedAt: boolean;
   hasCompletedAt: boolean;
+  autoCloseReason: string | null;
   durationMinutes: number | null;
   exercises: Array<{ exercise: string; sets: Array<Record<string, number>> }>;
 } {
@@ -211,6 +215,7 @@ function sessionProjection(session: WorkoutSessionWithDetails): {
     status: session.status,
     hasStartedAt: session.startedAt != null,
     hasCompletedAt: session.completedAt != null,
+    autoCloseReason: session.autoCloseReason ?? null,
     durationMinutes: session.durationMinutes ?? null,
     exercises: session.exercises.map(ex => ({
       exercise: ex.exercise.name,
@@ -222,6 +227,10 @@ function sessionProjection(session: WorkoutSessionWithDetails): {
               number
             >)
           : {}),
+        // Isometric/cardio holds: the schema's `durationSeconds` is the set's `duration`.
+        ...('duration' in s.setData && s.setData.duration > 0
+          ? (JSON.parse(JSON.stringify({ durationSeconds: s.setData.duration })) as Record<string, number>)
+          : {}),
       })),
     })),
   };
@@ -229,12 +238,18 @@ function sessionProjection(session: WorkoutSessionWithDetails): {
 
 /** Drops undefined keys so expected and observed lists stringify comparably. */
 function normalizeExpectedExercises(
-  exercises: Array<{ exercise: string; sets: Array<{ reps?: number; weight?: number; rpe?: number }> }>,
+  exercises: Array<{
+    exercise: string;
+    sets: Array<{ reps?: number; weight?: number; rpe?: number; durationSeconds?: number }>;
+  }>,
 ): Array<{ exercise: string; sets: Array<Record<string, number>> }> {
   return exercises.map(ex => ({
     exercise: ex.exercise,
     sets: ex.sets.map(
-      s => JSON.parse(JSON.stringify({ reps: s.reps, weight: s.weight, rpe: s.rpe })) as Record<string, number>,
+      s =>
+        JSON.parse(
+          JSON.stringify({ reps: s.reps, weight: s.weight, rpe: s.rpe, durationSeconds: s.durationSeconds }),
+        ) as Record<string, number>,
     ),
   }));
 }
@@ -365,6 +380,14 @@ function evaluateStep(
             projection.hasCompletedAt === expected.hasCompletedAt,
             expect.persisted.knownBug,
             `completedAt ${projection.hasCompletedAt ? 'present' : 'absent'}`,
+          );
+        }
+        if (expected.autoCloseReason !== undefined) {
+          add(
+            'persisted.session.autoCloseReason',
+            projection.autoCloseReason === expected.autoCloseReason,
+            expect.persisted.knownBug,
+            `expected ${String(expected.autoCloseReason)}, got ${String(projection.autoCloseReason)}`,
           );
         }
         if (expected.durationMinutes !== undefined) {

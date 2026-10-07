@@ -159,6 +159,8 @@ describe('loadScenarios', () => {
   it('the new-journeys group is selectable by name and by id, and NOT part of the default run (call ceiling)', () => {
     const group = loadScenarios('new-journeys');
     expect(group.map(s => s.id)).toEqual([
+      'g-greeting-after-open-session',
+      'h-forgot-plank-reopen',
       'i-weight-shorthand',
       'j-bodyweight',
       'k-weight-unknown',
@@ -167,7 +169,7 @@ describe('loadScenarios', () => {
     ]);
     expect(loadScenarios('l-correction').map(s => s.id)).toEqual(['l-correction']);
     const defaults = loadScenarios().map(s => s.id);
-    expect(defaults.some(id => id.startsWith('i-') || id.startsWith('j-') || id.startsWith('k-') || id.startsWith('l-') || id.startsWith('m-'))).toBe(false);
+    expect(defaults.some(id => id.startsWith('i-') || id.startsWith('j-') || id.startsWith('k-') || id.startsWith('l-') || id.startsWith('m-') || id.startsWith('g-') || id.startsWith('h-'))).toBe(false);
   });
 
   it('evaluates the database plane: a wrong fact row fails, the right one passes', () => {

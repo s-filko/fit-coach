@@ -182,3 +182,30 @@ Suites, close-out review (four zones, GLM — owner accent), report committed, `
   `Tests: 1841 passed, 1841 total`. DB suites not needed (no runtime code touched; reporter's md is L3-only output —
   asserted only by its unit test). The live run itself (L3 × GLM + judge over its transcripts, Opus spot-check) stays
   with the orchestrator.
+
+### Merge 7097dd10 + T1 g/h — the greeting and the forgotten plank (worker, 2026-10-07)
+
+- **The merged tree was already green — STEP 1 needed no fix and no commit.** The predicted breakage (stale-session-
+  autoclose fixtures calling `log_set` with reps and no weight) did not survive the orchestrator's conflict resolution
+  (c-catch-up's scripts carry `weight: 0`). Pre-change verification on the merge: `check-all` 0 errors; unit 189/1869;
+  flock `test:integration` 59 suites / 765 passed + 1 todo; flock `test:scenarios` 26 suites / 492 passed + 1 todo.
+- Implemented `g-greeting-after-open-session` (BUG-053: a SEEDED three-day-old `in_progress` workout — the dev shape,
+  where the stale-session-autoclose plan's own scenario reaches the open session in-run — closes at «привет»:
+  completed, `auto_close_reason = timeout`, completed_at = last activity, phase chat, the chat prompt's
+  "closed automatically after inactivity" fact, no tool) and `h-forgot-plank-reopen` (after g: `reopen_workout` +
+  two isometric `log_set` 45 s in the OLD session — the plank seeded as the session's empty exercise, resolved by
+  exact name; retro-dated per journey c's precedent). Both join the `new-journeys` L3 group (g…m, run order).
+- Scenario-format extensions they needed (evals/schema + evals/lib): `workouts[].status: 'in_progress'`;
+  `conversation.phase` (a `training` checkpoint pairs with the open workout as `activeSessionId` —
+  `seedCheckpointState` enforces the pair); `persisted.session.autoCloseReason`; the L3 session projection carries
+  `autoCloseReason` and `durationSeconds` (isometric sets).
+- Red first, recorded: `greeting-and-reopen.integration.test.ts:138:31 - error TS2339: Property 'autoCloseReason'
+  does not exist` → the extensions above → green. Two harness facts discovered on the way, both now pinned:
+  (a) `LLM_ERROR: Unknown tool: log_set` — the same-run chat → training hand-off needs
+  `TRANSITION_HANDOFF_TARGETS=training,session_planning` set in the test (journey c's beforeAll precedent; the plan's
+  § 0 command line already carries it for L3); (b) every retro set stamps `last_activity_at + RETRO_SET_OFFSET_MS`
+  (NOT chained +5/+10 — journey c's own assertion says so), so h's two plank sets share the retro stamp.
+- Verify (after g/h): `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 189 passed, 189 total`,
+  `Tests: 1869 passed, 1869 total`; flock `npm run test:integration` → `Test Suites: 60 passed, 60 total`,
+  `Tests: 1 todo, 774 passed, 775 total`; flock `npm run test:scenarios` → `Test Suites: 27 passed, 27 total`,
+  `Tests: 1 todo, 501 passed, 502 total` (+9 from g/h). One commit (STEP 1 produced no diff).
