@@ -19,6 +19,7 @@ import type { UserFact } from '@domain/user/ports';
 
 import { calendarDaysAgo, formatInUserTz } from '@shared/date-utils';
 
+import { formatBodyweightShort } from './set-format';
 import type { ContextBlock, ContextBlockCtx } from './types';
 
 export const TRAINING_TODAY_HEADER = '# Today (sets as reps×kg)';
@@ -146,18 +147,18 @@ function minutesText(seconds: number): string {
   return seconds < 60 ? `${seconds} s` : `${Math.round(seconds / 60)} min`;
 }
 
-/** One set as the facts blocks print it (`reps×kg`, see the block headers). */
+/** One set as the facts blocks print it (`reps×kg` / `reps×bodyweight`, see the block headers). */
 export function formatSetShort(setData: SetData): string {
   switch (setData.type) {
     case 'strength': {
       if (setData.weight == null) {
-        return `${setData.reps} reps`;
+        return formatBodyweightShort(setData.reps);
       }
       const unit = setData.weightUnit === 'lbs' ? ' lb' : '';
       return `${setData.reps}×${setData.weight}${unit}${setData.perHand ? ' per hand' : ''}`;
     }
     case 'functional_reps':
-      return `${setData.reps} reps`;
+      return formatBodyweightShort(setData.reps);
     case 'isometric':
       return `${setData.duration} s`;
     case 'cardio_duration':

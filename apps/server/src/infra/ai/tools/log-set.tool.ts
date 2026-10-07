@@ -6,7 +6,6 @@ import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
-import type { SetKind, WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { EFFORT_MAPPING_TEXT } from '@infra/ai/prompts/effort';
@@ -22,46 +21,6 @@ const log = createLogger('training-tools');
 
 export interface LogSetToolDeps {
   trainingService: ITrainingService;
-}
-
-type SetDataInput = z.infer<typeof SetDataSchema>;
-interface Carried {
-  weight: number;
-  weightUnit: 'kg' | 'lbs';
-  setNumber: number;
-}
-
-/**
- * D15: reps without a weight on an exercise already weighted in this session is shorthand ("did another 12"),
- * not a bodyweight set — carry the weight of the latest set of the same kind (a warm-up weight never reaches a
- * working set) and its total-weight basis; the confirmation says so.
- */
-function carryWeight(
-  base: SetDataInput,
-  input: { exerciseId?: string; exerciseName?: string; setKind?: SetKind; weightBasis?: 'total' },
-  session: WorkoutSessionWithDetails | null,
-): { setData: SetDataInput; weightBasis?: 'total'; carried?: Carried } {
-  if (base.type !== 'functional_reps') {
-    return { setData: base, weightBasis: input.weightBasis };
-  }
-  const wanted = input.exerciseName?.trim().toLowerCase();
-  // The same precedence as the service: an id wins over a name.
-  const sessionExercise = session?.exercises.find(se =>
-    input.exerciseId != null ? se.exerciseId === input.exerciseId : se.exercise.name.toLowerCase() === wanted,
-  );
-  const isWarmup = input.setKind === 'warmup';
-  const previous = [...(sessionExercise?.sets ?? [])]
-    .sort((a, b) => b.setNumber - a.setNumber)
-    .find(s => (s.setKind === 'warmup') === isWarmup && s.setData.type === 'strength' && (s.setData.weight ?? 0) > 0);
-  if (previous?.setData.type !== 'strength' || previous.setData.weight == null) {
-    return { setData: base, weightBasis: input.weightBasis };
-  }
-  const { weight, weightUnit = 'kg', perHand } = previous.setData;
-  return {
-    setData: { type: 'strength', reps: base.reps, weight, weightUnit },
-    weightBasis: input.weightBasis ?? (perHand === false ? 'total' : undefined),
-    carried: { weight, weightUnit, setNumber: previous.setNumber },
-  };
 }
 
 export function buildLogSetTool(deps: LogSetToolDeps) {
@@ -90,7 +49,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         if (input.durationSeconds != null) {
           return { type: 'cardio_duration' as const, duration: input.durationSeconds };
         }
-        if (input.reps != null && input.weight != null) {
+        if (input.reps != null && input.weight != null && input.weight > 0) {
           return { type: 'strength' as const, reps: input.reps, weight: input.weight, weightUnit: 'kg' as const };
         }
         if (input.reps != null) {
@@ -104,9 +63,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       try {
         const session = await trainingService.getSessionDetails(sessionId);
 
-        const { setData, weightBasis, carried } = carryWeight(baseSetData, input, session);
-
-        const parsed = SetDataSchema.safeParse(setData);
+        const parsed = SetDataSchema.safeParse(baseSetData);
         if (!parsed.success) {
           return llmError(`Invalid set data: ${parsed.error.message}`);
         }
@@ -128,7 +85,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           createdAt: retroCreatedAt,
           skipActivityUpdate: isRetro,
           setKind: input.setKind,
-          weightBasis,
+          weightBasis: input.weightBasis,
         });
 
         // Named for the summariser (renderTranscript over this tool's own confirmation) as much
@@ -152,10 +109,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         const rpeNote = rpe != null ? ` | RPE ${rpe}` : '';
         const retroNote = isRetro ? ' (retro-logged)' : '';
         const namePart = exerciseName ? ` — ${exerciseName}` : '';
-        const carriedNote = carried
-          ? ` Weight ${carried.weight} ${carried.weightUnit} carried over from set ${carried.setNumber} — correct it if different.`
-          : '';
-        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.${carriedNote}`;
+        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.`;
 
         log.info(
           {
@@ -224,7 +178,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           reps: z.number().int().positive().optional().describe('Number of repetitions performed.'),
           weight: z
             .number()
-            .positive()
+            .min(0)
             .optional()
             .describe('Weight used in kilograms (kg). Omit for bodyweight exercises.'),
           durationSeconds: z
@@ -286,6 +240,11 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         })
         .refine(d => d.reps !== undefined || d.durationSeconds !== undefined || d.distanceKm !== undefined, {
           message: 'Either reps, durationSeconds, or distanceKm must be provided',
+        })
+        // T6 (BR-TRAINING-047): the weight has no default — with reps it is the coach's explicit
+        // decision (0 = no external load, a bodyweight set), never an implied "unknown".
+        .refine(d => d.reps === undefined || d.weight !== undefined, {
+          message: 'weight is required with reps (0 = a bodyweight set)',
         }),
     },
   );

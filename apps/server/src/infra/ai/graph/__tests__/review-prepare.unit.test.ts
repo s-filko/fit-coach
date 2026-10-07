@@ -157,7 +157,6 @@ function makeGraphDeps(getSessionDetails: jest.Mock, recorded: ConversationRunRe
     } as unknown as ITrainingService,
     workoutPlanRepo: {
       findActiveByUserId: jest.fn().mockResolvedValue(null),
-      create: jest.fn(),
     } as unknown as IWorkoutPlanRepository,
     workoutSessionRepo: {
       findById: jest.fn(),

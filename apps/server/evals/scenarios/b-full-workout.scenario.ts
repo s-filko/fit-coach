@@ -294,7 +294,7 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'подтянулся 8 раз',
       script: [
-        { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8 } } },
+        { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8, weight: 0 } } },
         { text: AFTER_PULLUP_1_TEXT },
       ],
       expect: {
@@ -325,7 +325,7 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'ещё 8 подтягиваний',
       script: [
-        { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8 } } },
+        { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8, weight: 0 } } },
         { text: AFTER_PULLUP_2_TEXT },
       ],
       expect: {

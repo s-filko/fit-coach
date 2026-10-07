@@ -1536,7 +1536,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
         },
         "weight": {
           "description": "Weight used in kilograms (kg). Omit for bodyweight exercises.",
-          "exclusiveMinimum": 0,
+          "minimum": 0,
           "type": "number",
         },
         "weightBasis": {

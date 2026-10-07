@@ -5,11 +5,12 @@
  */
 import { sectionText } from '@infra/ai/prompts/compose';
 import { SESSION_PLANNING_V1 } from '@infra/ai/prompts/phases/session_planning/v1';
+import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { ALL_FIXTURES } from '../../../../../../evals/fixtures/personas';
 import { contextsForModule } from '../../../../../../evals/fixtures/prompt-contexts';
+import { buildHistorySection, SESSION_PLANNING_RECENT_HISTORY_V1 } from '../session-planning-recent-history.v1';
 import { SESSION_PLANNING_ACTIVE_PLAN_V1 } from '../session-planning-active-plan.v1';
-import { SESSION_PLANNING_RECENT_HISTORY_V1 } from '../session-planning-recent-history.v1';
 import { SESSION_PLANNING_RECOVERY_TIMELINE_V1 } from '../session-planning-recovery-timeline.v1';
 import type { ContextBlockCtx } from '../types';
 
@@ -43,6 +44,33 @@ describe('SESSION_PLANNING_RECENT_HISTORY_V1 == v1 section "recent_history"', ()
 
   it('depth 5 is the block default (full depth)', () => {
     expect(SESSION_PLANNING_RECENT_HISTORY_V1.depths?.[0]).toBe(5);
+  });
+});
+
+describe('buildHistorySection — bodyweight wording (AC-PTF-6)', () => {
+  const sessionWith = (sets: WorkoutSessionWithDetails['exercises'][number]['sets']): WorkoutSessionWithDetails =>
+    ({
+      startedAt: new Date('2026-09-27T10:00:00.000Z'),
+      status: 'completed',
+      exercises: [
+        {
+          exercise: { name: 'Pull-up' },
+          sets,
+        },
+      ],
+    }) as never;
+
+  it('names a bodyweight set "bodyweight" in full — never "BW" or the bare type name', () => {
+    const sets = [
+      { setNumber: 1, setData: { type: 'strength', reps: 8 } },
+      { setNumber: 2, setData: { type: 'functional_reps', reps: 8 } },
+    ] as never;
+
+    const out = buildHistorySection([sessionWith(sets)], new Date('2026-10-07T10:00:00.000Z'));
+
+    expect(out).toContain('8×bodyweight');
+    expect(out).not.toContain('BW');
+    expect(out).not.toContain('functional_reps');
   });
 });
 

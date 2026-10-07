@@ -142,7 +142,8 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
         ({ advisory } = verdict);
       }
 
-      await workoutPlanRepository.create(userId, {
+      // BR-TRAINING-046: the saved plan becomes the user's single active plan.
+      await workoutPlanRepository.createActiveReplacingOthers(userId, {
         name: input.name,
         planJson: {
           goal: input.goal,

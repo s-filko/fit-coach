@@ -53,7 +53,6 @@ const makeTrainingService = (sessionId = 'session-1'): jest.Mocked<ITrainingServ
 const makeWorkoutPlanRepo = (planId = 'plan-1'): jest.Mocked<IWorkoutPlanRepository> =>
   ({
     findActiveByUserId: jest.fn().mockResolvedValue({ id: planId }),
-    create: jest.fn(),
     findById: jest.fn(),
     findByUserId: jest.fn(),
     update: jest.fn(),
