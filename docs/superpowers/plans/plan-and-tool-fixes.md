@@ -1,4 +1,4 @@
-# Plan and Tool Fixes — one active plan, empty search, weight carry-over tails
+# Plan and Tool Fixes — one active plan, empty search, weight input (no carry-over)
 
 - Status: in progress
 - Parent: `docs/superpowers/plans/coach-simplification.md` (governing plan; this is a side plan of code-only fixes
@@ -67,7 +67,7 @@ and the filters used, e.g. `0 exercises match "<query>" (filters: category=…, 
 Verify: `infra/ai/tools/__tests__/search-exercises.tool.unit.test.ts` — empty repository result → outcome kind is
 `ok`, text contains the query; a thrown repository error → still an error outcome. `npm run test:unit`.
 
-### T3 — Weight carry-over works when the exercise is named inexactly (AC-PTF-3)
+### T3 — Weight carry-over works when the exercise is named inexactly (AC-PTF-3) — **superseded by T5** (owner 2026-10-05; the carry-over is removed)
 
 Problem (D15 review advisory): `carryWeight` in `infra/ai/tools/log-set.tool.ts:39-65` finds the session exercise
 by exact lower-case name when no `exerciseId` is given, while the service resolves names fuzzily
@@ -128,7 +128,7 @@ removed or inverted, not skipped. `npm run test:unit`, `npm run test:scenarios`.
 
 ## 2. Close (suites)
 
-All four tasks committed and pushed, then from `apps/server`:
+All tasks committed and pushed, then from `apps/server`:
 `npm run check-all` (0 errors), `npm run test:unit`, `npm run test:integration`, `npm run test:scenarios` — paste
 the summary lines into § 3. DB suites run one at a time (one shared test DB on the host).
 
@@ -149,7 +149,7 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
    - save a plan twice → `fitcoach_local` has one `active` plan for that user, the newest (T1);
    - a `search_exercises` call that matches nothing (e.g. a nonsense query with a narrow filter) → the reply does not
      claim an outage or failure (T2) — model behaviour, record what happened either way;
-   - in a training session log a weighted set, then reps only under an inexact name → carried weight (T3);
+   - in a training session log a weighted set, then reps only (no weight) → stored as given, a bodyweight set, no "carried over" (T5; T3 superseded);
    - a bodyweight set with weight 0 → no "@ 0 kg" (T4).
    Keep it short (Z.AI quota is shared). Paste the evidence (DB query results, reply excerpts, run ids) into § 3.
    Point the stand back to `~/projects/fit-coach` and restart it.
@@ -278,7 +278,7 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
   `bench press ещё 7` → `log_set {reps 7, weight 60, exerciseId}` (run `a2b00f74`); `curls: ещё 9` →
   `{reps 9, weight 30, exerciseId}` (run `929e3980`). The name pre-resolution itself ran live: `exerciseName: "Barbell Curl"`
   (run `e71fc6b3`) and `"Pull-up (weighted)"` / `"Pull-up"` (run `41b295bc`) resolved to catalog exercises and logged.
-  The carry-over on an inexact name stays proven by `log-set.carry-over.unit.test.ts` only.
+  The carry-over on an inexact name was proven by `log-set.carry-over.unit.test.ts` at the time; T5 then removed the carry-over (file renamed `log-set.weight-input.unit.test.ts`).
 - **T4 — passed.** "Подтягивания: +10 кг на 6, второй без отягощения, вес 0, 8 раз" (run `41b295bc`):
   `log_set {reps 8, weight 0, exerciseName "Pull-up"}` → stored `{"reps":8,"type":"functional_reps"}`, tool text
   `Set 1 logged — Pull-ups: 8 reps.` — no "@ 0 kg", no carry; the weighted set stored `strength 10 kg × 6`.
@@ -289,10 +289,17 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
   catalog) resolved by embedding to Dumbbell Hammer Curl / Dumbbell Bicep Curl and the 30 kg barbell load was stored
   "per hand"; (d) two parallel `log_set` calls were stored in reverse order (bodyweight set #1, weighted set #2).
 
+### § 2 close suites after T5 (orchestrator, branch head `d65886b6`, from `apps/server`)
+
+- `npm run check-all` → `✖ 1247 problems (0 errors, 1247 warnings)`.
+- `npm run test:unit` → 181/181 suites, 1809/1809 tests; `DB_PORT=5999 npm run test:unit` → the same.
+- `npm run test:integration` → 55/55 suites, 660 passed + 1 todo.
+- `npm run test:scenarios` → 23/23 suites, 392 passed + 1 todo.
+
 ## Review
 
 Close-out review 2026-10-04 (orchestrator; four independent Opus zones R1–R4 over `git diff $(merge-base origin/dev)...HEAD`
-at `886c6d97`). **First pass: blocked. Second pass (at `aa456b21`): one blocker, fixed → clean.**
+at `886c6d97`). **First pass: blocked. Second pass (at `aa456b21`): one blocker, fixed → clean. Third pass after T5 (at `d65886b6`): blocked — one owner-gated BR.**
 
 Blocking (verbatim):
 
@@ -329,12 +336,23 @@ recorded in § 3 above; 4/5 — BACKLOG entries removed / cut to the model half 
 
 6. `blocking | R4 | docs/features/FEAT-0008-training-plan-generation.md:26 | SUPERPOWERS_INTEGRATION.md rule 7 (stale pointer, fixable under rule 3) | the API Mapping line ends in save_workout_plan tool → IWorkoutPlanRepository.create(), and Implementation Notes at line 34 says the tool "calls workoutPlanRepository.create()" — a method that no longer exists.` — Closed by the orchestrator: both pointers now name `createActiveReplacingOthers()` (BR-TRAINING-046); a two-line pointer fix, verified by `grep -rn "WorkoutPlanRepository.create\b\|workoutPlanRepository.create()" docs apps` (only the historical `MVP_TRAINING_SESSION_MANAGEMENT.md:212` remains, left as history). Zones were not re-run for this doc-only change.
 
-Advisories of both passes → `docs/BACKLOG.md` § plan-and-tool-fixes close-out review advisories (7 entries). Owner-gated,
+Advisories of both passes → `docs/BACKLOG.md` § plan-and-tool-fixes close-out review advisories (7 entries filed; the `carryWeight` one dropped in `d65886b6` as moot after T5). Owner-gated,
 not backlog (durable specs / bug status): a BR for "weight 0 = bodyweight, explicit weight never carried, update to 0
-converts" and for the D15 carry-over (R4, `training.spec.md`); FEAT-0008 AC-0203 still describes replanning via
+converts" (the D15 carry-over half is gone after T5 — see pass 3) (R4, `training.spec.md`); FEAT-0008 AC-0203 still describes replanning via
 `archivedAt` and does not cite BR-TRAINING-046 (R4); BUG-033's "name half" says name resolution is exact-match, stale
 against `resolveExerciseIdByName` (R4, `BUGS.md:1712`). Dropped: `MVP_TRAINING_SESSION_MANAGEMENT.md:212` lists `create`
 (historical design doc).
+
+**Pass 3** (after T5, four fresh Opus zones at `d65886b6`): R1 no findings; R2 no findings; R3 advisories only (T3
+text not marked superseded, live-check step for T3 stale, unreachable `{strength, reps 0, weight 0}` fallback in
+`log-set.tool.ts:58`); R4:
+
+7. `blocking | R4 | docs/domain/training.spec.md:40 | SUPERPOWERS_INTEGRATION.md rule 1 (durable content never lives only in docs/superpowers/) | the owner's T5 rule ("log_set stores the weight the model passes; reps without a weight are stored as functional_reps; the code never decides a set's weight") and the T4 rule ("explicit weight 0 = bodyweight, in log_set and update_last_set") live only in working docs; no BR-TRAINING-* covers them.` — **Open, owner-gated.** Proposed wording put to the owner on 2026-10-05 (BR-TRAINING-047: "log_set stores the weight the model passes and never derives one — reps without a weight are stored as a bodyweight (functional_reps) set; an explicit weight of 0 means a bodyweight set. update_last_set with a weight on a bodyweight set makes it a weighted set; weight 0 on a weighted set makes it a bodyweight set with the same reps."); owner answer: **"not now"**. Until the owner decides, the verdict stays **blocked** and the plan stays `in progress`.
+
+R4 advisories (closed in the plan text, same commit): T3 marked superseded; live-check step for T3 replaced by the T5
+check; stale pointers in § 3 and this section corrected; title no longer says "carry-over tails". Open advisory: the
+`log_set` description says only "Omit for bodyweight exercises" — the meaning of `weight: 0` is visible nowhere to the
+model (a tool-description change → `prompt-doctor`, see the inventory).
 
 Decisions:
 
@@ -390,7 +408,7 @@ Decisions:
   to test; explicit `weightBasis: 'total'` passthrough stays covered in `log-set.tool.unit.test.ts`), both AC-PTF-4
   tests kept verbatim — nothing skipped. Test-support fake unchanged (`resolveExerciseIdByName` stays on the port
   mock — asserted never called by the tool).
-- Note for the orchestrator: `docs/BACKLOG.md:971` (T3 advisory — dead exact-name branch of `carryWeight`, double
+- Note for the orchestrator: the BACKLOG T3 advisory (already dropped by the orchestrator in `d65886b6` — dead exact-name branch of `carryWeight`, double
   resolution) is now moot: `carryWeight` no longer exists. Left untouched — outside this task's file ownership.
 - Verification (from `apps/server`):
   - `npm run check-all` → `✖ 1247 problems (0 errors, 1247 warnings)`.

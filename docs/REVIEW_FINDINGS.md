@@ -183,6 +183,8 @@ or is inert for the kind of diff under review.
   Runs: plan-and-tool-fixes (2026-10-04) (R3).
 - [×1] A plan's `## Review` section that marks first-pass advisories "*Closed by …*" inline makes a second-pass reviewer sort open from closed by hand; list closed and still-open advisories separately.
   Runs: plan-and-tool-fixes run 2 (2026-10-04) (R2).
+- [×1] On pass ≥ 2 the zones do not say whether an advisory already filed in BACKLOG and still true at the new head is re-reported; R1 and R2 each chose to re-verify and not re-report. Proposed for the close-out-review skill: "On pass ≥ 2, an advisory already filed in BACKLOG with an unchanged location is re-verified, not re-reported." A worker's line-number pointer into BACKLOG (`BACKLOG.md:971`) went stale after the orchestrator's own edit — point at entry text, not line numbers.
+  Runs: plan-and-tool-fixes run 3 (2026-10-05) (R1, R2).
 
 ## Blind spots
 
@@ -963,6 +965,7 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
 - [×1] A plan that commits a design/spec file next to its own as-shipped sections must say which wins on divergence, and
   must not point at a spec the code does not follow (I1's header said the spec "is the spec the code follows" while the
   code diverged). Proposed for `SUPERPOWERS_INTEGRATION.md`. Runs: coach-simplification-i1 2026-10-04 pass 2 (R4).
-- [×1] R1: "A (D) decision that changes domain behaviour visible in stored data is recorded as an owner-gated BR candidate, not only in the plan" — CONTRIBUTING_AI. (plan-and-tool-fixes 2026-10-04)
+- [×2] R1: "A (D) decision that changes domain behaviour visible in stored data is recorded as an owner-gated BR candidate, not only in the plan" — CONTRIBUTING_AI. (plan-and-tool-fixes 2026-10-04; run 3 R4 from the other side: passes 1–2 rated the weight-0 BR gap advisory, pass 3 rated the same class blocking under rule 1 — proposed for r4-documentation.md: "A rule that changes stored data and has no BR-* is blocking under rule 1; the fix path is owner escalation (rule 3).")
 - [×1] R4: "Close-out removes or updates every BACKLOG/BUGS entry the plan's tasks cite as their source before `Status: done`" — SUPERPOWERS_INTEGRATION § Status layer. (plan-and-tool-fixes 2026-10-04)
 - [×1] R4: "A backlog entry may cite only evidence already recorded in the plan; trims that depend on a pending step are made when that step is recorded" — SUPERPOWERS_INTEGRATION § Backlog. (plan-and-tool-fixes run 2, 2026-10-04)
+- [×1] R4: "A task that supersedes an earlier task of the same plan marks the earlier task, its live-check step and any review advisory or owner-gated item about it as superseded, in the same commit" — SUPERPOWERS_INTEGRATION § Status layer. (plan-and-tool-fixes run 3, 2026-10-05)
