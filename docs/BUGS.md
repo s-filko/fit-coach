@@ -2330,3 +2330,32 @@ plan_creation offers no `log_set` (its tools: search, save plan, transition, sha
 
 A plan_creation rule for reported sets (say they are not logged yet and offer to start the session), and/or a
 post-reply check of "записал/logged" claims against the run's tool calls; the owner decides.
+
+## BUG-053 — A plain «привет» a day after a workout is answered as a continuation of that workout
+
+**Status:** Open — investigation pending (no transcript yet)
+**Severity:** High — the first message of a new day reads as nonsense to the user; it is the entry point of every workout
+**Found during:** owner's own use of the dev bot (@MyFitAiCoachDevBot), reported 2026-10-07: before going to the gym
+the owner wrote «привет» and the coach tried to continue the previous workout
+**Component:** unknown until the exact request is read — candidates below
+
+### Description
+
+Owner report only; the run has not been located. The local stand has no run from the owner after 2026-10-04, so it was
+dev; from the orchestrator host dev is reachable only through the restricted gate (`ssh filko.dev logs server N`, at
+most 2000 lines ≈ 1 h of health checks) — the run and its request are not visible from here.
+
+### Hypotheses (to check against the exact request, nothing fixed before that)
+
+- The previous session was never finished: `workout_sessions.status = in_progress` and/or the graph phase stayed
+  `training`; the 2 h auto-close (`SESSION_TIMEOUT_MS`, `training.service.ts:564`) runs only inside training-service
+  calls, so the first message of the next day may be routed into the training phase with yesterday's session.
+- The context shows yesterday as current: BUG-047 (episode summaries labelled with the compaction time, a finished
+  session's open items reappearing as "today"); the time-gap note (`time-gap.v1.ts`, "Reply to their new message
+  first") present or not.
+- Model: given an open session in context, it continues it instead of answering the greeting.
+
+### Next step
+
+Read the run with `print-transcript --user <ownerId> --since <today> --until <today> --payloads` on the dev data
+(needs owner access or a gate command), find the cause in the exact request, then a red test before any fix.
