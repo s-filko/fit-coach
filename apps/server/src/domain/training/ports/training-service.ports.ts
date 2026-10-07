@@ -87,6 +87,15 @@ export interface ITrainingService {
   getTrainingHistory(userId: string, limit?: number): Promise<WorkoutSessionWithDetails[]>;
   getSessionDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;
 
+  /**
+   * INV-TRAINING-005 (BUG-053): closes the user's in_progress sessions idle past the timeout —
+   * at most one exists (INV-TRAINING-002) — through the timeout auto-close path: status
+   * 'completed', `auto_close_reason = 'timeout'`, `completed_at` = the last activity
+   * (INV-TRAINING-006), after the same finish reconciliation `completeSession` runs. Exposed for
+   * `prepare`, which calls it at the user's next message before the phase runs.
+   */
+  autoCloseTimedOutSessions(userId: string): Promise<void>;
+
   // Exercise management during training
   completeCurrentExercise(sessionId: string): Promise<AutoCompletedExercise>;
 

@@ -1,0 +1,142 @@
+/**
+ * Stale session auto-close (BUG-053, stale-session-autoclose plan T1 / AC-SSA-1):
+ * `prepare` closes an in_progress session idle past SESSION_TIMEOUT_MS at the
+ * user's next message — through the training service's timeout auto-close — and
+ * routes THIS message to chat with no canned reply (the chat agent answers the
+ * user's words itself, unlike the `session_ended` short-circuit). A planning
+ * session and a fresh in_progress session are untouched.
+ */
+import type { AIMessage, BaseMessage } from '@langchain/core/messages';
+import type { RunnableConfig } from '@langchain/core/runnables';
+import { Command } from '@langchain/langgraph';
+
+import type { ITrainingService } from '@domain/training/ports';
+import type { IUserService } from '@domain/user/ports';
+
+import { RunMetricsCollector } from '@infra/ai/run-metrics';
+
+import type { ConversationStateType } from '../state';
+import { buildPrepareNode } from '../nodes/prepare.node';
+
+const T0 = new Date('2026-10-08T12:00:00.000Z');
+const SESSION_ID = 'session-stale';
+const USER = { id: 'u1', firstName: 'Test', languageCode: 'ru', profileStatus: 'complete' };
+
+function configOf(): RunnableConfig {
+  return {
+    configurable: { thread_id: 'u1' },
+    context: {
+      runId: 'run-ssa-1',
+      userId: 'u1',
+      user: USER,
+      now: T0,
+      client: 'telegram',
+      trigger: 'user_message',
+      metrics: new RunMetricsCollector('run-ssa-1'),
+    },
+  } as unknown as RunnableConfig;
+}
+
+const trainingState = {
+  phase: 'training',
+  activeSessionId: SESSION_ID,
+  episodeId: 'ep-1',
+  messages: [],
+} as unknown as ConversationStateType;
+
+function buildPrepare(getSessionDetails: jest.Mock, autoCloseTimedOutSessions: jest.Mock) {
+  return buildPrepareNode({
+    userService: { isRegistrationComplete: jest.fn().mockReturnValue(true) } as unknown as IUserService,
+    trainingService: { getSessionDetails, autoCloseTimedOutSessions } as unknown as ITrainingService,
+    compact: jest.fn().mockResolvedValue({}),
+    courseCheck: jest.fn().mockResolvedValue({}),
+  });
+}
+
+/** What prepare returned: goto, the durable updates, and any AI messages riding along. */
+function outcomeOf(result: Command<Partial<ConversationStateType>>) {
+  const update = (result.update ?? {}) as Partial<ConversationStateType>;
+  const aiMessages = ((update.messages ?? []) as BaseMessage[]).filter(m => m._getType() === 'ai') as AIMessage[];
+  return {
+    goto: [result.goto].flat().join(','),
+    update,
+    aiText: aiMessages.map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))).join(' '),
+  };
+}
+
+/** An in_progress session whose last activity is `idleMs` before T0, with one logged set. */
+function sessionIdle(idleMs: number, status = 'in_progress') {
+  const at = new Date(T0.getTime() - idleMs);
+  return { id: SESSION_ID, status, startedAt: at, lastActivityAt: at, exercises: [{ sets: [{ id: 'set-1' }] }] };
+}
+
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+describe('prepare — stale session auto-close (BUG-053, AC-SSA-1)', () => {
+  it('in_progress idle 3 days → closed through the service timeout path, message routed to chat, no catalog AIMessage', async () => {
+    const autoClose = jest.fn().mockResolvedValue(undefined);
+    const { goto, update, aiText } = outcomeOf(
+      await buildPrepare(jest.fn().mockResolvedValue(sessionIdle(THREE_DAYS_MS)), autoClose)(trainingState, configOf()),
+    );
+
+    expect(autoClose).toHaveBeenCalledTimes(1);
+    expect(autoClose).toHaveBeenCalledWith('u1');
+    expect(goto).toBe('route');
+    expect(update.phase).toBe('chat');
+    expect(update.activeSessionId).toBeNull();
+    // The transition is a direct phase write (like the registration sync), not a pendingTransition.
+    expect(update.pendingTransition).toBeNull();
+    expect(aiText).toBe('');
+  });
+
+  it('in_progress idle 30 min → stays in training, nothing closed', async () => {
+    const autoClose = jest.fn().mockResolvedValue(undefined);
+    const { goto, update } = outcomeOf(
+      await buildPrepare(jest.fn().mockResolvedValue(sessionIdle(30 * 60 * 1000)), autoClose)(
+        trainingState,
+        configOf(),
+      ),
+    );
+
+    expect(autoClose).not.toHaveBeenCalled();
+    expect(goto).toBe('route');
+    expect(update.phase).toBeUndefined();
+    expect(update.activeSessionId).toBeUndefined();
+  });
+
+  it('in_progress idle exactly the timeout (2 h) → stays (only LONGER than the timeout closes)', async () => {
+    const autoClose = jest.fn().mockResolvedValue(undefined);
+    const { update } = outcomeOf(
+      await buildPrepare(jest.fn().mockResolvedValue(sessionIdle(2 * 60 * 60 * 1000)), autoClose)(
+        trainingState,
+        configOf(),
+      ),
+    );
+
+    expect(autoClose).not.toHaveBeenCalled();
+    expect(update.phase).toBeUndefined();
+  });
+
+  it('planning status idle 3 days → untouched (only in_progress closes)', async () => {
+    const autoClose = jest.fn().mockResolvedValue(undefined);
+    const { goto, update } = outcomeOf(
+      await buildPrepare(jest.fn().mockResolvedValue(sessionIdle(THREE_DAYS_MS, 'planning')), autoClose)(
+        trainingState,
+        configOf(),
+      ),
+    );
+
+    expect(autoClose).not.toHaveBeenCalled();
+    expect(goto).toBe('route');
+    expect(update.phase).toBeUndefined();
+    expect(update.activeSessionId).toBeUndefined();
+  });
+
+  it('a failed close propagates (infrastructure failure, nothing committed)', async () => {
+    const failing = jest.fn().mockRejectedValue(new Error('database unavailable'));
+
+    await expect(
+      buildPrepare(jest.fn().mockResolvedValue(sessionIdle(THREE_DAYS_MS)), failing)(trainingState, configOf()),
+    ).rejects.toThrow('database unavailable');
+  });
+});

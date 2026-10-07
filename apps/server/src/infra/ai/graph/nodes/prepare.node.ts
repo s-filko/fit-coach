@@ -10,6 +10,7 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import { Command, END } from '@langchain/langgraph';
 
 import type { ITrainingService } from '@domain/training/ports';
+import { autoCloseIdleSince, SESSION_TIMEOUT_MS } from '@domain/training/session-timing';
 import type { IUserService } from '@domain/user/ports';
 
 import type { CourseCheckStep } from '@infra/ai/course-check/course-check.step';
@@ -43,7 +44,7 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
     config: RunnableConfig,
   ): Promise<Command<Partial<ConversationStateType>>> {
     const ctx = ctxOf(config as never);
-    const { userId, user } = ctx;
+    const { userId, user, now } = ctx;
     const lang = langOf(user?.languageCode);
 
     // Manual compaction (`/compact`): the compact step and nothing else — no
@@ -66,9 +67,11 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
     // sync so every path (including the short-circuits) carries its updates.
     const compactUpdates = await compact(state, config);
 
-    // Training phase — check whether the active session has ended. NO idle
-    // timeout: a session stays in_progress until explicitly closed (the
-    // training loader lets the model decide on stale sessions).
+    // Training phase — check whether the active session has ended, and close a
+    // stale one at the user's next message (INV-TRAINING-005, BUG-053): an
+    // in_progress session idle longer than SESSION_TIMEOUT_MS (idle from
+    // `autoCloseIdleSince`) is completed through the timeout auto-close path
+    // before the phase runs; a planning session is untouched.
     if (state.phase === 'training' && state.activeSessionId) {
       // A REJECTED read is an infrastructure failure, not a domain fact: it propagates (the run
       // adapter records it and throws a typed error → HTTP status + code, ADR-0013 §6) and commits
@@ -91,6 +94,27 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
             messages: [...(compactUpdates.messages ?? []), new AIMessage(t('session_ended_return_to_chat', lang))],
           },
         });
+      }
+
+      // BUG-053 (INV-TRAINING-005): the stale session closes here — status
+      // 'completed', auto_close_reason 'timeout', completed_at = the last
+      // activity (INV-TRAINING-006). The message itself is answered by chat:
+      // like the registration sync below, this is a direct phase write (the
+      // conversation moved on while the user was away, so this is a state
+      // sync, not a conversation transition), and NO canned reply rides along —
+      // the chat agent answers the user's words.
+      if (
+        session &&
+        session.status === 'in_progress' &&
+        now.getTime() - autoCloseIdleSince(session).getTime() > SESSION_TIMEOUT_MS
+      ) {
+        await trainingService.autoCloseTimedOutSessions(userId);
+        log.info(
+          { userId, sessionId: state.activeSessionId, lastActivityAt: session.lastActivityAt },
+          'Stale session auto-closed — answering in chat',
+        );
+        updates.phase = 'chat';
+        updates.activeSessionId = null;
       }
     }
 

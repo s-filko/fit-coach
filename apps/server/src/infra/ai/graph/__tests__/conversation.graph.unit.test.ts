@@ -63,6 +63,7 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     skipSession: jest.fn(),
     completeCurrentExercise: jest.fn(),
     ensureCurrentExercise: jest.fn(),
+    autoCloseTimedOutSessions: jest.fn().mockResolvedValue(undefined),
   } as unknown as ITrainingService,
   workoutPlanRepo: {
     findActiveByUserId: jest.fn().mockResolvedValue(null),
@@ -254,15 +255,42 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
       expect(result.phase).toBe('chat');
     });
 
-    it('in_progress session: no auto-close, phase stays training', async () => {
+    it('in_progress session idle past the timeout: auto-closed, the message answered in chat', async () => {
       const deps = makeDeps();
-      const twoHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
       (deps.trainingService.getSessionDetails as jest.Mock).mockResolvedValue({
         id: 'session-2',
         status: 'in_progress',
-        lastActivityAt: twoHoursAgo,
-        updatedAt: twoHoursAgo,
-        createdAt: twoHoursAgo,
+        lastActivityAt: threeHoursAgo,
+        updatedAt: threeHoursAgo,
+        createdAt: threeHoursAgo,
+        exercises: [],
+      });
+
+      const graph = buildConversationGraph(deps);
+      const result = (await graph.invoke(
+        { phase: 'training', activeSessionId: 'session-2', messages: [new HumanMessage('hello')] },
+        ctxConfig('run-idle'),
+      )) as unknown as { phase: string; activeSessionId: string | null; messages: BaseMessage[] };
+
+      // BUG-053 (INV-TRAINING-005): closed through the timeout path, not the explicit finish.
+      expect(deps.trainingService.autoCloseTimedOutSessions).toHaveBeenCalledWith('u1');
+      expect(deps.trainingService.completeSession).not.toHaveBeenCalled();
+      expect(result.phase).toBe('chat');
+      expect(result.activeSessionId).toBeNull();
+      // No canned reply — the chat agent's own answer is the run's text.
+      expect(runAiText(result.messages)).toBe('Mocked LLM response');
+    });
+
+    it('in_progress session within the timeout: no auto-close, phase stays training', async () => {
+      const deps = makeDeps();
+      const halfHourAgo = new Date(Date.now() - 30 * 60 * 1000);
+      (deps.trainingService.getSessionDetails as jest.Mock).mockResolvedValue({
+        id: 'session-2',
+        status: 'in_progress',
+        lastActivityAt: halfHourAgo,
+        updatedAt: halfHourAgo,
+        createdAt: halfHourAgo,
         exercises: [],
       });
 
@@ -272,7 +300,7 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
         ctxConfig('run-idle'),
       )) as unknown as { phase: string; messages: BaseMessage[] };
 
-      expect(deps.trainingService.completeSession).not.toHaveBeenCalled();
+      expect(deps.trainingService.autoCloseTimedOutSessions).not.toHaveBeenCalled();
       expect(result.phase).toBe('training');
     });
   });

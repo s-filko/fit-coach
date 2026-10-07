@@ -93,3 +93,35 @@ set dated to the last activity; evidence in § 3. Merge, deploy and the dev data
 session `9a24d418` closes itself on the owner's next message after deploy).
 
 ## 3. Worker log (append; newest last)
+
+### T1 — Close a stale in_progress session on the user's next message (AC-SSA-1) — 2026-10-08, worker
+
+Red first (failing lines recorded before implementation):
+- `src/infra/ai/graph/__tests__/stale-session-autoclose.unit.test.ts:85` — `expect(autoClose).toHaveBeenCalledTimes(1)`: the close was never called (0 times).
+- same file `:141` — the close's rejection: "Received promise resolved instead of rejected".
+- `src/domain/training/__tests__/session-timing.unit.test.ts:7` — TS2305: no exported member 'autoCloseIdleSince'.
+
+Code (one path, no new domain rules):
+- `domain/training/session-timing.ts`: `autoCloseIdleSince` — the one idle-moment helper for the auto-close (`lastActivityOf`'s fallback chain); T2 extends it to `max(last_activity_at, reopened_at)`. Kept separate from `isStale` on purpose: retro-dating (BR-TRAINING-030) keeps measuring from the last activity, so the two bases diverge in T2.
+- `domain/training/ports/training-service.ports.ts` + `services/training.service.ts`: `autoCloseTimedOutSessions(userId)` exposed on the port (was private) — the existing timeout auto-close verbatim: finish reconciliation, then the repo close (`status = completed`, `auto_close_reason = 'timeout'`, `completed_at` = last activity clamped to `started_at`, INV-TRAINING-006). At most one in_progress session exists per user (INV-TRAINING-002), so the user-scoped call closes exactly the session prepare verified.
+- `infra/ai/graph/nodes/prepare.node.ts`: training + `in_progress` + idle > `SESSION_TIMEOUT_MS` (from `ctx.now` through `autoCloseIdleSince`) → close via the service, then a direct phase write to `chat` + `activeSessionId = null`, NO canned reply — the run continues to `route` and the chat agent answers the user's message itself. Planning sessions untouched. The "NO idle timeout" comment replaced with the INV-TRAINING-005 rule it now follows.
+
+(D) The stale-close routes to chat by a direct phase write (the registration-sync shape), not a `pendingTransition` through commit: commit → END would end the run with the user's message unanswered (the plan forbids the `session_ended_return_to_chat` text for this case), and the commit → route hop fires only for `TRANSITION_HANDOFF_TARGETS` (unset on the stand, `training,session_planning` in the smoke env — chat is never a target). Cost: the run row reads `phase_in = chat`, `transition = null`; the prepare log line ('Stale session auto-closed — answering in chat') carries the fact.
+(D) No new per-session close method: the repo owns the timeout write fields; a per-session service variant would duplicate them, and the repo is outside T1 ownership. The user-scoped existing path is equivalent under INV-TRAINING-002.
+
+Journey collisions (coordinator ruling on ask `msg_dcda235f03e3`, 2026-10-08): journey C and retro-timestamps pinned the pre-BUG-053 >2 h catch-up behaviour the owner's 2026-10-08 decision supersedes. Rewritten to the new rule; reopen-dependent steps parked verbatim under `restored in T2 via reopen_workout` (no knownBug marks):
+- `evals/scenarios/c-catch-up-logging.scenario.ts` — step 9: script is text-only (`CATCH_UP_T1_TEXT`); expectations `tools.mustNot: [log_set]`, session `completed` + `hasCompletedAt`, `phaseAfter chat` (were: 3× `log_set`, retro `seen` markers in `# Today`, session `in_progress`, phase training). Steps 10–11 (advance +3.75 h, `finish_training`) and the 3× log_set catch-up script parked verbatim in the marked block. liveOnly markers kept exported for T2/T3's L3 re-eval.
+- `tests/integration/scenarios/c-catch-up-logging.integration.test.ts` — step 9 now asserts: `auto_close_reason = 'timeout'`; `completed_at` = the last pre-pause activity (set 2, the 11–12.5 min window); no tool ran, no new session; the reconcile outcome (bench keeps its 2 sets, planned Pull-ups gets an empty skipped row — set-kind D7); phase chat. The old assertions (stale `# Today` fact line, retro sets and timestamps, the whole step-11 finish block) are parked in the file's marked comment.
+- `tests/integration/scenarios/retro-timestamps.integration.test.ts` — journey truncated to the gym arrival (+180 m): the empty session (2 h 55 m idle) closes with `auto_close_reason = 'timeout'`, `completed_at` = the clamped last activity (the BUG-043 clamp shows here: a never-started session's `started_at` can exceed `last_activity_at` by ~1 s of harness drift — asserted as `max()` of the two, still the creation moment), no set persisted, phase chat, text-only reply. The 16-live-sets + finish steps and the AC-RT-3/AC-RT-4 assertions are parked verbatim (T2's reopen + late start restores the journey).
+- `src/infra/ai/graph/__tests__/conversation.graph.unit.test.ts` — the old rule's pin ('in_progress session: no auto-close', a 3 h-idle session) rewritten into the new rule through the real graph (auto-close called, phase chat, `activeSessionId` null, delivered = the chat agent's text) plus a within-timeout control; `autoCloseTimedOutSessions` added to the fixture's training service.
+- New: `src/infra/ai/graph/__tests__/stale-session-autoclose.unit.test.ts` (5 prepare cases incl. the 2 h boundary and close-failure propagation), `src/domain/training/__tests__/session-timing.unit.test.ts` (pins the helper's base for T2), `tests/integration/scenarios/stale-session-autoclose.integration.test.ts` (journey B setup → one set → +3.5 h → «привет»: completed/timeout, `completed_at = last_activity_at`, phase chat, scripted chat reply, no catalog text, no tools).
+
+Note for T2: extend `autoCloseIdleSince` to `max(last_activity_at, reopened_at)` (its unit tests pin the base) and re-enable the two parked blocks together with `reopen_workout`.
+
+Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lock` — the shared test DB is also used by another worker):
+- `npm run check-all` → 0 errors (lint + format:check + tsc --noEmit).
+- `npm run test:unit` → Tests: 1813 passed, 1813 total (Suites: 183/183).
+- `npm run test:integration` → Tests: 630 passed, 1 todo, 631 total (Suites: 55/55).
+- `npm run test:scenarios` → Tests: 365 passed, 1 todo, 366 total (Suites: 24/24).
+- Caveat: before the flock instruction arrived (mid-run), my unlocked DB runs raced the other worker once — one c-catch-up run failed 40 tests transiently; everything above was re-verified under the lock.
+

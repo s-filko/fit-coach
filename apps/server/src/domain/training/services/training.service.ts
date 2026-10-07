@@ -561,7 +561,14 @@ export class TrainingService implements ITrainingService {
     return resolvedExerciseId;
   }
 
-  private async autoCloseTimedOutSessions(userId: string): Promise<void> {
+  /**
+   * INV-TRAINING-005 (BUG-053): the timeout auto-close, exposed on the port for `prepare` —
+   * at most one in_progress session exists per user (INV-TRAINING-002), so this closes the one
+   * stale session the caller verified: status 'completed', `auto_close_reason = 'timeout'`,
+   * `completed_at` = the last activity (INV-TRAINING-006), after the same finish reconciliation
+   * `completeSession` runs (set-kind plan Task 2, D7).
+   */
+  async autoCloseTimedOutSessions(userId: string): Promise<void> {
     const cutoffTime = new Date(Date.now() - SESSION_TIMEOUT_MS);
     // set-kind plan Task 2 (D7): a timed-out session reconciles through the SAME path as an
     // explicit finish — reconcile before the repo marks the sessions completed.

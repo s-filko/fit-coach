@@ -2,14 +2,21 @@
  * Journey C, deterministic layer (training-journey-scenarios plan, Task 5b /
  * AC-TJ-2, AC-TJ-3): catch-up logging after a +3.5 h pause over the real test
  * database — journey B's setup steps (imported, not copied) → two bench sets →
- * a text-only rest question → a +3.5 h pause (past EPISODE_GAP_HOURS) → the
- * missed pull-ups logged retro into the PREVIOUS session → `finish_training`
- * closing it AT the pre-pause time (owner ruling 2026-09-20: a long gap means
- * the user is catching up an old workout later, not continuing it). Both
- * catch-up wordings — implicit ("забыл дописать…") and explicit ("добавь к
- * последней тренировке…") — come from one journey builder in the scenario
- * module; this file runs each variant end to end and asserts the SAME
- * persisted outcome for both.
+ * a text-only rest question → a +3.5 h pause (past EPISODE_GAP_HOURS and the
+ * 2 h session timeout) → the catch-up message.
+ *
+ * BUG-053 (stale-session-autoclose plan T1, owner decision 2026-10-08 — it
+ * supersedes the 2026-09-20 ruling's still-open-session shape): at the
+ * catch-up message the stale session is COMPLETED by the timeout auto-close
+ * (`auto_close_reason = 'timeout'`, `completed_at` = the last pre-pause
+ * activity) and CHAT answers the message. The retro sets into the reopened
+ * workout and the `finish_training` step are parked — verbatim, marked
+ * `restored in T2 via reopen_workout` — in the scenario module; this file's
+ * matching assertions are parked with them. Both catch-up wordings —
+ * implicit ("забыл дописать…") and explicit ("добавь к последней
+ * тренировке…") — come from one journey builder in the scenario module; this
+ * file runs each variant end to end and asserts the SAME persisted outcome
+ * for both.
  *
  * `beforeAll` (per variant) runs the journey once (real wiring via
  * `runScenario`, Date-only fake timers); per-step `seen` is attributed through
@@ -19,8 +26,6 @@
  * everything else must pass.
  */
 import { eq } from 'drizzle-orm';
-
-import { RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 
 import { db } from '@infra/db/drizzle';
 import { conversationTurns } from '@infra/db/schema';
@@ -313,21 +318,33 @@ describe.each([
     });
   });
 
-  // --- step 9: the catch-up after +3.5 h — the owner-ruling turn ---
+  // --- step 9: the catch-up after +3.5 h — BUG-053 (T1): the stale session
+  // closes at this message and chat answers it; the retro sets into the
+  // reopened workout return with T2's reopen_workout (see the scenario
+  // module's `restored in T2` block for the parked steps and assertions). ---
   describe('step 9 — the catch-up message (after the +3.5 h pause)', () => {
-    itEntries('seen', 9, stepAt(9).expect?.seen?.mustMatch, () => seenOf(9));
     itEntries('delivered', 9, stepAt(9).expect?.delivered?.mustMatch, () => observationOf(9).delivered);
 
-    it('the model saw the stale-session fact in # Today (the training phase re-read the session)', () => {
-      expect(seenOf(9)).toContain("No activity for 3 h; a set logged now is dated to the session's last activity.");
+    it('the session is completed by the timeout auto-close (auto_close_reason = timeout)', () => {
+      const raw = upperASessionOf(9);
+      expect(raw.status).toBe('completed');
+      expect(raw.autoCloseReason).toBe('timeout');
     });
 
-    it('log_set was called for the pull-ups', () => {
-      expect(observationOf(9).runRow?.toolCalls?.map(c => c.name)).toContain('log_set');
+    it('completed_at = the last pre-pause activity (set 2), not the catch-up clock', () => {
+      const raw = upperASessionOf(9);
+      expect(raw.completedAt!.getTime()).toBe(raw.lastActivityAt!.getTime());
+      expect(raw.completedAt!.getTime()).toBe(upperASessionOf(6).lastActivityAt!.getTime());
+      // The trained window (set 2 at T0+12m), not the +3.7 h wall clock.
+      expect(raw.completedAt!.getTime() - raw.startedAt!.getTime()).toBeGreaterThanOrEqual(11 * 60_000);
+      expect(raw.completedAt!.getTime() - raw.startedAt!.getTime()).toBeLessThan(12.5 * 60_000);
     });
 
-    it('the pull-up sets land in the PREVIOUS session (same row — no new session opened)', () => {
-      expect(upperASessionOf(9).id).toBe(upperASessionOf(6).id);
+    it('NO set was logged and no new session opened (the catch-up sets wait for T2 reopen_workout)', () => {
+      expect(observationOf(9).runRow?.toolCalls ?? []).toEqual([]);
+      expect(observationOf(9).sessions.length).toBe(observationOf(6).sessions.length);
+      // The auto-close reconciled the plan (set-kind D7): bench keeps its two
+      // sets; the never-touched planned pull-ups got an empty skipped row.
       expect(persistedProjection(upperASessionOf(9)).exercises).toEqual([
         {
           exercise: 'Barbell Bench Press',
@@ -336,100 +353,28 @@ describe.each([
             { reps: 8, weight: 80 },
           ],
         },
-        {
-          exercise: 'Pull-ups',
-          sets: [{ reps: 8 }, { reps: 8 }, { reps: 8 }],
-        },
+        { exercise: 'Pull-ups', sets: [] },
       ]);
-    });
-
-    it('the catch-up sets carry RETRO timestamps: last activity + 5 min, inside the pre-pause window', () => {
-      const session = upperASessionOf(9);
-      // Retro logging did NOT refresh the session activity — it is still set 2.
-      expect(session.lastActivityAt?.getTime()).toBe(upperASessionOf(6).lastActivityAt?.getTime());
-      const pullUpSets = session.exercises.find(ex => ex.exercise.name === 'Pull-ups')?.sets ?? [];
-      expect(pullUpSets).toHaveLength(3);
-      for (const set of pullUpSets) {
-        expect(set.createdAt.getTime() - session.lastActivityAt!.getTime()).toBe(RETRO_SET_OFFSET_MS);
-        // In the previous session's window, not the +3.5 h wall clock.
-        expect(set.createdAt.getTime()).toBeLessThan(T0.getTime() + 3 * 3_600_000);
-      }
-    });
-
-    it('NO new workout session was opened for the catch-up (owner ruling: shared by both layers)', () => {
-      // Same session rows as before the pause — nothing added, nothing re-opened.
-      expect(observationOf(9).sessions.length).toBe(observationOf(6).sessions.length);
       const open = observationOf(9).sessions.filter(s => s.status === 'in_progress' || s.status === 'planning');
-      expect(open.map(s => s.id)).toEqual([upperASessionOf(9).id]);
+      expect(open).toEqual([]);
     });
 
     it('conversation_turns rows link to this run', async () => {
       expect(await turnCountOf(9)).toBeGreaterThan(0);
     });
 
-    it('phase stays training (prepare did not bounce the run to chat)', () => {
-      expect(observationOf(9).phase).toBe('training');
+    it('phase is chat (the message was answered there, not in training)', () => {
+      expect(observationOf(9).phase).toBe('chat');
     });
   });
 
-  // --- step 11: finish — closed AT the pre-pause time, not the wall clock ---
-  describe('step 11 — "всё, закрой тренировку" (finish_training)', () => {
-    it('finish_training was called', () => {
-      expect(observationOf(11).runRow?.toolCalls?.map(c => c.name)).toContain('finish_training');
-    });
-
-    it('the session is completed AT the last pre-pause activity (not the wall clock)', () => {
-      const raw = upperASessionOf(11);
-      const session = persistedProjection(raw);
-      expect(session.status).toBe('completed');
-      expect(session.durationMinutes).toBe(11);
-      expect(session.hasCompletedAt).toBe(true);
-      // The pull-up sets were retro (`skipActivityUpdate`), so the session
-      // stayed stale and finish_training completed it AT the last real
-      // activity — set 2 at T0+12m — not at the +3h33m finish clock.
-      expect(raw.completedAt!.getTime()).toBe(raw.lastActivityAt!.getTime());
-      expect(raw.completedAt!.getTime() - raw.startedAt!.getTime()).toBeGreaterThanOrEqual(11 * 60_000);
-      expect(raw.completedAt!.getTime() - raw.startedAt!.getTime()).toBeLessThan(12.5 * 60_000);
-    });
-
-    it('the final session keeps the catch-up sets', () => {
-      expect(persistedProjection(upperASessionOf(11)).exercises).toEqual([
-        {
-          exercise: 'Barbell Bench Press',
-          sets: [
-            { reps: 8, weight: 80 },
-            { reps: 8, weight: 80 },
-          ],
-        },
-        {
-          exercise: 'Pull-ups',
-          sets: [{ reps: 8 }, { reps: 8 }, { reps: 8 }],
-        },
-      ]);
-    });
-
-    it('the OLD session is the one completed — no session is left planning or in_progress', () => {
-      expect(observationOf(11).sessions.length).toBe(observationOf(6).sessions.length);
-      const open = observationOf(11).sessions.filter(s => s.status === 'in_progress' || s.status === 'planning');
-      expect(open).toEqual([]);
-    });
-
-    it('the run row records the applied transition back to chat', () => {
-      const runRow = observationOf(11).runRow;
-      expect(runRow!.phaseOut).toBe('chat');
-      expect(runRow!.transition).toEqual(expect.objectContaining({ toPhase: 'chat' }));
-    });
-
-    it('conversation_turns rows link to this run', async () => {
-      expect(await turnCountOf(11)).toBeGreaterThan(0);
-    });
-
-    itEntries('delivered', 11, stepAt(11).expect?.delivered?.mustMatch, () => observationOf(11).delivered);
-
-    it('phase after the step is chat', () => {
-      expect(observationOf(11).phase).toBe('chat');
-    });
-  });
+  // --- restored in T2 via reopen_workout (BUG-053): step 11 («всё, закрой
+  // тренировку») and the step-9 retro assertions (the three pull-up sets land
+  // RETRO at last activity + RETRO_SET_OFFSET_MS in the REOPENED session;
+  // finish_training completes it AT the last pre-pause activity,
+  // durationMinutes = 11; run row records the transition back to chat).
+  // Their steps live verbatim in c-catch-up-logging.scenario.ts's T2 block;
+  // re-enable both together when reopen_workout exists. ---
 
   it('consumed the whole script (no fallback answer leaked in)', () => {
     expect(model.chatScriptExhausted).toBe(true);
