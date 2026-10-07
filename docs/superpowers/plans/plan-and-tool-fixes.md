@@ -126,6 +126,33 @@ Verify: unit — after a 60 kg set, `log_set` reps-only stores `functional_reps`
 "carried over"; `log_set` with `exerciseName` calls the resolver zero times in the tool; existing carry-over tests are
 removed or inverted, not skipped. `npm run test:unit`, `npm run test:scenarios`.
 
+### T6 — Weight is required with reps; bodyweight is named "bodyweight" everywhere (AC-PTF-6)
+
+Owner decisions (2026-10-05…08): the weight has no default — the coach passes it, 0 is the coach's decision "no
+external load", never "unknown"; the tool feedback and every history the model reads say "bodyweight", in full (not
+"BW": ambiguous with the user's body weight, needs a legend). BR-TRAINING-047 (owner-approved 2026-10-08).
+
+Do (code):
+- `log_set`: with `reps`, `weight` is required (schema refine; a call with reps and no weight is rejected by the
+  schema); `weight: 0` → `functional_reps` (as T4). Without reps (duration/distance) weight stays optional.
+- One formatter for a bodyweight set, used by every renderer the model reads: `formatSetData` (tool confirmations of
+  `log_set` / `update_last_set` / `get_exercise_history`) → `8 reps @ bodyweight`; `formatSetShort`
+  (`training-facts.ts`, today + history) → `8×bodyweight`; `session-planning-recent-history.v1.ts` the same short form.
+  A `strength` set with a null weight (legacy rows) renders the same way. Legacy `functional_reps` rows from the
+  omitted-weight era also read "bodyweight" (owner accepted, no migration).
+- Do NOT change prompt files or tool descriptions in this task.
+
+Do (texts, via `prompt-doctor`, after the code): the `weight` argument description states the meaning only — "Weight in
+kg, required with reps. 0 = no external load (a bodyweight set) — a decision, not 'unknown'."; one rule in the training
+prompt: the weight comes from the conversation and history; if it is clear, log it and say briefly which weight was
+logged; if not, ask. Baseline vs candidate on GLM (stand), guard cases: «ещё 8» after 55 kg → 55 logged and said;
+pull-ups without a belt → 0 / bodyweight; weight not named and unclear → asks; «нет, было 60» → corrected; plus the
+existing control cases. Accepted only if not worse.
+
+Verify: unit — `log_set` reps without weight → schema rejection, no write; weight 0 → `functional_reps`, reply
+`… 8 reps @ bodyweight.`; renderers print `8×bodyweight` / `@ bodyweight` for functional_reps and null-weight strength;
+snapshots updated deliberately (list them in § 3). `npm run test:unit`; DB suites run by the orchestrator.
+
 ## 2. Close (suites)
 
 All tasks committed and pushed, then from `apps/server`:
