@@ -12,7 +12,7 @@ import type {
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
-import { CHAT_CONTEXT_V1 } from '@infra/ai/prompts/blocks';
+import { CHAT_CONTEXT_V2 } from '@infra/ai/prompts/blocks';
 import {
   buildReopenWorkoutTool,
   buildRequestTransitionTool,
@@ -59,8 +59,9 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
         data: { hasActivePlan: !!activePlan, recentSessions },
       };
     },
-    // D-B: the v1 `context` section becomes this domain block (block 3).
-    contextBlocks: [CHAT_CONTEXT_V1],
+    // D-B: the v1 `context` section became this domain block (block 3). BUG-053 T3 (AC-SSA-3):
+    // v2 — the block also states when a session was closed automatically after inactivity.
+    contextBlocks: [CHAT_CONTEXT_V2],
     modelProfile: 'default',
   };
 }

@@ -154,3 +154,23 @@ Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lo
 - `npm run test:integration` → Tests: 669 passed, 1 todo, 670 total (Suites: 56/56).
 - `npm run test:scenarios` → Tests: 399 passed, 1 todo, 400 total (Suites: 24/24).
 
+### T3 — The chat context marks an auto-closed workout (AC-SSA-3) — 2026-10-08, worker (code part; the prompt-doctor eval of this line runs in the orchestrator's live measurement, journeys g/h)
+
+Red first (failing lines recorded before implementation):
+- `src/infra/ai/prompts/blocks/__tests__/chat-context.v2.unit.test.ts:11` — TS2307: Cannot find module '../chat-context.v2'.
+- `tests/integration/scenarios/stale-session-autoclose.integration.test.ts` — ✕ 'AC-SSA-3: the chat prompt marks the workout as closed automatically (the fact, in the recent-sessions list)' (1 failed, 7 passed).
+
+Code:
+- New block version `chat-context.v2.ts` (BR-LLM-008, the active-plan/user-facts v2 precedent): same id `chat.context`, version 'v2', depths [5,3,1]; `chat.spec.ts` renders V2; v1 stays untouched (its byte-identity proof tests still pass). No registry change: like the other phase-specific blocks, `chat.context` is not stamped by `promptVersionsForPhase`.
+- The fact: on a `auto_close_reason = 'timeout'` line the recent-sessions list carries `closed automatically after inactivity` between the time and the duration — `- upper_a — 3 days ago, closed automatically after inactivity, 97 min: …`. `manual`/`new_session_started`/null show no marker — a reopened-then-finished session's reopen cleared the reason, so it is unmarked by construction. Without a timeout-closed session the render is v1 byte for byte (pinned by a test).
+- v1's `buildChatContextText` gained an injectable recent-sessions section builder (default = v1's own), so v2 reuses the whole text without duplicating it; existing callers (the legacy CHAT_V1 phase module) are unchanged.
+- Loader: `findRecentByUserIdWithDetails` already selects `auto_close_reason` (all columns) — verified end to end by the scenario's seen assertion.
+- Snapshots: none updated — the eval fixtures' sessions carry `autoCloseReason: null`/`manual`, so every pinned assembly renders v2 == v1 (the byte-identity-without-timeout test pins this).
+
+Tests: `chat-context.v2.unit.test.ts` (6 cases: the marker and its position, manual/new_session_started/null, reopened-then-finished, byte-identity without a timeout close, the section builder, id/version pins); the stale-session scenario gained the AC-SSA-3 seen assertion — the chat prompt of the «привет» run after the auto-close carries the marked line.
+
+Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lock`):
+- `npm run check-all` → 0 errors (lint + format:check + tsc --noEmit).
+- `npm run test:unit` → Tests: 1832 passed, 1832 total (Suites: 186/186).
+- `npm run test:scenarios` → Tests: 400 passed, 1 todo, 401 total (Suites: 24/24).
+

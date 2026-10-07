@@ -53,6 +53,8 @@ const RETURN_STEP = 6;
 describe('stale session auto-close (BUG-053, AC-SSA-1) — one message over the real stack', () => {
   let result: ScenarioRunResult;
   let model: ScriptedModelHandle;
+  /** Everything the model was handed at the return step (the chat prompt of that run). */
+  let seenAtReturn = '';
 
   beforeAll(async () => {
     expect(ScenarioSchema.parse(scenario)).toBeTruthy(); // the scenario is format-valid
@@ -64,7 +66,18 @@ describe('stale session auto-close (BUG-053, AC-SSA-1) — one message over the 
         model.enqueueChat(step.script ?? []);
       }
     }
-    result = await runScenario(scenario, { onAdvance: now => jest.setSystemTime(now) });
+    result = await runScenario(scenario, {
+      onAdvance: now => jest.setSystemTime(now),
+      onStep: obs => {
+        if (obs.action === 'user' && obs.stepIndex === RETURN_STEP) {
+          seenAtReturn = model
+            .drainChatInputs()
+            .flat()
+            .map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+            .join('\n');
+        }
+      },
+    });
   });
 
   afterAll(() => {
@@ -109,6 +122,11 @@ describe('stale session auto-close (BUG-053, AC-SSA-1) — one message over the 
 
   it('the phase after the return message is chat', () => {
     expect(observationOf(RETURN_STEP).phase).toBe('chat');
+  });
+
+  it('AC-SSA-3: the chat prompt marks the workout as closed automatically (the fact, in the recent-sessions list)', () => {
+    expect(seenAtReturn).toContain('RECENT TRAINING HISTORY');
+    expect(seenAtReturn).toMatch(/- upper_a — [^,\n]+, closed automatically after inactivity, \d+ min:/);
   });
 
   it('the delivered text is the scripted chat reply, not the session_ended catalog text', () => {
