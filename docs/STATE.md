@@ -21,7 +21,6 @@ _Generated 2026-10-07 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 - `restart-ladder.md` — Restart Ladder — the return ladder closes on fresh workouts Implementation Plan
-- `stale-session-autoclose.md` — Stale Session Auto-Close — a forgotten workout closes on return; the model can reopen it (BUG-053)
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -78,6 +77,9 @@ _Generated 2026-10-07 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **Close-out debt (merged but plan not done)**
 — none —
+
+**Warnings**
+- `stale-session-autoclose.md` — Status: in progress but branch ``plan/stale-session-autoclose`, cut from `dev`.` no longer exists
 <!-- AUTO:status END -->
 
 ## Scope now

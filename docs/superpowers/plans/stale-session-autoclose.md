@@ -1,6 +1,6 @@
 # Stale Session Auto-Close — a forgotten workout closes on return; the model can reopen it (BUG-053)
 
-- Status: planned
+- Status: in progress
 - Branch: `plan/stale-session-autoclose`, cut from `dev`.
 - Source: BUG-053 (`docs/BUGS.md` on `plan/plan-and-tool-fixes`; cause read from dev run `cf44f1fe`): a workout left
   `in_progress` (phone died, never finished) is still open days later; the next «привет» enters `training` with it,
