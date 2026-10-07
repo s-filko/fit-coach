@@ -156,6 +156,20 @@ describe('loadScenarios', () => {
     expect(defaults.some(id => id.startsWith('n-load'))).toBe(false);
   });
 
+  it('the new-journeys group is selectable by name and by id, and NOT part of the default run (call ceiling)', () => {
+    const group = loadScenarios('new-journeys');
+    expect(group.map(s => s.id)).toEqual([
+      'i-weight-shorthand',
+      'j-bodyweight',
+      'k-weight-unknown',
+      'l-correction',
+      'm-no-false-log',
+    ]);
+    expect(loadScenarios('l-correction').map(s => s.id)).toEqual(['l-correction']);
+    const defaults = loadScenarios().map(s => s.id);
+    expect(defaults.some(id => id.startsWith('i-') || id.startsWith('j-') || id.startsWith('k-') || id.startsWith('l-') || id.startsWith('m-'))).toBe(false);
+  });
+
   it('evaluates the database plane: a wrong fact row fails, the right one passes', () => {
     const scenario = loadScenarios('fl-b-closed-not-resurrected')[0]!;
     const t0 = new Date();

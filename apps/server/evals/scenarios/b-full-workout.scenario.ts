@@ -332,7 +332,8 @@ export const scenario: Scenario = {
         seen: {
           mustMatch: [
             `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — done: 8×80, 8×80`,
-            `- Pull-ups [id ${PULL_UPS_ID}] — plan 3×6-8 — in progress: 8 reps`,
+            // T6 (BR-TRAINING-047): a bodyweight set renders "8×bodyweight", not "8 reps".
+            `- Pull-ups [id ${PULL_UPS_ID}] — plan 3×6-8 — in progress: 8×bodyweight`,
           ],
         },
         tools: { must: ['log_set'] },

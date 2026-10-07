@@ -91,6 +91,11 @@ import { scenario as journeyNLoadMiss } from '../scenarios/n-load-miss.scenario'
 import { scenario as journeyNLoadUneven } from '../scenarios/n-load-uneven.scenario';
 import { scenario as journeyNLoadUp } from '../scenarios/n-load-up.scenario';
 import { scenario as smokeScenario } from '../scenarios/smoke.scenario';
+import { scenario as journeyIWeightShorthand } from '../scenarios/i-weight-shorthand.scenario';
+import { scenario as journeyJBodyweight } from '../scenarios/j-bodyweight.scenario';
+import { scenario as journeyKWeightUnknown } from '../scenarios/k-weight-unknown.scenario';
+import { scenario as journeyLCorrection } from '../scenarios/l-correction.scenario';
+import { scenario as journeyMNoFalseLog } from '../scenarios/m-no-false-log.scenario';
 
 /** Every authored training journey, in run order — what a plain L3 run executes. */
 const ALL_SCENARIOS: Scenario[] = [journeyA, journeyB, journeyC, journeyCExplicit];
@@ -128,6 +133,22 @@ const N_LOAD_SCENARIOS: Scenario[] = [
 ];
 
 /**
+ * The 2026-10 findings journeys (coach-quality-proof T1, AC-CQ-1) — i…m today; g and h join this
+ * group once plan/stale-session-autoclose merges. Selectable by id or as a group (`new-journeys`),
+ * NOT part of the default run (the shared call ceiling, like the two groups above). m-no-false-log
+ * carries a BUG-052 knownBug assertion — the live reporter counts it as a reproduction, never a
+ * regression.
+ */
+export const NEW_JOURNEYS_GROUP = 'new-journeys';
+const NEW_JOURNEYS_SCENARIOS: Scenario[] = [
+  journeyIWeightShorthand,
+  journeyJBodyweight,
+  journeyKWeightUnknown,
+  journeyLCorrection,
+  journeyMNoFalseLog,
+];
+
+/**
  * The smoke scenario (smoke-test plan, AC-SM-3) — selectable ONLY by id
  * (`--scenario smoke`, what `npm run smoke` passes), never part of
  * `ALL_SCENARIOS`'s default run: it has no deterministic twin and is meant
@@ -146,7 +167,16 @@ export function loadScenarios(scenarioId?: string): Scenario[] {
   if (scenarioId === N_LOAD_GROUP) {
     return N_LOAD_SCENARIOS;
   }
-  const everyScenario = [...ALL_SCENARIOS, ...FACT_LIFECYCLE_SCENARIOS, ...N_LOAD_SCENARIOS, ...SMOKE_SCENARIOS];
+  if (scenarioId === NEW_JOURNEYS_GROUP) {
+    return NEW_JOURNEYS_SCENARIOS;
+  }
+  const everyScenario = [
+    ...ALL_SCENARIOS,
+    ...FACT_LIFECYCLE_SCENARIOS,
+    ...N_LOAD_SCENARIOS,
+    ...NEW_JOURNEYS_SCENARIOS,
+    ...SMOKE_SCENARIOS,
+  ];
   const found = everyScenario.filter(s => s.id === scenarioId);
   if (found.length === 0) {
     const available = everyScenario.map(s => s.id).join(', ');

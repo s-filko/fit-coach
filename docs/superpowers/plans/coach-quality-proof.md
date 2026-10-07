@@ -121,3 +121,33 @@ Suites, close-out review (four zones, GLM — owner accent), report committed, `
 - Operational note for the orchestrator: the plan-and-tool-fixes worker's DB-suite wrapper (PID 1338826/1338827) is
   self-deadlocked — its `while pgrep -f "node .*jest"` matches its own shell's command line, so it never reaches its
   `flock /tmp/fitcoach-testdb.lock` stage. This task's DB runs took the same lock and released it.
+
+### T1 (i–m only) — the weight-logging journeys (worker, 2026-10-07)
+
+- Implemented `i-weight-shorthand`, `j-bodyweight`, `k-weight-unknown`, `l-correction`, `m-no-false-log` under
+  `evals/scenarios/` (shared builder `weight-logging-shared.ts`: user + one-exercise plan + the chat → session_planning
+  → training setup), wired as the L3 group `new-journeys` (selectable by id; NOT in the default run — call ceiling,
+  like n-load; g/h join this group once plan/stale-session-autoclose merges). Deterministic layer:
+  `tests/integration/scenarios/t1-weight-logging-journeys.integration.test.ts` (generic per-step plane + k's llm_error
+  pin + m's BUG-052 `test.failing` reproduction). All five pin the merged BR-TRAINING-047 behaviour: the coach passes
+  the weight (55 copied from today's row for «ещё 8»; 0 = bodyweight named in full in the confirmation; a reps-only
+  call rejected by the schema with nothing stored; `update_last_set` Before/After through the shared formatter).
+- Red first, recorded: run 1 — `t1-weight-logging-journeys.integration.test.ts:138:44 - error TS2345` (compile); run 2 —
+  `Tests: 6 failed, 26 passed`, headline `j-bodyweight … step 3: session exercises — got
+  [{"exercise":"Pull-ups","sets":[{"reps":8},{"reps":6,"weight":10}]}]` — a step's script leaked into the previous
+  run because a tool-call script message without a trailing text-only message let the run continue into the next
+  queued answer; every such step now ends with one (journey B's AC-CC-3 shape). Run 3 — `k-weight-unknown … step 3:
+  session exercises — got []`: no `session_exercises` row exists before the first logged set; the pin is `exercises:
+  []` (nothing stored — the meaningful half of the assertion).
+- Verification interference, resolved by the coordinator: two mid-run schema resets on the shared test DB by the
+  stale-session-autoclose worker's jest running WITHOUT the flock (`relation "workout_sessions" does not exist` at
+  ~20:05, `relation "checkpoint_blobs" does not exist` at ~20:07 UTC); escalated (msg_0cb61646c378), the coordinator
+  had that worker wrap its DB runs in `flock /tmp/fitcoach-testdb.lock`, and the retried runs were clean.
+- Merge fallout fixed in passing (evals ownership): `b-full-workout.scenario.ts` step 10 still pinned the pre-T6
+  rendering `— in progress: 8 reps`; T6 renders `— in progress: 8×bodyweight` (BR-TRAINING-047) — the pin was updated.
+  The branch's scenario suite had never been run between the T6 merge and this task, so the stale pin survived the
+  orchestrator's merge.
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 183 passed, 183 total`,
+  `Tests: 1830 passed, 1830 total` (the merged tree itself confirmed green first: 183/1829 before any change);
+  flock-wrapped `npm run test:scenarios` → `Test Suites: 25 passed, 25 total`, `Tests: 1 todo, 484 passed, 485 total`
+  (+32 from the five journeys).
