@@ -1,4 +1,4 @@
-# Stale Session Auto-Close — a forgotten workout closes on return; the model can reopen it (BUG-053)
+# Stale Session Auto-Close — a forgotten workout closes on return; the model edits a finished workout in place (BUG-053)
 
 - Status: in progress
 - Branch: plan/stale-session-autoclose
@@ -7,8 +7,10 @@
   `in_progress` (phone died, never finished) is still open days later; the next «привет» enters `training` with it,
   the context labels it `# Today`, and the coach continues it.
 - Owner decisions (2026-10-08): **auto-close** — no extended window ("продлить тренировку на 6 часов ради дописать —
-  это затычка"); the model gets a **tool to reopen** a closed workout when the user says it is a continuation or wants
-  to add/correct sets. Technically not a wall, practically an old open session is not continued.
+  это затычка"); a forgotten set is added by **editing the finished workout in place** (T5: `edit_last_workout`, the
+  workout stays completed) — not by reopening it (T2's `reopen_workout` was built, then superseded: reopening leaves
+  the workout open and a new workout then conflicts with it). Technically not a wall, practically an old open session
+  is not continued.
 - Executor: orchestrator session on the Orca host; GLM workers; Opus close-out review; live check on the local stand.
   Server code in `apps/server/src` (paths relative to it), commands from `apps/server`.
 
@@ -28,16 +30,17 @@ INV-TRAINING-005 / BR-TRAINING-011.
 
 Do:
 - In `prepare`, phase `training` with `activeSessionId`: if the session is `in_progress` and idle longer than
-  `SESSION_TIMEOUT_MS` (2 h, `domain/training/session-timing.ts`) — idle measured from
-  `max(last_activity_at, reopened_at)` (T2) — complete it through the training service (the existing timeout
-  auto-close path: `status = completed`, `auto_close_reason = 'timeout'`, `completed_at` = last activity, INV-TRAINING-006)
-  and route this message to `chat` **without** a canned reply: the chat phase answers the user's message itself
+  `SESSION_TIMEOUT_MS` (2 h, `isStale` in `domain/training/session-timing.ts`, idle from `last_activity_at`),
+  `prepare` only DETECTS it (ADR-0013 §4.1) and requests a transition to `chat` with reason `session_timeout`, routed
+  to `commit`: commit's session lifecycle handler completes the session through the existing timeout auto-close path
+  (`status = completed`, `auto_close_reason = 'timeout'`, `completed_at` = last activity, INV-TRAINING-006) and the
+  run hands off to `chat` in the same run **without** a canned reply: the chat phase answers the user's message itself
   (no `session_ended_return_to_chat` catalog text for this case).
 - Replace the "NO idle timeout" comment with the rule it now follows.
 - A planning-status session is untouched (only `in_progress`).
 
 Verify: unit tests on `prepare` — training + session idle 3 days → service close called, transition to chat, no catalog
-AIMessage; idle 30 min → stays in training; reopened 10 min ago with old `last_activity_at` → stays. DB-backed: a
+AIMessage; idle 30 min → stays in training; fresh activity → stays. DB-backed: a
 scenario/integration test that an idle session is `completed` with `auto_close_reason = 'timeout'` and
 `completed_at = last_activity_at` after one message. `npm run test:unit`, `npm run test:integration`,
 `npm run test:scenarios`.
@@ -71,8 +74,8 @@ block the model reads → it goes through `prompt-doctor` with T2's tool (baseli
 cases below) before acceptance; new block version per BR-LLM-008 if the block is versioned.
 
 Guard cases for the eval: (1) «привет» the day after an auto-closed workout → a greeting, no continuation; (2) «я
-вчера не дописал планку, 2 по 45 сек» → `reopen_workout` then `log_set`; (3) «продолжаем» within the same day after an
-auto-close → reopen; (4) a normal new-workout request → `session_planning`, no reopen.
+вчера не дописал планку, 2 по 45 сек» → `edit_last_workout` add; (3) «продолжаем» within the same day after an
+auto-close → `edit_last_workout` add or a text answer, no reopen (there is none); (4) a normal new-workout request → `session_planning`, no reopen.
 
 ### T5 — `edit_last_workout` replaces `reopen_workout` (AC-SSA-5)
 
@@ -102,20 +105,23 @@ workout); integration (the session stays completed, times unchanged, retro times
 ### T4 — Spec (orchestrator, after the owner approves the wording)
 
 Proposed, shown to the owner before any edit of `docs/domain/training.spec.md`:
-- INV-TRAINING-005 → "An in_progress session idle more than 2 hours (idle from max(last_activity_at, reopened_at)) is
-  completed automatically at the user's next message, before the phase runs; completed_at = last_activity_at."
-- BR-TRAINING-011 → "Sessions auto-close after 2 hours inactivity, lazily on the user's next message (no scheduled job)
+- INV-TRAINING-005 → "An in_progress session idle more than 2 hours (from last_activity_at) is completed at the user's
+  next message; completed_at = last_activity_at; no scheduled job."
+- BR-TRAINING-011 → "Sessions auto-close after 2 hours inactivity, lazily at the user's next message (no scheduled job)
   [INV-TRAINING-005]."
-- BR-TRAINING-030 → add "…including a session returned by reopen_workout".
-- New BR: "reopen_workout returns the user's most recent completed session to in_progress (reopened_at = now), keeping
-  its sets; refused when another session is active; it closes again by finish_training or INV-TRAINING-005."
+- BR-TRAINING-030 → rewritten: "Sets added to a finished workout (edit_last_workout) are dated last_activity_at + 5 min
+  and do not change the workout's status, times or duration."
+- New BR: "edit_last_workout adds, updates or deletes sets in the user's most recent completed workout only; the workout
+  stays completed; a row gaining its first set becomes completed, a row losing its last set becomes skipped."
+- To be amended (FEAT-0010): S-0114, AC-0207 and BR-TRAINING-024 still promise a daily 3 AM cron that never existed —
+  they are named here as to-be-amended with the lazy auto-close above.
 
 ## 2. Close
 
 Suites (`check-all`, unit, `DB_PORT=5999` unit, integration, scenarios — DB suites one at a time) → close-out review
 (four Opus zones) → live check on the stand: a workout with sets, `last_activity_at` moved back 3 h in
-`fitcoach_local`, «привет» → chat greeting and the session `completed/timeout`; «я не дописал планку» → reopen + log,
-set dated to the last activity; evidence in § 3. Merge, deploy and the dev data stay with the owner (the open dev
+`fitcoach_local`, «привет» → chat greeting and the session `completed/timeout`; «я не дописал планку» → `edit_last_workout` add,
+the set dated to the last activity and the session still `completed`; evidence in § 3. Merge, deploy and the dev data stay with the owner (the open dev
 session `9a24d418` closes itself on the owner's next message after deploy).
 
 ## 3. Worker log (append; newest last)
@@ -245,40 +251,43 @@ Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lo
 - `npm run test:integration` → Tests: 640 passed, 1 todo, 641 total (Suites: 56/56).
 - `npm run test:scenarios` → Tests: 370 passed, 1 todo, 371 total (Suites: 24/24).
 
+### Review pass 2 — R1–R4 of the Opus close-out review — 2026-10-08, worker
+
+Red first: `stale-session-autoclose.unit.test.ts` ✕ 'in_progress idle 3 days → a session_timeout transition to chat goes to commit' (prepare still closed the session itself and went to `route`); `commit.node.unit.test.ts` ✕ 'review R1: a session_timeout transition to chat hops with the flag off'; `session-lifecycle.handler.unit.test.ts` ✕ 'review R1: reason session_timeout → the timeout auto-close'; `training-service-edit-finished.unit.test.ts` ✕ 'a set added to a skipped row makes the row completed' and ✕ 'deleting the last set … makes it skipped'. The real-repository tests (skipped row, delete-last, NULL `completed_at`) were written with the fix, not run red.
+
+Code:
+- R1: `prepare` only detects the stale session and returns `goto: 'commit'` with `pendingTransition { toPhase: 'chat', reason: 'session_timeout' }` (no canned reply). The session lifecycle handler (commit) performs `autoCloseTimedOutSessions`; `isAcceptedHandoff` treats the reason as a forced hand-off (any `TRANSITION_HANDOFF_TARGETS`), so chat answers the user's message in the same run. (D) a handler failure is logged by commit and the run continues (the existing handler contract) — the session then stays `in_progress` until the next sweep.
+- R2: `prepare` uses `isStale`; `autoCloseIdleSince` deleted (its tests moved to `isStale` / `lastActivityOf`).
+- R3: a row gaining its first set in a finished workout ends `completed` (also from `skipped`); `deleteSet` on a completed session makes a row that lost its last set `skipped`; `findLastCompletedByUserId` filters `completed_at IS NOT NULL` (NULLs sort first on DESC). c-catch-up asserts the Pull-ups D7 row is `completed`.
+- R4: plan title, owner decisions, T1, T3 guard cases, T4 texts, § 2 swept; branch-filed BACKLOG entries for reopen dropped, doc-drift item updated; chat-context.v2 test header.
+
+Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lock`):
+- `npm run check-all` → 0 errors.
+- `npm run test:unit` → Tests: 1840 passed, 1840 total (Suites: 186/186).
+- `npm run test:integration` → Tests: 645 passed, 1 todo, 646 total (Suites: 56/56).
+- `npm run test:scenarios` → Tests: 372 passed, 1 todo, 373 total (Suites: 24/24).
+
 ## Review
 
-Close-out review 2026-10-08 — four independent zones run as subagents by a GLM reviewer session (owner order
-2026-10-08: everything on GLM until the weekly GLM reset; (D) instead of the host rule's Opus), over
-`git diff $(merge-base origin/dev)...HEAD` at `71d4d276`+`d99846bf`. Raw findings:
-`data/investigations/2026-10-08-review-stale-session-autoclose.md` (local, gitignored). **Verdict: blocked — one
-owner-gated blocker open.**
+Close-out review 2026-10-08 — pass 1 by a GLM reviewer session (four zones, owner order: everything on GLM until the
+weekly GLM reset) over the T1–T3 code; pass 2 by Opus over the T5 code (`d2c739f2`). Raw findings of pass 1:
+`data/investigations/2026-10-08-review-stale-session-autoclose.md` (local, gitignored). Pass-1 findings that concerned
+the reopen path (`reopen_workout`, `reopened_at`, the chat → training edge) are void: T5 removed that code. Still
+standing from pass 1 and fixed: the shared recent-sessions builder and the Branch header (`5005d057`).
 
-Blocking:
+Pass 2 (Opus) — blocking:
 
-1. `blocking | R2 | training.service.ts:597-600 | DRY | reopenLastSession re-implements the INV-TRAINING-002 guard
-   inline` — closed in `5005d057` (uses `assertNoActiveSession`).
-2. `blocking | R2 | chat-context.v2.ts:16-37 | DRY | buildRecentSessionsSectionV2 copies v1's builder` — closed in
-   `5005d057` (one shared builder with a `markAutoClosed` option; v1 byte-identical).
-3. `blocking | R1 | reopen-workout.tool.ts:64 | ADR-0013 §6 | business refusals mapped to llm_error` — closed in
-   `5005d057` (`userError`, as `start_training_session`).
-4. `blocking | R4 | stale-session-autoclose.md:4 | SUPERPOWERS_INTEGRATION § Branch header | prose in the Branch line
-   breaks state.mjs --check` — closed in `5005d057`.
-5. `blocking | R1/R3/R4 | docs/domain/training.spec.md:17,31,34 | SUPERPOWERS_INTEGRATION rules 1, 2, 7 | the shipped
-   behaviour drifts from INV-TRAINING-005 / BR-TRAINING-011 / BR-TRAINING-030; no BR for reopen_workout; the chat →
-   training edge has no BR-CONV-015 amendment` — **open, owner-gated (T4)**. Proposed texts are in T4 above plus:
-   BR-CONV-015 amendment "chat → training is allowed only through reopen_workout (a model-requested transition cannot
-   target training from chat)".
+1. `R1 | prepare.node.ts:105-117 | ADR-0013 §4.1 | prepare completed the session itself (a side effect that belongs to
+   commit)` — fixed in `957a5593` (prepare requests a `session_timeout` transition; the lifecycle handler at commit
+   closes it; forced same-run hand-off to chat).
+2. `R2 | prepare.node.ts:107-110 | DRY | duplicated isStale(); pass-through autoCloseIdleSince` — fixed in `957a5593`.
+3. `R3 | training.service.ts:225 | AC-SSA-5 | edit_last_workout add into a skipped row left it skipped; deleting the last
+   set left a completed row empty; findLastCompletedByUserId picked a NULL completed_at first` — fixed in `957a5593`.
+4. `R4 | plan, BACKLOG | stale text for the reopen design` — fixed in the docs commit of this pass (plan swept, BACKLOG
+   entries for the reopen path dropped). **Open, owner-gated (T4):** the durable spec texts in § 1 T4 (INV-TRAINING-005,
+   BR-TRAINING-011/030, the new `edit_last_workout` BR, FEAT-0010 cron lines) — the orchestrator applies them.
 
-Advisories (→ `docs/BACKLOG.md` § stale-session-autoclose close-out review advisories): `timeOf` reinvents
-`formatInUserTz`; unused barrel export; prepare.node.ts header contract now has a third (auto-close) case;
-training.service.ts keeps growing; FEAT-0010 still promises a 3 AM cron (S-0114, BR-TRAINING-024, AC-0207);
-ITrainingService port list in training.spec.md:49 lacks the two new methods; ARCHITECTURE.md:128 prepare map stale;
-API_SPEC.md training flow lacks the reopen path; `AC-SSA_3` typo in chat-context.v2.ts:2; two "now" sources in the stale
-gate (ctx.now vs Date.now()); `reopened_at` is `timestamptz` while the other session moments are `timestamp` (implicit
-cast inside `greatest()` depends on the DB time zone); T1's "reopened 10 min ago" prepare case never written (covered at
-the service/repository level); a reopen from chat reaches training in the same run only with
-`TRANSITION_HANDOFF_TARGETS` containing `training` (dev has it; the local stand env does not); BACKLOG.md:391 planning
-item's facts rotted.
+Advisories → `docs/BACKLOG.md` § stale-session-autoclose close-out review advisories (doc drift: FEAT-0010 cron lines,
+training.spec port list, ARCHITECTURE.md prepare map, API_SPEC training flow, BACKLOG.md:391).
 
-Suites after the fixes (`5005d057`): check-all 0 errors; unit 1832/1832; integration 670 + 1 todo; scenarios 400 + 1
-todo; `state.mjs --check` OK. Live evidence: journeys g/h of `coach-quality-proof` (see that plan's report).
+Suites after the fixes (`957a5593`): check-all 0 errors; unit 1840/1840; integration 645 + 1 todo; scenarios 372 + 1 todo.
