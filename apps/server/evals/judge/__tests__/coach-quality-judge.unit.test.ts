@@ -6,7 +6,7 @@
  * exercised by the script's own --dry-run.
  */
 
-import { pickCoachContext } from '../../lib/write-requests-sidecar';
+import { pickCoachCall, pickCoachContext, resolveSystemText } from '../../lib/write-requests-sidecar';
 import type { NLoadExpectation } from '../../scenarios/n-load-shared';
 import {
   buildJudgePrompt,
@@ -221,6 +221,7 @@ const EVIDENCE: Evidence = {
   delivered: 'Бери 82.5 кг.',
   tools: [],
   requestContext: '(context)',
+  coachSystem: '(system)',
   toolCallsWithArgs: '',
 };
 
@@ -364,6 +365,7 @@ describe('parseRequestsSidecar', () => {
     );
     expect(sidecar.get('run-1')).toEqual({
       requestContext: '# Today …',
+      coachSystem: '',
       toolCallsWithArgs: `log_set ${JSON.stringify({ reps: 10, weight: 82.5 })}`,
     });
     expect(sidecar.has('run-2')).toBe(false);
@@ -442,7 +444,7 @@ describe('buildJudgePrompt — the evidence reaches the judge', () => {
 
   it('contains the client message, the delivered reply and the tool names of a real fixture step', () => {
     const prompt = buildJudgePrompt(
-      { scenarioId: 'b', stepIndex: step.stepIndex, userText: step.userText, delivered: step.delivered, tools: ['log_set'], requestContext: 'CTX', toolCallsWithArgs: '' },
+      { scenarioId: 'b', stepIndex: step.stepIndex, userText: step.userText, delivered: step.delivered, tools: ['log_set'], requestContext: 'CTX', coachSystem: '', toolCallsWithArgs: '' },
       'RUBRIC',
     );
     expect(step.userText).not.toBe('');
@@ -469,5 +471,57 @@ describe('pickCoachContext — the coach call, not the last stored call', () => 
 
   it('is empty when no call carries a <context> block', () => {
     expect(pickCoachContext([rows[1]!])).toBe('');
+  });
+});
+
+// --- "What the coach knew": the system message (profile, history, NOW) reaches the judge ---
+
+describe('system message evidence', () => {
+  const systemRow = (hash: string) => ({
+    callIndex: 0,
+    request: { messages: [{ role: 'system', contentHash: hash }, { role: 'user', content: 'hi\n<context>\nNOW: Mon 2026-09-21 18:00\n</context>' }] },
+    response: null,
+  });
+
+  it('resolveSystemText resolves a hashed system message from the blobs', () => {
+    const blobs = new Map<string, string | null>([['h1', 'Client: Alex, goal: strength']]);
+    expect(resolveSystemText(systemRow('h1').request, blobs)).toBe('Client: Alex, goal: strength');
+  });
+
+  it('says so when the blob is missing or aged out (never an empty string)', () => {
+    expect(resolveSystemText(systemRow('h2').request, new Map([['h2', null]]))).toContain('aged out');
+    expect(resolveSystemText(systemRow('h3').request, new Map())).toContain('not found');
+  });
+
+  it('keeps an inline system message as is', () => {
+    expect(resolveSystemText({ messages: [{ role: 'system', content: 'inline' }] }, new Map())).toBe('inline');
+  });
+
+  it('pickCoachCall returns the coach row, not the trailing course-check row', () => {
+    const coach = systemRow('h1');
+    const check = { callIndex: 1, request: { messages: [{ role: 'user', content: 'Course-check directive' }] }, response: null };
+    expect(pickCoachCall([coach, check])).toBe(coach);
+    expect(pickCoachCall([check])).toBeUndefined();
+  });
+
+  it('parseRequestsSidecar carries coachSystem; an old sidecar without it reads empty', () => {
+    const raw = JSON.stringify({
+      r1: { requestContext: 'ctx', coachSystem: 'SYS Alex', toolCalls: [] },
+      r2: { requestContext: 'ctx', toolCalls: [] },
+    });
+    const parsed = parseRequestsSidecar(raw);
+    expect(parsed.get('r1')!.coachSystem).toBe('SYS Alex');
+    expect(parsed.get('r2')!.coachSystem).toBe('');
+  });
+
+  it('the judge prompt shows the system message under "What the coach knew" and says the clock is the request\'s', () => {
+    const prompt = buildJudgePrompt(
+      { scenarioId: 's', stepIndex: 1, userText: 'u', delivered: 'd', tools: [], requestContext: 'CTX', coachSystem: 'Client: Alex\n# History\nNOW 2026-09-21', toolCallsWithArgs: '' },
+      'RUBRIC',
+    );
+    const at = prompt.indexOf('## What the coach knew');
+    expect(at).toBeGreaterThan(-1);
+    expect(prompt.indexOf('Client: Alex')).toBeGreaterThan(at);
+    expect(prompt).toMatch(/fake clock|not the real date/);
   });
 });

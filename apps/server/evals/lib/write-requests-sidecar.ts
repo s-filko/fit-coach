@@ -18,6 +18,8 @@ import { writeFileSync } from 'node:fs';
 export interface SidecarRunEvidence {
   /** The <context>-carrying user message of the run's coach call ('' when none was stored). */
   requestContext: string;
+  /** The coach call's resolved system message (profile, history, rules) — llm_calls keeps it as a hash only. */
+  coachSystem: string;
   /** Every tool call of the run with its arguments, in call order. */
   toolCalls: Array<{ name: string; args: unknown }>;
 }
@@ -29,21 +31,54 @@ export interface StoredCall {
   response: unknown;
 }
 
+type RequestMessages = { messages?: Array<{ role: string; content?: unknown; contentHash?: unknown }> } | null;
+
+/** The userMessage of a stored request: its last `user` message with string content. */
+function lastUserContent(request: unknown): string | null {
+  const messages = (request as RequestMessages)?.messages ?? [];
+  const lastUser = [...messages].reverse().find(m => m.role === 'user');
+  return lastUser !== undefined && typeof lastUser.content === 'string' ? lastUser.content : null;
+}
+
 /**
- * The user message of the COACH call: the last call whose request carries a `<context>` block. The last stored
- * call of a run can be a course-check or summariser call (no `<context>`), which would hand the judge the wrong
- * request. '' when no call carries one.
+ * The COACH call: the last call whose request carries a `<context>` block. The last stored call of a run can be
+ * a course-check or summariser call (no `<context>`), which would hand the judge the wrong request.
  */
-export function pickCoachContext(rows: readonly StoredCall[]): string {
-  let context = '';
+export function pickCoachCall<T extends StoredCall>(rows: readonly T[]): T | undefined {
+  let found: T | undefined;
   for (const row of rows) {
-    const messages = (row.request as { messages?: Array<{ role: string; content?: unknown }> } | null)?.messages ?? [];
-    const lastUser = [...messages].reverse().find(m => m.role === 'user');
-    if (lastUser !== undefined && typeof lastUser.content === 'string' && lastUser.content.includes('<context>')) {
-      context = lastUser.content;
+    if (lastUserContent(row.request)?.includes('<context>') === true) {
+      found = row;
     }
   }
-  return context;
+  return found;
+}
+
+/** The user message of the coach call ('' when no call carries a `<context>` block). */
+export function pickCoachContext(rows: readonly StoredCall[]): string {
+  const row = pickCoachCall(rows);
+  return row === undefined ? '' : (lastUserContent(row.request) ?? '');
+}
+
+/**
+ * The system message(s) of a stored request as text. llm_calls stores them as `{ contentHash }` pointing at
+ * prompt_blobs (`blobs` = the resolved map, as print-transcript --payloads uses); a missing or pruned blob is
+ * said in the text, never silently empty.
+ */
+export function resolveSystemText(request: unknown, blobs: ReadonlyMap<string, string | null>): string {
+  const messages = (request as RequestMessages)?.messages ?? [];
+  return messages
+    .filter(m => m.role === 'system')
+    .map(m => {
+      if (typeof m.contentHash === 'string') {
+        if (!blobs.has(m.contentHash)) {
+          return `(system prompt ${m.contentHash} not found in prompt_blobs)`;
+        }
+        return blobs.get(m.contentHash) ?? `(system prompt ${m.contentHash} aged out — retention pruned it)`;
+      }
+      return typeof m.content === 'string' ? m.content : '';
+    })
+    .join('\n\n');
 }
 
 /**
@@ -57,10 +92,10 @@ export async function collectRunEvidence(runId: string): Promise<SidecarRunEvide
   const { llmCalls } = await import('@infra/db/schema');
   const { eq } = await import('drizzle-orm');
   const rows = (await db
-    .select({ callIndex: llmCalls.callIndex, request: llmCalls.request, response: llmCalls.response })
+    .select({ callIndex: llmCalls.callIndex, request: llmCalls.request, response: llmCalls.response, promptHashes: llmCalls.promptHashes })
     .from(llmCalls)
     .where(eq(llmCalls.runId, runId))
-    .orderBy(llmCalls.callIndex)) as Array<{ callIndex: number; request: unknown; response: unknown }>;
+    .orderBy(llmCalls.callIndex)) as Array<StoredCall & { promptHashes: string[] | null }>;
 
   const toolCalls: Array<{ name: string; args: unknown }> = [];
   for (const row of rows) {
@@ -69,8 +104,16 @@ export async function collectRunEvidence(runId: string): Promise<SidecarRunEvide
       toolCalls.push({ name: String(call.name ?? '?'), args: call.args ?? {} });
     }
   }
-  const requestContext = pickCoachContext(rows);
-  return { requestContext, toolCalls };
+  const coach = pickCoachCall(rows);
+  const requestContext = coach === undefined ? '' : (lastUserContent(coach.request) ?? '');
+  let coachSystem = '';
+  if (coach !== undefined) {
+    // The same resolution print-transcript --payloads uses.
+    const { resolvePromptBlobs } = await import('@infra/observability/transcript-reader');
+    const blobs = await resolvePromptBlobs([coach] as never);
+    coachSystem = resolveSystemText(coach.request, blobs);
+  }
+  return { requestContext, coachSystem, toolCalls };
 }
 
 /**

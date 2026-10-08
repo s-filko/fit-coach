@@ -31,7 +31,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
-import { pickCoachContext } from '../lib/write-requests-sidecar';
+import { collectRunEvidence } from '../lib/write-requests-sidecar';
 import { nLoadExpectations, type NLoadExpectation } from '../scenarios/n-load-shared';
 
 // --- the pure core (unit-tested) ---------------------------------------------------------------
@@ -387,6 +387,8 @@ export interface Evidence {
   tools: string[];
   /** The <context>-carrying user message of the run's coach call, best effort. */
   requestContext: string;
+  /** The coach call's resolved system message: client profile, history, rules. */
+  coachSystem: string;
   /** Every tool call of the run with arguments, as stored in llm_calls responses. */
   toolCallsWithArgs: string;
 }
@@ -397,6 +399,14 @@ export function buildJudgePrompt(evidence: Evidence, rubric: string): string {
     '',
     '---',
     'Judge THIS coach reply. Evidence:',
+    '',
+    'Note: eval runs use a fake clock. "Today", the weekday and the time are the ones the request below states,',
+    'not the real date; names, goals, history and dates the request states are facts, not inventions.',
+    '',
+    '## What the coach knew (the system message of the coach call: client profile, history, rules)',
+    '```',
+    evidence.coachSystem === '' ? '(system message unavailable)' : evidence.coachSystem,
+    '```',
     '',
     '## The request the model was shown (the coach call\'s user message)',
     '```',
@@ -509,6 +519,7 @@ interface LlmCallRow {
 /** The judge-side view of one run's sidecar entry. */
 export interface SidecarEvidence {
   requestContext: string;
+  coachSystem: string;
   toolCallsWithArgs: string;
 }
 
@@ -533,13 +544,17 @@ export function parseRequestsSidecar(raw: string): Map<string, SidecarEvidence> 
     if (typeof entry !== 'object' || entry === null || !('requestContext' in entry)) {
       continue;
     }
-    const e = entry as { requestContext?: unknown; toolCalls?: unknown };
+    const e = entry as { requestContext?: unknown; coachSystem?: unknown; toolCalls?: unknown };
     const calls = Array.isArray(e.toolCalls)
       ? e.toolCalls
           .map((c: { name?: unknown; args?: unknown }) => `${String((c as { name?: unknown }).name ?? '?')} ${JSON.stringify((c as { args?: unknown }).args ?? {})}`)
           .join('\n')
       : '';
-    out.set(runId, { requestContext: typeof e.requestContext === 'string' ? e.requestContext : '', toolCallsWithArgs: calls });
+    out.set(runId, {
+      requestContext: typeof e.requestContext === 'string' ? e.requestContext : '',
+      coachSystem: typeof e.coachSystem === 'string' ? e.coachSystem : '',
+      toolCallsWithArgs: calls,
+    });
   }
   return out;
 }
@@ -551,27 +566,16 @@ function readSidecar(transcriptPath: string): Map<string, SidecarEvidence> {
 }
 
 /** Best-effort evidence from llm_calls for one run (dynamic import — no DB at unit-test time). */
-async function loadRunEvidence(runId: string): Promise<{ requestContext: string; toolCallsWithArgs: string }> {
+async function loadRunEvidence(runId: string): Promise<SidecarEvidence> {
   try {
-    const { db } = await import('@infra/db/drizzle');
-    const { llmCalls } = await import('@infra/db/schema');
-    const { eq } = await import('drizzle-orm');
-    const rows = (await db
-      .select({ callIndex: llmCalls.callIndex, request: llmCalls.request, response: llmCalls.response })
-      .from(llmCalls)
-      .where(eq(llmCalls.runId, runId))
-      .orderBy(llmCalls.callIndex)) as LlmCallRow[];
-    const toolCalls: string[] = [];
-    for (const row of rows) {
-      const calls = (row.response as { toolCalls?: Array<{ name?: unknown; args?: unknown }> | null } | null)?.toolCalls ?? [];
-      for (const call of calls) {
-        toolCalls.push(`${String(call.name ?? '?')} ${JSON.stringify(call.args ?? {})}`);
-      }
-    }
-    const requestContext = pickCoachContext(rows) || '(stored request unavailable)';
-    return { requestContext, toolCallsWithArgs: toolCalls.join('\n') };
+    const stored = await collectRunEvidence(runId);
+    return {
+      requestContext: stored.requestContext || '(stored request unavailable)',
+      coachSystem: stored.coachSystem,
+      toolCallsWithArgs: stored.toolCalls.map(c => `${c.name} ${JSON.stringify(c.args ?? {})}`).join('\n'),
+    };
   } catch {
-    return { requestContext: '(stored request unavailable)', toolCallsWithArgs: '' };
+    return { requestContext: '(stored request unavailable)', coachSystem: '', toolCallsWithArgs: '' };
   }
 }
 
@@ -681,6 +685,7 @@ async function main(): Promise<number> {
         delivered: step.delivered,
         tools: step.tools,
         requestContext: input.contexts.get(step.stepIndex) ?? (dryRun ? '(dry run: canned context)' : ''),
+        coachSystem: dryRun ? '(dry run: canned system message)' : '',
         toolCallsWithArgs: step.tools.join(', '),
       };
       // The sidecar first (durable, written by the L3 runner right after the
@@ -689,10 +694,12 @@ async function main(): Promise<number> {
       const sidecarEvidence = step.runId !== null ? input.sidecar.get(step.runId) : undefined;
       if (sidecarEvidence !== undefined) {
         evidence.requestContext = sidecarEvidence.requestContext;
+        evidence.coachSystem = sidecarEvidence.coachSystem;
         evidence.toolCallsWithArgs = sidecarEvidence.toolCallsWithArgs;
       } else if (!dryRun && step.runId !== null) {
         const stored = await loadRunEvidence(step.runId);
         evidence.requestContext = stored.requestContext;
+        evidence.coachSystem = stored.coachSystem;
         evidence.toolCallsWithArgs = stored.toolCallsWithArgs;
       }
       const outcome = judgeReplyVia(evidence, rubric, cliSpawn, judgeCmd, fallbackCmd);

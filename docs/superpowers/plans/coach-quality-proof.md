@@ -372,3 +372,20 @@ progression principle)**. The sentence replaced: 125 → 313 chars.
   `Tests: 1 todo, 511 passed, 512 total`; n-load suite under `PROMPT_VERSION_TRAINING=v15` → `Test Suites: 1 passed,
   1 total`, `Tests: 70 passed, 70 total` (the whole scenarios folder under v15 also: 511 passed, 1 todo).
 - Left to the orchestrator: live v15 measurement (3 runs, blind judge with the fixed judge prompt), accept-or-revert.
+
+### T3 addendum — the judge sees what the coach knew (worker, 2026-10-08)
+
+- Fault: the judge flagged the client's name, history and dates as invented — the evidence carried only the coach
+  call's USER message. The profile and the stable rules sit in the coach call's single SYSTEM message, which
+  `llm_calls` stores as a `contentHash` only (`prompt_blobs`).
+- Change: the sidecar entry gained `coachSystem` (the system message resolved through `resolvePromptBlobs` of
+  `transcript-reader`, the resolution `print-transcript --payloads` uses — imported, not copied); the judge prompt shows
+  it under «What the coach knew» and says the clock is the request's (fake clock in L3 runs), not the real date; an old
+  sidecar without the field reads empty and the prompt says «system message unavailable». Backfill:
+  `npm run backfill:sidecars -- <reports-dir>… [--force]` (`evals/lib/backfill-requests-sidecars.ts`) rewrites sidecars
+  from `llm_calls` where the rows still exist; run on `cq-measure/.../reports` today it resolved **0/126** runs — the
+  test DB was reset since, so those rows are gone.
+- Red first, recorded: `coach-quality-judge.unit.test.ts(9,10): error TS2305: Module '"../../lib/write-requests-sidecar"'
+  has no exported member 'pickCoachCall'`.
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 192 passed, 192 total`,
+  `Tests: 1921 passed, 1921 total`.

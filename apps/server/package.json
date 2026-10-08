@@ -19,6 +19,7 @@
     "evals": "tsx --env-file-if-exists=.env evals/run.ts",
     "evals:export": "tsx --env-file=.env evals/export.ts",
     "evals:ledger": "tsx --env-file-if-exists=.env evals/ledger.ts",
+    "backfill:sidecars": "NODE_ENV=test tsx --env-file-if-exists=.env.test evals/lib/backfill-requests-sidecars.ts",
     "judge:coach-quality": "tsx --env-file-if-exists=.env evals/judge/coach-quality-judge.ts",
     "smoke": "DB_NAME=fitcoach_test RUN_LLM_EVALS=1 TRANSITION_HANDOFF_TARGETS=training,session_planning tsx --env-file-if-exists=.env evals/run.ts --level L3 --scenario smoke",
     "run-server": "node dist/index.js",
