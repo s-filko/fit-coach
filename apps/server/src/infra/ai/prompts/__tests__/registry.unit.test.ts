@@ -13,9 +13,9 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     ]);
   });
 
-  it('promptVersionsForPhase(training) lists the phase (v13 — coach-simplification I1: coach persona + profile, no directives), the stamped shared blocks', () => {
+  it('promptVersionsForPhase(training) lists the phase (v15 — coach-simplification I1 v13, load rule v15: coach persona + profile, no directives), the stamped shared blocks', () => {
     const versions = promptVersionsForPhase('training');
-    expect(versions['phase.training']).toBe('v13');
+    expect(versions['phase.training']).toBe('v15');
     expect(versions['directive.identity']).toBeUndefined(); // training has no directives any more
     expect(versions['directive.tool-reply']).toBeUndefined();
     expect(versions['directive.language']).toBeUndefined();

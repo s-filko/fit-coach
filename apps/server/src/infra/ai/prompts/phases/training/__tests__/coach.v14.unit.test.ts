@@ -61,31 +61,3 @@ describe('TRAINING_COACH_V14 (the progression candidate)', () => {
     );
   });
 });
-
-describe('PROMPT_VERSION_TRAINING — the version switch (default v13, candidate v14)', () => {
-  it.each([
-    [undefined, 'v13'],
-    ['v13', 'v13'],
-    ['v14', 'v14'],
-  ])('env %p selects %p (read once at composition; the old version stays for comparison)', (env, expected) => {
-    const previous = process.env.PROMPT_VERSION_TRAINING;
-    if (env === undefined) {
-      delete process.env.PROMPT_VERSION_TRAINING;
-    } else {
-      process.env.PROMPT_VERSION_TRAINING = env;
-    }
-    try {
-      jest.isolateModules(() => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { TRAINING_PROMPT } = require('../index') as { TRAINING_PROMPT: { current: { version: string } } };
-        expect(TRAINING_PROMPT.current.version).toBe(expected);
-      });
-    } finally {
-      if (previous === undefined) {
-        delete process.env.PROMPT_VERSION_TRAINING;
-      } else {
-        process.env.PROMPT_VERSION_TRAINING = previous;
-      }
-    }
-  });
-});

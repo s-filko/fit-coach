@@ -149,8 +149,7 @@ The **judge** scores each coach reply on `evals/rubrics/coach-quality.md`:
 - The judge is shown what the coach knew (the system message), the `<context>` request, the tool calls and the
   delivered reply, and is told that the clock is the request's fake clock, not the real date.
 
-The training prompt version under test is chosen by the run's environment: `PROMPT_VERSION_TRAINING=v14` or `=v15`
-selects a candidate coach prompt; unset keeps v13, the default and the baseline. One run is always one version.
+The training prompt under test is the default one (v15 since 2026-10-08); there is no version switch — one run is always the code's default prompt.
 
 ## Smoke — one live workout over the test DB
 

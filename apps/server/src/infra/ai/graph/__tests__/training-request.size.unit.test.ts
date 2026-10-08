@@ -6,11 +6,11 @@
 import { assembleTrainingRequest, CASE07_FIXTURE, PLAIN_FIXTURE } from './training-request-fixture';
 
 describe('training request size (AC-CS1-5)', () => {
-  it('plain fixture: coach section <= 2 500, system <= 3 500, context <= 6 000, total text <= 12 000 chars', async () => {
+  it('plain fixture: coach section <= 3 050, system <= 3 500, context <= 6 000, total text <= 12 000 chars', async () => {
     const req = await assembleTrainingRequest(PLAIN_FIXTURE());
     const chars = (name: string): number => req.sections.find(s => s.name === name)?.chars ?? NaN;
 
-    expect(req.coachChars).toBeLessThanOrEqual(2500);
+    expect(req.coachChars).toBeLessThanOrEqual(3050);
     expect(chars('system: coach prompt') + chars('system: # Profile')).toBeLessThanOrEqual(3500);
     expect(chars('context: # Today') + chars('context: # History') + chars('context: NOW line')).toBeLessThanOrEqual(
       6000,

@@ -387,6 +387,25 @@ progression principle)**. The sentence replaced: 125 → 313 chars.
   1 total`, `Tests: 70 passed, 70 total` (the whole scenarios folder under v15 also: 511 passed, 1 todo).
 - Left to the orchestrator: live v15 measurement (3 runs, blind judge with the fixed judge prompt), accept-or-revert.
 
+### T4 accepted — v15 default (worker, 2026-10-08)
+
+- **T4 accepted — v15 default.** Owner approved 2026-10-08 after the live measurement (v13 / v14 / v15 × 13 journeys × 3):
+  v15 growth 3/3, miss-choice 3/3, friendliness 1.85, honesty 0.72 (v13 0.66). ADR-0013 size pin amended to ≤ 3 050
+  chars (1c6c87fc).
+- `TRAINING_PROMPT.current` / `TRAINING_COACH` (`prompts/phases/training/index.ts`) now resolve to v15. `coach.ts` (v13)
+  and `coach.v14.ts` stay as the derivation chain v15 is built from (BR-LLM-008). The `PROMPT_VERSION_TRAINING` env
+  switch is removed entirely (no `process.env` read outside config); its three env-selection tests were replaced by one
+  default-is-v15 test, and the `evals/datasets/README.md` § L3 line now says there is no version switch.
+- Deliberately updated frozen artefacts: `evals/snapshots/__tests__/__snapshots__/message-assembly.unit.test.ts.snap`
+  (`training / plain`, `training / with-summary`, `training / post-tool`: the v15 coach text); version pins in
+  `phase-specs.unit.test.ts` and `registry.unit.test.ts` (v13 → v15); the size pin `training-request.size.unit.test.ts`
+  coach section 2 500 → 3 050. (v13's own 2 500 pin in `coach.unit.test.ts` stays: it tests the v13 module.)
+- Red first, recorded: `phase-specs.unit.test.ts` `expect(spec.prompt.current.version).toBe('v15')` received `"v13"`
+  (also `registry.unit.test.ts`, the v15 default test, and the plain-fixture size/snapshot tests after the switch).
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 193 passed, 193 total`,
+  `Tests: 1931 passed, 1931 total`; flock `npm run test:scenarios` → `Test Suites: 27 passed, 27 total`,
+  `Tests: 1 todo, 511 passed, 512 total`.
+
 ### T3 addendum — the judge sees what the coach knew (worker, 2026-10-08)
 
 - Fault: the judge flagged the client's name, history and dates as invented — the evidence carried only the coach

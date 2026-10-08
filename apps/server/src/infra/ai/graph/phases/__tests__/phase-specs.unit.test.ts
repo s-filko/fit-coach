@@ -465,7 +465,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
   it('training: new coach prompt, the two fact blocks, workout memory, no load-engine tool (coach-simplification I1)', () => {
     const spec = specOf('training');
     expect(spec.prompt.current.id).toBe('phase.training');
-    expect(spec.prompt.current.version).toBe('v13');
+    expect(spec.prompt.current.version).toBe('v15');
     expect(spec.contextBlocks.map(b => `${b.id}.${b.version}`)).toEqual(['training.today.v1', 'training.history.v1']);
     expect(spec.memory).toBe('workout');
     expect(spec.tools.map(t => t.name)).toContain('get_exercise_history');

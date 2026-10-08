@@ -120,7 +120,7 @@ export function contextsForModule(moduleId: string, fixture: EvalFixture): unkno
         exerciseHistory: [],
         recentWorkouts: [],
         todayMuscles: [],
-        // TRAINING_COACH (v13) reads the client's facts for its `# Profile`.
+        // TRAINING_COACH (v15) reads the client's facts for its `# Profile`.
         profileFacts: [],
       };
     case 'summarizer':

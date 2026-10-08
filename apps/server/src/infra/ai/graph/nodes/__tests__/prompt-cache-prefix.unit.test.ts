@@ -144,7 +144,7 @@ describe('AC-PC-5: the checkpointed HumanMessage carries no <context> text (D2)'
   });
 });
 
-describe('AC-PC-1: the real training phase (v13 coach prompt, # Today / # History, workout memory)', () => {
+describe('AC-PC-1: the real training phase (v15 coach prompt, # Today / # History, workout memory)', () => {
   async function twoTurns(): Promise<{ r1: WireRequest; r2: WireRequest }> {
     let sets = 0;
     const { spec, deps } = makeRealTrainingSpec(() => trainingData(sets));
@@ -173,7 +173,7 @@ describe('AC-PC-1: the real training phase (v13 coach prompt, # Today / # Histor
     return { r1: first.requests[0]!, r2: second.requests[0]! };
   }
 
-  it('the system message is byte-identical across the two turns, and it is the v13 coach prompt + profile', async () => {
+  it('the system message is byte-identical across the two turns, and it is the v15 coach prompt + profile', async () => {
     const { r1, r2 } = await twoTurns();
     expect(JSON.stringify(r2.messages[0])).toBe(JSON.stringify(r1.messages[0]));
     expect(wireText(r1.messages[0]!)).toContain("You are the client's personal strength coach");

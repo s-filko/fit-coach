@@ -7,7 +7,7 @@ import { TRAINING_COACH_V14, V14_LOAD_RULE } from './coach.v14';
  * sometimes the max weight with fewer reps sets a new mark, then the reps and then the sets (3→4→5)
  * come back. v15 replaces v14's progression sentence with that fuller principle (goal- and
  * range-dependent, the coach says its choice in one phrase); everything else is v14 (and so v13)
- * verbatim. Same switch as v14: env PROMPT_VERSION_TRAINING=v15.
+ * verbatim. Accepted as the default 2026-10-08.
  */
 export const V15_LOAD_RULE =
   "The next load follows the history, the plan's range and the client's goal: every set at the top of the range in two workouts in a row — one equipment step up (2.5 kg barbell, 2 per hand dumbbell, 5 stack); a little short of the floor — the same load, aim for the floor again; with a strength goal, a heavier load for fewer reps is a fair way to set a new mark, and then the reps come back and the sets grow 3→4→5; the load drops only when reps fell far below the range and it was not a deliberate heavy try; after a long break — lighter than before it. Say in one phrase which choice this is and why.";

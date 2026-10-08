@@ -4,12 +4,13 @@
  * and lowered the rep target in 3/3 — which the owner called a LEGITIMATE choice («не всегда понижение
  * веса… иногда нужно взять максимальный вес, новую планку поставить, сделать меньше повторов, потом повторы,
  * потом подходы 3→4→5»). v15 replaces v14's progression sentence with that fuller principle; everything else
- * is v14 (and so v13) verbatim. Same switch: PROMPT_VERSION_TRAINING=v15.
+ * is v14 (and so v13) verbatim. Accepted as the default 2026-10-08.
  */
 import type { DirectiveContext } from '@infra/ai/prompts/types';
 
 import { TRAINING_COACH, type TrainingCoachContext } from '../coach';
 import { TRAINING_COACH_V14, V14_LOAD_RULE } from '../coach.v14';
+import { TRAINING_COACH as TRAINING_COACH_DEFAULT, TRAINING_PROMPT } from '../index';
 import { deriveV15Template, TRAINING_COACH_V15, V15_LOAD_RULE } from '../coach.v15';
 
 function ctx(languageCode: string | null): TrainingCoachContext {
@@ -56,30 +57,10 @@ describe('TRAINING_COACH_V15 (the load-vs-reps candidate)', () => {
   });
 });
 
-describe('PROMPT_VERSION_TRAINING — v15 joins the switch', () => {
-  it.each([
-    [undefined, 'v13'],
-    ['v14', 'v14'],
-    ['v15', 'v15'],
-  ])('env %p selects %p', (env, expected) => {
-    const previous = process.env.PROMPT_VERSION_TRAINING;
-    if (env === undefined) {
-      delete process.env.PROMPT_VERSION_TRAINING;
-    } else {
-      process.env.PROMPT_VERSION_TRAINING = env;
-    }
-    try {
-      jest.isolateModules(() => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { TRAINING_PROMPT } = require('../index') as { TRAINING_PROMPT: { current: { version: string } } };
-        expect(TRAINING_PROMPT.current.version).toBe(expected);
-      });
-    } finally {
-      if (previous === undefined) {
-        delete process.env.PROMPT_VERSION_TRAINING;
-      } else {
-        process.env.PROMPT_VERSION_TRAINING = previous;
-      }
-    }
+describe('the default training coach prompt', () => {
+  it('TRAINING_PROMPT and TRAINING_COACH resolve to v15 (owner accepted 2026-10-08)', () => {
+    expect(TRAINING_PROMPT.current).toBe(TRAINING_COACH_V15);
+    expect(TRAINING_PROMPT.current.version).toBe('v15');
+    expect(TRAINING_COACH_DEFAULT).toBe(TRAINING_COACH_V15);
   });
 });

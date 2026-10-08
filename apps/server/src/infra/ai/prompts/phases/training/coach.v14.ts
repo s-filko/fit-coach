@@ -8,8 +8,8 @@ import { TRAINING_COACH, type TrainingCoachContext } from './coach';
  * v13's only load rule anchored every try to a load already used ("the next load they have used; otherwise a rep or
  * two more") — above the top recorded load there is nothing "used" to pick — and nothing in the request defined what
  * a below-floor performance means for the next load. v14 replaces that ONE sentence with the progression principle
- * the durable spec already holds; everything else is v13 verbatim. Selected via env PROMPT_VERSION_TRAINING=v14
- * (v13 stays the default and the baseline) — see index.ts.
+ * the durable spec already holds; everything else is v13 verbatim. A derivation step of v15 (not selectable on its own;
+ * v15 is the default) — see index.ts.
  */
 export const V13_LOAD_RULE =
   'When last time topped the rep range with reps to spare, the try is the next load they have used; otherwise a rep or two more.';
