@@ -1,6 +1,7 @@
 # Plan and Tool Fixes — one active plan, empty search, weight input (no carry-over)
 
-- Status: in progress
+- Status: done
+- Review: 2026-10-08 | clean | R1,R2,R3,R4
 - Parent: `docs/superpowers/plans/coach-simplification.md` (governing plan; this is a side plan of code-only fixes
   found in the D15 live review and the 2026-10-04/05 findings). Branch `plan/plan-and-tool-fixes`, cut from `dev`.
 - Executor: an autonomous orchestrator session (Opus) on the Orca host `finland-v4-8gb`, launched by the owner's
@@ -709,3 +710,11 @@ Decisions:
 **Merge note (orchestrator, 2026-10-08).** `plan/stale-session-autoclose` also adds a migration numbered 0024
 (`reopened_at`). Merge order (updated): this branch first (its `weight_mode` migration stays 0024); stale-session-autoclose
 then regenerates its `reopened_at` migration as the next number after merging `dev`.
+
+**Final closure check (Opus, 2026-10-08, at `56531ff3`): verdict clean.** Pass-5 blocker closed (the weight-mode
+decision precedes every mutation; one catalog read). New advisories → BACKLOG: the startedAt re-anchor order and the
+real-path single read are proven by reading, not by a test; an invented exerciseId can still re-anchor startedAt before
+"Unknown exerciseId" (pre-existing); `catalogVerified` option on `ensureCurrentExercise`; the weight-mode.ts comment
+must cite BUG-056. (D) The § 2a stand live check is replaced by the live L3 measurement in plan `coach-quality-proof`
+(journeys i–n on the merged code) and by the owner's own test on dev ("проверять будем всё равно в бою", 2026-10-08).
+

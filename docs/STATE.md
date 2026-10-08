@@ -13,7 +13,6 @@ _Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **In progress**
 - `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
-- `plan-and-tool-fixes.md` — Plan and Tool Fixes — one active plan, empty search, weight input (no carry-over) (direct on integration branch)
 
 **Planned**
 - `coach-tone.md` — Coach Tone — the coach knows the trend and encourages progress Implementation Plan
@@ -40,6 +39,7 @@ _Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `now-line-last.md` — NOW Line Last — Move the Current-Time Line out of Block 1 for Prompt Caching Implementation Plan
+- `plan-and-tool-fixes.md` — Plan and Tool Fixes — one active plan, empty search, weight input (no carry-over)
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
 - `prompt-caching.md` — Prompt Caching (BUG-051) — Stable Prefix, Two Breakpoints, No Mid-Workout Rewrites Implementation Plan
 - `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan
