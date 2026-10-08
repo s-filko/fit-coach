@@ -17,7 +17,6 @@ _Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `stale-session-autoclose.md` — Stale Session Auto-Close — a forgotten workout closes on return; the model can reopen it (BUG-053) (branch: `plan/stale-session-autoclose`, last commit 2026-10-07)
 
 **Planned**
-- `coach-quality-proof.md` — Coach Quality Proof — the coach is friendly, honest, logs right and proposes weights that follow the history
 - `coach-tone.md` — Coach Tone — the coach knows the trend and encourages progress Implementation Plan
 - `cold-start.md` — Cold Start — a load for a user with no history (U11) Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
@@ -79,6 +78,9 @@ _Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **Close-out debt (merged but plan not done)**
 — none —
+
+**Warnings**
+- `coach-quality-proof.md` — Status: in progress but branch ``plan/coach-quality-proof`, cut from `dev`.` no longer exists
 <!-- AUTO:status END -->
 
 ## Scope now

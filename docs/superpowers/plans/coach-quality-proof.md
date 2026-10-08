@@ -1,6 +1,6 @@
 # Coach Quality Proof — the coach is friendly, honest, logs right and proposes weights that follow the history
 
-- Status: planned
+- Status: in progress
 - After: plan-and-tool-fixes, stale-session-autoclose (measured on an integration branch that contains both)
 - Branch: `plan/coach-quality-proof`, cut from `dev`.
 - Owner order (2026-10-08): finish everything, add tests so existing problems are not missed, test known scenarios on
