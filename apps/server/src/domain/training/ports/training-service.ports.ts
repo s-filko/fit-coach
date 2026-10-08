@@ -161,6 +161,9 @@ export interface ITrainingService {
       // AC-SSA-5: the session is completed and edited in place — exercise statuses and the session's
       // activity clock stay as they are (implies skipActivityUpdate); a new exercise row is `completed`.
       finishedSession?: boolean;
+      // AC-PTF-7: the caller passed reps without any weight — the exercise's weight_mode decides
+      // whether that is a bodyweight set (optional) or a WeightRequiredError (required).
+      weightOmitted?: boolean;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }>;
 }

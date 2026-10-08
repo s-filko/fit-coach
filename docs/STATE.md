@@ -17,7 +17,6 @@ _Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen
 **Planned**
 - `coach-tone.md` — Coach Tone — the coach knows the trend and encourages progress Implementation Plan
 - `cold-start.md` — Cold Start — a load for a user with no history (U11) Implementation Plan
-- `plan-and-tool-fixes.md` — Plan and Tool Fixes — one active plan, empty search, weight carry-over tails
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 - `restart-ladder.md` — Restart Ladder — the return ladder closes on fresh workouts Implementation Plan
@@ -40,6 +39,7 @@ _Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `now-line-last.md` — NOW Line Last — Move the Current-Time Line out of Block 1 for Prompt Caching Implementation Plan
+- `plan-and-tool-fixes.md` — Plan and Tool Fixes — one active plan, empty search, weight input (no carry-over)
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
 - `prompt-caching.md` — Prompt Caching (BUG-051) — Stable Prefix, Two Breakpoints, No Mid-Workout Rewrites Implementation Plan
 - `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan

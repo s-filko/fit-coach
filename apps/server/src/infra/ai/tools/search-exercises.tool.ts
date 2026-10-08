@@ -69,7 +69,15 @@ export function buildSearchExercisesTool(deps: SearchExercisesToolDeps) {
         });
 
         if (results.length === 0) {
-          return userError('No exercises found matching the search criteria. Try a broader query or remove filters.');
+          // AC-PTF-2: zero matches is a result, not a failure — state the facts only.
+          const usedFilters = [
+            ['category', input.category],
+            ['equipment', input.equipment],
+            ['muscleGroup', input.muscleGroup],
+          ].filter(([, value]) => value !== undefined);
+          const filterLine =
+            usedFilters.length > 0 ? ` (filters: ${usedFilters.map(([k, v]) => `${k}=${v}`).join(', ')})` : '';
+          return ok(`0 exercises match "${input.query}"${filterLine}`);
         }
 
         const lines = results.map(ex => {

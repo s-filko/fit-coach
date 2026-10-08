@@ -58,6 +58,7 @@ const sessionWith = (autoCloseReason: WorkoutSessionWithDetails['autoCloseReason
           energyCost: 'high',
           complexity: 'intermediate',
           typicalDurationMinutes: 15,
+          weightMode: 'required',
           requiresSpotter: false,
           imageUrl: null,
           videoUrl: null,

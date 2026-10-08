@@ -23,13 +23,13 @@ Acceptance Criteria
 • AC-0205: Planning conversations remain within `/api/chat`; no alternate endpoints manage plan lifecycle.
 
 API Mapping
-• POST /api/chat (phase='plan_creation') → ConversationRunPort → plan-creation phase subgraph → save_workout_plan tool → IWorkoutPlanRepository.create()
+• POST /api/chat (phase='plan_creation') → ConversationRunPort → plan-creation phase subgraph → save_workout_plan tool → IWorkoutPlanRepository.createActiveReplacingOthers() (BR-TRAINING-046)
 • Phase entered via: `request_transition` tool from chat phase (LLM calls tool when user requests a plan)
 
 Implementation Notes
 • plan_creation subgraph: `infra/ai/graph/phases/plan-creation.spec.ts` (built by `phase-subgraph.factory.ts`)
 • System prompt: `infra/ai/graph/nodes/plan-creation.node.ts` — loads exercises with real primaryMuscles/secondaryMuscles
-• save_workout_plan tool: `infra/ai/tools/save-workout-plan.tool.ts` — Zod-validated full plan schema, calls workoutPlanRepository.create()
+• save_workout_plan tool: `infra/ai/tools/save-workout-plan.tool.ts` — Zod-validated full plan schema, calls workoutPlanRepository.createActiveReplacingOthers()
 • Transition: save_workout_plan sets pendingTransition → chat (to be updated to session_planning in Step 6)
 
 Domain Rules Reference

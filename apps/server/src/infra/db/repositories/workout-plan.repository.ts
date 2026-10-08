@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import type { IWorkoutPlanRepository } from '@domain/training/ports';
 import type { CreateWorkoutPlanDto, WorkoutPlan, WorkoutPlanStatus } from '@domain/training/types';
@@ -7,21 +7,30 @@ import { db } from '@infra/db/drizzle';
 import { workoutPlans } from '@infra/db/schema';
 
 export class WorkoutPlanRepository implements IWorkoutPlanRepository {
-  async create(userId: string, plan: CreateWorkoutPlanDto): Promise<WorkoutPlan> {
-    const [created] = await db
-      .insert(workoutPlans)
-      .values({
-        userId,
-        name: plan.name,
-        planJson: plan.planJson,
-        status: plan.status ?? 'active',
-      })
-      .returning();
+  // BR-TRAINING-046: one active plan per user — archive + insert commit atomically,
+  // so a failure between them can never leave the user without an active plan (or with two).
+  async createActiveReplacingOthers(userId: string, plan: CreateWorkoutPlanDto): Promise<WorkoutPlan> {
+    return db.transaction(async tx => {
+      await tx
+        .update(workoutPlans)
+        .set({ status: 'archived', updatedAt: new Date() })
+        .where(and(eq(workoutPlans.userId, userId), eq(workoutPlans.status, 'active')));
 
-    return {
-      ...created,
-      planJson: created.planJson as WorkoutPlan['planJson'],
-    };
+      const [created] = await tx
+        .insert(workoutPlans)
+        .values({
+          userId,
+          name: plan.name,
+          planJson: plan.planJson,
+          status: 'active',
+        })
+        .returning();
+
+      return {
+        ...created,
+        planJson: created.planJson as WorkoutPlan['planJson'],
+      };
+    });
   }
 
   async findById(planId: string): Promise<WorkoutPlan | null> {
@@ -38,10 +47,13 @@ export class WorkoutPlanRepository implements IWorkoutPlanRepository {
   }
 
   async findActiveByUserId(userId: string): Promise<WorkoutPlan | null> {
+    // BR-TRAINING-046: rows saved before the rule may hold several active plans —
+    // the newest is the active one, deterministically.
     const [plan] = await db
       .select()
       .from(workoutPlans)
       .where(and(eq(workoutPlans.userId, userId), eq(workoutPlans.status, 'active')))
+      .orderBy(desc(workoutPlans.createdAt))
       .limit(1);
 
     if (!plan) {

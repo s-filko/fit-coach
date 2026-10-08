@@ -557,3 +557,9 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   branches removed on the owner's order (i1, i2, load-plan, load-plan-fixes, load-plan-t3, the agent worktree; remote
   `plan/load-plan`, `plan/load-plan-fixes`). **Next:** D15 (2) — training-prompt changes on the eval set, owner sees
   the result before merge.
+- 2026-10-05 — **Owner: the code does not set a set's weight.** The `log_set` carry-over of D15 (reps without a weight
+  take the previous weight) is removed on `plan/plan-and-tool-fixes` (T5, AC-PTF-5): the model reads the context, passes
+  the weight it means (stating an assumption briefly), asks when unclear; the user corrects via `update_last_set`. The
+  D15 correction path in `updateLastSet` stays. Owner rule recorded with it: every instruction the model receives must be
+  deliberate and traceable — inventory of today's out-of-prompt instructions:
+  `docs/superpowers/specs/2026-10-05-model-instruction-inventory.md`.

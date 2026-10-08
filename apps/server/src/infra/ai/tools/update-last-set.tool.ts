@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 
+import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
 import { rejectWithoutLoggedSet } from '@infra/ai/tools/set-preconditions';
 
@@ -46,8 +47,10 @@ export function buildUpdateLastSetTool(deps: UpdateLastSetToolDeps) {
           inclinePct: input.inclinePct,
           setKind: input.setKind,
         });
-        const beforeStr = JSON.stringify(result.before.setData);
-        const afterStr = JSON.stringify(result.after.setData);
+        // T6: Before/After render through the shared set formatter — a bodyweight set is named
+        // "bodyweight" (BR-TRAINING-047), not shown as raw setData JSON.
+        const beforeStr = formatSetData(result.before.setData);
+        const afterStr = formatSetData(result.after.setData);
         const beforeKind = result.before.setKind ? ` (${result.before.setKind})` : '';
         const afterKind = result.after.setKind ? ` (${result.after.setKind})` : '';
         log.info(

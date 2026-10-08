@@ -19,7 +19,7 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import { maybeCtxOf } from '@infra/ai/graph/state';
 import { formatExerciseSets, formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { userIdOf } from '@infra/ai/tools/format-exercise-summary';
-import { carryWeight, flatSetData } from '@infra/ai/tools/set-input';
+import { flatSetData } from '@infra/ai/tools/set-input';
 
 import { createLogger } from '@shared/logger';
 import { isDatabaseFailure } from '@shared/pg-error-cause';
@@ -33,7 +33,7 @@ export interface EditLastWorkoutToolDeps {
 
 const EDIT_LAST_WORKOUT_DESCRIPTION = [
   'Edits the user’s most recent finished workout in place; the workout stays finished.',
-  'action "add": adds a set to an exercise (reps, weight in kg, durationSeconds or distanceKm), with the same validation as log_set; an exercise that is not in the workout is added to it.',
+  'action "add": adds a set to an exercise (reps, weight in kg — optional for bodyweight exercises —, durationSeconds or distanceKm), with the same validation as log_set; an exercise that is not in the workout is added to it.',
   'action "update": changes the exercise’s set setNumber (default: its last set) to the given values.',
   'action "delete": removes the exercise’s set setNumber.',
   'Without an action, the exercise’s sets in that workout are returned; without an exercise, the whole workout.',
@@ -219,8 +219,7 @@ export function buildEditLastWorkoutTool(deps: EditLastWorkoutToolDeps) {
     if (input.reps == null && input.durationSeconds == null && input.distanceKm == null) {
       return llmError('Either reps, durationSeconds, or distanceKm must be provided to add a set.');
     }
-    const { setData, weightBasis, carried } = carryWeight(flatSetData(input), input, session);
-    const parsed = SetDataSchema.safeParse(setData);
+    const parsed = SetDataSchema.safeParse(flatSetData(input));
     if (!parsed.success) {
       return llmError(`Invalid set data: ${parsed.error.message}`);
     }
@@ -238,7 +237,10 @@ export function buildEditLastWorkoutTool(deps: EditLastWorkoutToolDeps) {
       skipActivityUpdate: true,
       finishedSession: true,
       setKind: input.setKind,
-      weightBasis,
+      weightBasis: input.weightBasis,
+      // AC-PTF-7: the service judges reps-without-weight by the exercise's weight_mode — the same
+      // rule, decided before any mutation, as for log_set.
+      weightOmitted: input.reps != null && input.weight == null,
     });
     log.info(
       {
@@ -253,12 +255,9 @@ export function buildEditLastWorkoutTool(deps: EditLastWorkoutToolDeps) {
       },
       'AUDIT: set added to the finished workout',
     );
-    const carriedNote = carried
-      ? ` (weight ${carried.weight} ${carried.weightUnit} carried over from set ${carried.setNumber})`
-      : '';
     const after = await trainingService.getSessionDetails(session.id);
     const ex = after?.exercises.find(e => e.id === set.sessionExerciseId);
-    const note = `set ${setNumber} added: ${formatSetData(set.setData)}${carriedNote}`;
+    const note = `set ${setNumber} added: ${formatSetData(set.setData)}`;
     return ok(after && ex ? exerciseReply(ex, after, note, timeZone) : `${note}.`);
   }
 }
@@ -274,7 +273,11 @@ const EditLastWorkoutSchema = z.object({
     .optional()
     .describe('The set to update (default: the last set) or delete (required).'),
   reps: z.number().int().positive().optional().describe('Number of repetitions.'),
-  weight: z.number().positive().optional().describe('Weight in kilograms.'),
+  weight: z
+    .number()
+    .min(0)
+    .optional()
+    .describe('Weight in kilograms; 0 = bodyweight. Required for exercises that use a weight.'),
   durationSeconds: z.number().int().positive().optional().describe('Duration in seconds (cardio, isometric holds).'),
   distanceKm: z.number().positive().optional().describe('Distance in km (cardio_distance exercises).'),
   inclinePct: z.number().min(0).max(30).optional().describe('Treadmill incline in percent (0–30).'),

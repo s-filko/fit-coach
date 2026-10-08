@@ -1,8 +1,26 @@
 /**
- * Set formatters shared by the `log_set` and `get_exercise_history` tool results (moved from the
- * retired training-workout-overview block).
+ * Set formatters shared by the `log_set`, `update_last_set`, `delete_last_sets` and
+ * `get_exercise_history` tool results (moved from the retired training-workout-overview block).
  */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
+
+/**
+ * The one wording for a set with no external load (BR-TRAINING-047): `bodyweight`, written in full —
+ * never `BW` (ambiguous with the user's body weight) and never a bare weightless reps count. Every
+ * set text the model reads is built on it: tool confirmations print `8 reps @ bodyweight`, the facts
+ * blocks print `8×bodyweight`.
+ */
+export const BODYWEIGHT_LABEL = 'bodyweight';
+
+/** `8 reps @ bodyweight` — the long form of the tool confirmations and exercise summaries. */
+export function formatBodyweightLong(reps: number): string {
+  return `${reps} reps @ ${BODYWEIGHT_LABEL}`;
+}
+
+/** `8×bodyweight` — the short form of the facts blocks (today / history / recent history). */
+export function formatBodyweightShort(reps: number): string {
+  return `${reps}×${BODYWEIGHT_LABEL}`;
+}
 
 /**
  * One exercise's set lines (`  Set N: ...`) plus an optional `  Overall feedback: "..."` line, or
@@ -32,8 +50,12 @@ export function formatSetData(
 ): string {
   switch (setData.type) {
     case 'strength': {
+      if (setData.weight == null) {
+        // A legacy row that never carried a load — to the model it is what it is: a bodyweight set.
+        return formatBodyweightLong(setData.reps);
+      }
       const perHandNote = setData.perHand ? ' per hand' : '';
-      return `${setData.reps} reps${setData.weight != null ? ` @ ${setData.weight} ${setData.weightUnit ?? 'kg'}${perHandNote}` : ''}`;
+      return `${setData.reps} reps @ ${setData.weight} ${setData.weightUnit ?? 'kg'}${perHandNote}`;
     }
     case 'cardio_distance': {
       const durStr = setData.duration > 0 ? `${Math.round(setData.duration / 60)}min` : '?min';
@@ -46,7 +68,7 @@ export function formatSetData(
     case 'cardio_duration':
       return `${setData.duration}s${setData.intensity ? ` (${setData.intensity})` : ''}`;
     case 'functional_reps':
-      return `${setData.reps} reps`;
+      return formatBodyweightLong(setData.reps);
     case 'isometric':
       return `${setData.duration}s hold`;
     case 'interval':

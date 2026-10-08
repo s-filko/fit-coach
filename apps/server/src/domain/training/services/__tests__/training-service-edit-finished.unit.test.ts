@@ -4,6 +4,8 @@
  * without changing the session or its exercise statuses — `getLastFinishedSession`,
  * `logSetWithContext` with `finishedSession`, `updateLastSet` with a `setNumber`, `deleteSet`.
  */
+import { WeightRequiredError } from '@domain/training/errors';
+
 import { createMocks, makeExerciseWithDetails, makeSession, makeSessionSet } from './training-service-test-support';
 
 const EX_ID = 'd8794819-ffc6-4d08-8336-d9bedc4e554a';
@@ -137,6 +139,67 @@ describe('review R3 — row statuses of a finished workout', () => {
     mockSessionRepo.findByIdWithDetails.mockResolvedValue(finishedSession());
     await trainingService.deleteSet('session-1', EX_ID, 2);
     expect(mockSessionExerciseRepo.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('merge with plan-and-tool-fixes — the weight rule (AC-PTF-7) applies to a finished workout', () => {
+  it('add: a required exercise + reps without a weight → WeightRequiredError, nothing written (no row, set or status change)', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockSessionSetRepo, mockExerciseRepo } =
+      createMocks();
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(finishedSession());
+    mockExerciseRepo.findById.mockResolvedValue({
+      id: EX_ID,
+      name: 'Barbell Bench Press',
+      weightMode: 'required',
+    } as never);
+
+    await expect(
+      trainingService.logSetWithContext('session-1', {
+        exerciseId: EX_ID,
+        setData: { type: 'functional_reps', reps: 8 },
+        weightOmitted: true,
+        finishedSession: true,
+      }),
+    ).rejects.toBeInstanceOf(WeightRequiredError);
+
+    expect(mockSessionSetRepo.create).not.toHaveBeenCalled();
+    expect(mockSessionExerciseRepo.create).not.toHaveBeenCalled();
+    expect(mockSessionExerciseRepo.update).not.toHaveBeenCalled();
+    expect(mockSessionRepo.updateActivity).not.toHaveBeenCalled();
+  });
+
+  it('add: an optional (bodyweight) exercise + reps without a weight is stored as a bodyweight set', async () => {
+    const { trainingService, mockSessionRepo, mockSessionSetRepo, mockExerciseRepo } = createMocks();
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(finishedSession());
+    mockExerciseRepo.findById.mockResolvedValue({ id: EX_ID, name: 'Pull-ups', weightMode: 'optional' } as never);
+    mockSessionSetRepo.create.mockResolvedValue(makeSessionSet({ id: 'set-n', setNumber: 3 }));
+
+    await trainingService.logSetWithContext('session-1', {
+      exerciseId: EX_ID,
+      setData: { type: 'functional_reps', reps: 8 },
+      weightOmitted: true,
+      finishedSession: true,
+    });
+
+    expect(mockSessionSetRepo.create).toHaveBeenCalledWith(
+      'se-bench',
+      expect.objectContaining({ setData: { type: 'functional_reps', reps: 8 } }),
+    );
+  });
+
+  it('update: an explicit weight 0 on a named set makes it a bodyweight set (same rule as update_last_set)', async () => {
+    const { trainingService, mockSessionRepo, mockSessionSetRepo } = createMocks();
+    const session = finishedSession();
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(session);
+    const first = session.exercises[0]!.sets[0]!;
+    mockSessionSetRepo.update.mockImplementation(async (_id, patch) => ({ ...first, ...patch }) as never);
+
+    await trainingService.updateLastSet('session-1', EX_ID, { weight: 0 }, { setNumber: 1 });
+
+    expect(mockSessionSetRepo.update).toHaveBeenCalledWith(
+      'set-1',
+      expect.objectContaining({ setData: { type: 'functional_reps', reps: 10 } }),
+    );
   });
 });
 

@@ -6,7 +6,7 @@ import type { WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/ty
 
 describe('SessionPlanningContextBuilder', () => {
   const createMockWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> => ({
-    create: jest.fn(),
+    createActiveReplacingOthers: jest.fn(),
     findById: jest.fn(),
     findActiveByUserId: jest.fn(),
     findByUserId: jest.fn(),
@@ -87,6 +87,7 @@ describe('SessionPlanningContextBuilder', () => {
           name: 'Bench Press',
           category: 'compound',
           equipment: 'barbell',
+          weightMode: 'required',
           exerciseType: 'strength',
           description: null,
           energyCost: 'high',

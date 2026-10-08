@@ -13,6 +13,7 @@ const PLANK: Exercise = {
   name: 'Plank',
   category: 'functional',
   equipment: 'bodyweight',
+  weightMode: 'optional',
   exerciseType: 'isometric',
   description: null,
   energyCost: 'low',

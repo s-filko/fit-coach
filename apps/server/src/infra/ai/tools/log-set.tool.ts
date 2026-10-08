@@ -10,7 +10,7 @@ import { SetDataSchema } from '@domain/training/set-data.types';
 import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { EFFORT_MAPPING_TEXT } from '@infra/ai/prompts/effort';
 import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
-import { carryWeight, flatSetData } from '@infra/ai/tools/set-input';
+import { flatSetData } from '@infra/ai/tools/set-input';
 
 import { createLogger } from '@shared/logger';
 import { isDatabaseFailure } from '@shared/pg-error-cause';
@@ -36,16 +36,14 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         return systemError('No active training session found. Cannot log set.');
       }
 
-      const baseSetData = flatSetData(input);
-
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
 
       try {
+        const baseSetData = flatSetData(input);
+
         const session = await trainingService.getSessionDetails(sessionId);
 
-        const { setData, weightBasis, carried } = carryWeight(baseSetData, input, session);
-
-        const parsed = SetDataSchema.safeParse(setData);
+        const parsed = SetDataSchema.safeParse(baseSetData);
         if (!parsed.success) {
           return llmError(`Invalid set data: ${parsed.error.message}`);
         }
@@ -67,7 +65,9 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           createdAt: retroCreatedAt,
           skipActivityUpdate: isRetro,
           setKind: input.setKind,
-          weightBasis,
+          weightBasis: input.weightBasis,
+          // AC-PTF-7: the service judges reps-without-weight by the exercise's weight_mode.
+          weightOmitted: input.reps != null && input.weight == null,
         });
 
         // Named for the summariser (renderTranscript over this tool's own confirmation) as much
@@ -75,10 +75,12 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         // The set is already saved at this point: a failure resolving the name degrades the
         // confirmation text, it must never turn a successful write into a reported error.
         let exerciseName = input.exerciseName ?? '';
+        let resolvedExerciseId = input.exerciseId;
         try {
           const finalSession = await trainingService.getSessionDetails(sessionId);
           const row = finalSession?.exercises.find(se => se.id === set.sessionExerciseId);
           exerciseName = row?.exercise.name ?? exerciseName;
+          resolvedExerciseId = row?.exerciseId ?? resolvedExerciseId;
         } catch (nameErr) {
           log.warn({ err: nameErr, sessionId }, 'log_set: could not resolve exercise name for confirmation');
         }
@@ -91,10 +93,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         const rpeNote = rpe != null ? ` | RPE ${rpe}` : '';
         const retroNote = isRetro ? ' (retro-logged)' : '';
         const namePart = exerciseName ? ` — ${exerciseName}` : '';
-        const carriedNote = carried
-          ? ` Weight ${carried.weight} ${carried.weightUnit} carried over from set ${carried.setNumber} — correct it if different.`
-          : '';
-        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.${carriedNote}`;
+        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.`;
 
         log.info(
           {
@@ -102,7 +101,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             userId,
             sessionId,
             setId: set.id,
-            exerciseId: input.exerciseId,
+            exerciseId: resolvedExerciseId,
             setNumber,
             setData: set.setData,
             rpe: set.rpe,
@@ -136,7 +135,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         'Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from today\'s plan in the context or from a search_exercises result ("ID:..." line).',
         'If the exercise is not in the plan and you do not have its exact UUID, pass exerciseName instead (the server resolves it in the catalog) — never invent or guess a UUID.',
         'For strength/weighted exercises: provide reps and weight (in kg).',
-        'For bodyweight exercises: provide reps only.',
+        'For bodyweight exercises: provide reps and optionally a weight — omitted = a bodyweight set, a number = added load.',
         'For cardio duration (bike, elliptical): provide durationSeconds only.',
         'For isometric holds (plank, side plank, wall sit): provide durationSeconds — the hold time in SECONDS — never reps; the server stores it as a timed hold.',
         'For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only).',
@@ -163,9 +162,11 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           reps: z.number().int().positive().optional().describe('Number of repetitions performed.'),
           weight: z
             .number()
-            .positive()
+            .min(0)
             .optional()
-            .describe('Weight used in kilograms (kg). Omit for bodyweight exercises.'),
+            .describe(
+              'Weight in kilograms (kg). Required for exercises that use a weight; optional for bodyweight exercises (omitted = bodyweight, a number = added load); not used for cardio.',
+            ),
           durationSeconds: z
             .number()
             .int()
@@ -226,6 +227,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         .refine(d => d.reps !== undefined || d.durationSeconds !== undefined || d.distanceKm !== undefined, {
           message: 'Either reps, durationSeconds, or distanceKm must be provided',
         }),
+      // The weight requirement is not a schema refine: TrainingService judges it by the
+      // exercise's weight_mode (AC-PTF-7) and a WeightRequiredError reaches the model as llm_error.
     },
   );
 }

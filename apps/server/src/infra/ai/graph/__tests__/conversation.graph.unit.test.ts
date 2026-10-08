@@ -67,7 +67,6 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
   } as unknown as ITrainingService,
   workoutPlanRepo: {
     findActiveByUserId: jest.fn().mockResolvedValue(null),
-    create: jest.fn(),
   } as unknown as IWorkoutPlanRepository,
   workoutSessionRepo: {
     create: jest.fn(),

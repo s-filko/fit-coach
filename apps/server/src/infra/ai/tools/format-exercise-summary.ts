@@ -1,6 +1,8 @@
 import type { AutoCompletedExercise } from '@domain/training/ports';
 import { workingSets } from '@domain/training/sets';
 
+import { formatBodyweightLong } from '@infra/ai/prompts/blocks/set-format';
+
 /** Reads the user id the executor put into the tool config; null when absent. */
 export function userIdOf(config: { configurable?: Record<string, unknown> } | undefined): string | null {
   const userId = config?.configurable?.['userId'];
@@ -23,7 +25,8 @@ export function formatExerciseSummary(ex: AutoCompletedExercise): string {
     .map(s => {
       const parts = [`Set ${s.setNumber}:`];
       if (s.reps != null) {
-        parts.push(`${s.reps} reps`);
+        // T6 (BR-TRAINING-047): reps with no external load are named "bodyweight", never a bare count.
+        parts.push(s.weight != null ? `${s.reps} reps` : formatBodyweightLong(s.reps));
       }
       if (s.weight != null) {
         parts.push(`@ ${s.weight} ${s.weightUnit ?? 'kg'}`);

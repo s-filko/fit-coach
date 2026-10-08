@@ -174,4 +174,14 @@ describe('edit_last_workout (BUG-053 T5, AC-SSA-5) — integration', () => {
 
     expect(last?.id).toBe(sessionId);
   });
+
+  it('merge: the weight rule applies — a weighted exercise + reps without a weight is refused and nothing is written', async () => {
+    const { userId, sessionId, bench } = await userWithFinishedWorkout('weight_rule');
+
+    const text = await callTool(userId, { action: 'add', exerciseId: bench, reps: 8 });
+
+    expect(text).toMatch(/weight is required/i);
+    const sets = (await service.getSessionDetails(sessionId))!.exercises.find(e => e.exerciseId === bench)!.sets;
+    expect(sets).toHaveLength(2);
+  });
 });

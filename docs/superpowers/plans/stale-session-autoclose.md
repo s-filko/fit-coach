@@ -276,6 +276,22 @@ Code: `prepare` sets the run flag `ctx.staleSessionClose` (run context — a mod
 
 Verification: `npm run check-all` → 0 errors; `npm run test:unit` → Tests: 1844 passed, 1844 total (Suites: 186/186); `npm run test:integration` → Tests: 646 passed, 1 todo, 647 total (Suites: 56/56); `npm run test:scenarios` → Tests: 373 passed, 1 todo, 374 total (Suites: 24/24).
 
+### Merge origin/dev (plan-and-tool-fixes) — 2026-10-08, worker
+
+Conflicts and resolution:
+- `docs/BACKLOG.md`: both sections kept (this branch's pass-2 advisories, dev's plan-and-tool-fixes advisories).
+- `training-service.ports.ts` (`logSetWithContext` opts): both fields — dev's `weightOmitted` and this branch's `finishedSession`.
+- `training.service.ts` (three hunks): `ensureCurrentExercise` opts carry dev's `catalogVerified` and this branch's `finishedSession`; `logSetWithContext` keeps dev's order — the target is resolved and its catalog row read ONCE, `assertWeightGiven` runs before any mutation — and then this branch's `skipActivityUpdate` (= `finishedSession || skipActivityUpdate`), `finishedSession` passed to `ensureCurrentExercise`, row-status reconciliation after the set. `updateLastSet` merged cleanly (dev's weight-mode/bodyweight rules + the `setNumber` option); `shapeSetData` is the one shaping path for live and finished sets.
+- `log-set.tool.ts`: dev's tool (carry-over removed, `weightOmitted`, resolved id in the audit) with the set-data mapping taken from the shared `set-input.ts`; `flatSetData` now follows dev's rule (weight 0 / absent → `functional_reps`, AC-PTF-7); `carryWeight` (D15) deleted from `set-input.ts` and `edit_last_workout` — dev dropped that behaviour.
+- `c-catch-up-logging.scenario.ts`: this branch's `edit_last_workout` add script kept (reps only; Pull-ups is `optional`, so a bodyweight set); dev's `log_set … weight: 0` script is for the retired live path.
+- `edit_last_workout`: `add` passes `weightOmitted` to the same `logSetWithContext` path (so `required` + reps without a weight → `WeightRequiredError` before any write), `weight` accepts 0 (bodyweight); `update` rides `updateLastSet`, which honours the mode. No second copy of the rule.
+- Other: `chat-context.v2.unit.test.ts` fixture gained `weightMode`.
+Migrations: dev's `0024_flawless_felicia_hardy` (`weight_mode`) is the only 0024; this branch adds none (the reopen migration was removed in T5); journal and snapshot are dev's. The test DB lacked the column: the five 0024 statements were applied inside the lock (it has no drizzle migrations table).
+
+New tests (written after the merge, so green on first run — not red-first): service `add` refused for `required` without a weight with nothing written / bodyweight stored for `optional` / `update` weight 0 on a named set (`training-service-edit-finished.unit.test.ts`), tool passes `weightOmitted` (`edit-last-workout.tool.unit.test.ts`), integration refusal with nothing written.
+
+Verification: `npm run check-all` → 0 errors; `npm run test:unit` → Tests: 1884 passed, 1884 total (Suites: 189/189); `npm run test:integration` → Tests: 653 passed, 1 todo, 654 total (Suites: 58/58); `npm run test:scenarios` → Tests: 373 passed, 1 todo, 374 total (Suites: 24/24).
+
 ## Review
 
 Close-out review 2026-10-08 — pass 1 by a GLM reviewer session (four zones, owner order: everything on GLM until the

@@ -119,6 +119,27 @@ describe('edit-last-workout.tool — edit_last_workout (BUG-053 T5, AC-SSA-5)', 
     expect(text).not.toMatch(/\b(always|never|must|ask the user)\b/i);
   });
 
+  it("add: reps without a weight is handed to the service as weightOmitted (the weight_mode rule is the service's), weight 0 is a bodyweight set", async () => {
+    const svc = makeTrainingService();
+    svc.getLastFinishedSession.mockResolvedValue(finished());
+    svc.logSetWithContext.mockResolvedValue({ set: strength(3, 8), setNumber: 3 });
+    svc.getSessionDetails.mockResolvedValue(finished());
+
+    await build(svc).invoke({ action: 'add', exerciseId: EX_ID, reps: 8 }, makeConfig());
+    await build(svc).invoke({ action: 'add', exerciseId: EX_ID, reps: 8, weight: 0 }, makeConfig());
+
+    expect(svc.logSetWithContext).toHaveBeenNthCalledWith(
+      1,
+      'session-1',
+      expect.objectContaining({ setData: { type: 'functional_reps', reps: 8 }, weightOmitted: true }),
+    );
+    expect(svc.logSetWithContext).toHaveBeenNthCalledWith(
+      2,
+      'session-1',
+      expect.objectContaining({ setData: { type: 'functional_reps', reps: 8 }, weightOmitted: false }),
+    );
+  });
+
   it('add: a name resolves through logSetWithContext (same path as log_set), invalid data is an llm_error', async () => {
     const svc = makeTrainingService();
     svc.getLastFinishedSession.mockResolvedValue(finished());

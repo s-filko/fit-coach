@@ -53,9 +53,12 @@ describe('TrainingService.logSetWithContext', () => {
       setData: { type: 'strength', reps: 10 },
     });
 
-    expect(trainingService.ensureCurrentExercise).toHaveBeenCalledWith('session-1', {
-      exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
-      exerciseName: 'Bench Press',
-    });
+    expect(trainingService.ensureCurrentExercise).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({
+        exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
+        exerciseName: 'Bench Press',
+      }),
+    );
   });
 });

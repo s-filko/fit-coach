@@ -208,3 +208,32 @@ describe('update-last-set.tool — setKind (set-kind plan D3, AC-SK-8)', () => {
     expect(content).toContain('(working)');
   });
 });
+
+// -------------------------------------------------------------------------
+// plan-and-tool-fixes T6 (AC-PTF-6): the Before/After lines render through the
+// shared set formatter — a bodyweight set is named "bodyweight", never raw JSON.
+// -------------------------------------------------------------------------
+
+describe('update-last-set.tool — Before/After rendering (AC-PTF-6)', () => {
+  it('renders Before/After through the shared formatter; a weight-0 correction names bodyweight', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.updateLastSet.mockResolvedValue({
+      exerciseId: EXERCISE_ID,
+      setNumber: 2,
+      before: {
+        setData: { type: 'strength', reps: 10, weight: 10, weightUnit: 'kg' },
+        rpe: null,
+        userFeedback: null,
+      },
+      after: { setData: { type: 'functional_reps', reps: 10 }, rpe: null, userFeedback: null },
+    });
+    const tool = buildUpdateLastSetTool({ trainingService }) as unknown as InvokableTool;
+
+    const result = (await tool.invoke({ exercise_id: EXERCISE_ID, weight: 0 }, makeConfig())) as ToolReturn;
+    const content = renderedContent(result);
+
+    expect(content).toContain('Before: 10 reps @ 10 kg.');
+    expect(content).toContain('After: 10 reps @ bodyweight.');
+    expect(content).not.toContain('{"reps"');
+  });
+});
