@@ -433,3 +433,32 @@ has no exported member 'formatToolCallLine'` (and `mergeSidecars`, `hitRateLine`
 - Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 193 passed, 193 total`,
   `Tests: 1936 passed, 1936 total`; flock `npm run test:scenarios` → `Test Suites: 27 passed, 27 total`,
   `Tests: 1 todo, 511 passed, 512 total`; judge `--dry-run` → `weight hit rate (T2) | 1 (1/1 judged, 0 unjudged)`.
+
+## Review
+
+Close-out review pass 1 (2026-10-08, four independent Opus zones — GLM was at its 5-hour limit, owner rule "GLM out →
+Anthropic"; scope: this plan's own files). **Verdict: blocked** until T3's live evidence is recorded.
+
+Blocking:
+
+1. `blocking | R2 | evals/lib/write-requests-sidecar.ts:94 | DRY | collectRunEvidence re-queries llm_calls` — closed in
+   `864a062c` (reuses `fetchRunTranscript` / `resolvePromptBlobs` / `describeSystemBlob`).
+2. `blocking | R2 | evals/scenarios/n-load-shared.ts:122 | DRY | copy of trainingSetupSteps + journey-B constants` —
+   closed in `864a062c`.
+3. `blocking | R2 | evals/scenarios/n-load-shared.ts:23 | DRY | catalog ids re-declared` — closed in `864a062c`.
+4. `blocking | R2 | evals/scenarios/n-load-shared.ts:109 | DRY | USER literal copied (FL_USER exists)` — closed in
+   `864a062c`.
+5. `blocking | R4 | coach-quality-proof.md:3 | SUPERPOWERS_INTEGRATION § Status layer | Status: planned while tasks ran`
+   — closed in `41cdf468`/`cb1319bf` (status in progress; bare Branch header; state.mjs --check OK).
+6. `blocking | R3 | coach-quality-proof.md:62 | SUPERPOWERS_INTEGRATION rule 2 | T3 acceptance has no recorded live
+   evidence` — **open**: the first live measurements lost their stored requests (jest DB resets between L3 runs) and
+   the judge prompt was truncated / lacked the system message (fixed in `e2c98f32`, `dc7a2114`, `0d58e933`); the
+   measurement is re-run on GLM v13 / v14 / v15 with whole-batch DB locking and run-time sidecars.
+
+Advisories fixed in `864a062c` (see § 3 table): judge exercise-name normalisation, unjudged ask steps counted, multipart
+content, sidecar merge, dead code, shared CLI args, parser moved next to the reporter, test-only export removed,
+README § L3, rubric and judge header, T4/AC-CQ-4 defined, report path. Remaining advisories → BACKLOG at close: the
+oracle omits BR-042 one-session growth, BR-036 ≤ 0 kg guard and BR-038 rebuild/restart tiers; assisted working-weight
+selection with two recurring loads; the prompt-version switch reads `process.env` directly (move to typed config if
+v14/v15 is accepted, or delete); the 799-line judge file. Owner-gated: `docs/PROMPT_EVAL_FRAMEWORK.md` § 5 (judge
+input/mechanism) and ADR-0013's ≤ 2 500-char pin for `phase.training` if v15 becomes the default.
