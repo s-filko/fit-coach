@@ -1,4 +1,5 @@
 import type { Scenario } from '../schema/scenario.schema';
+import { FL_USER } from './fl-shared';
 
 /**
  * Journey m — no false logging claim in plan_creation (coach-quality-proof T1 /
@@ -19,18 +20,7 @@ export const scenario: Scenario = {
   description:
     'in plan_creation, a reported set («сделал жим 60 на 10») is not logged and must not be claimed as logged (BUG-052, knownBug until fixed)',
   past: {
-    user: {
-      languageCode: 'ru',
-      timezone: 'Europe/Berlin',
-      firstName: 'Alex',
-      age: 30,
-      gender: 'male',
-      height: 180,
-      weight: 80,
-      fitnessLevel: 'intermediate',
-      fitnessGoal: 'strength',
-      registrationCompleted: true,
-    },
+    user: FL_USER,
     facts: [],
     workouts: [],
   },

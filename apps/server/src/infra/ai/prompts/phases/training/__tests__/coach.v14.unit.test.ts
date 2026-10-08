@@ -9,7 +9,7 @@
 import type { DirectiveContext } from '@infra/ai/prompts/types';
 
 import { TRAINING_COACH, type TrainingCoachContext } from '../coach';
-import { COACH_TEMPLATE_V13, deriveV14Template, TRAINING_COACH_V14 } from '../coach.v14';
+import { deriveV14Template, TRAINING_COACH_V14 } from '../coach.v14';
 
 /** The one changed line — the derivation needle (v13) and its replacement (v14). */
 export const V13_RULE =
@@ -56,7 +56,9 @@ describe('TRAINING_COACH_V14 (the progression candidate)', () => {
   });
 
   it('deriveV14Template fails loudly when the v13 needle is missing (stale derivation)', () => {
-    expect(() => deriveV14Template(COACH_TEMPLATE_V13.replace(V13_RULE, 'something else entirely'))).toThrow(/needle/);
+    expect(() => deriveV14Template(textOf(TRAINING_COACH).replace(V13_RULE, 'something else entirely'))).toThrow(
+      /needle/,
+    );
   });
 });
 

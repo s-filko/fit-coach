@@ -11,8 +11,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { parseTranscriptMarkdown } from '../judge/coach-quality-judge';
-
+import { closePool } from './cli-args';
+import { parseTranscriptMarkdown } from './transcript-parser';
 import { collectRunEvidence, writeRequestsSidecar } from './write-requests-sidecar';
 
 /** The distinct run ids a transcript md mentions (`run:` lines), in order. */
@@ -56,7 +56,7 @@ export async function backfillDir(dir: string, force: boolean): Promise<Backfill
       continue;
     }
     report.transcripts += 1;
-    // Keep the old sidecar when the rows are gone: only write what resolves.
+    // Rows that are gone are not written; writeRequestsSidecar merges into the old sidecar, never dropping entries.
     const resolvable: string[] = [];
     for (const runId of runIds) {
       report.runsTotal += 1;
@@ -99,12 +99,7 @@ async function main(): Promise<void> {
     }
   }
   console.log(`TOTAL runs resolved ${resolved}/${total}`);
-  try {
-    const { db } = await import('@infra/db/drizzle');
-    await db.$client?.end?.();
-  } catch {
-    // no pool opened
-  }
+  await closePool().catch(() => undefined);
 }
 
 if (process.argv[1]?.endsWith('backfill-requests-sidecars.ts')) {

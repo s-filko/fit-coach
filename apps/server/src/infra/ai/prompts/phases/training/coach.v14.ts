@@ -1,6 +1,4 @@
-import { COACH_TEMPLATE_V13, TRAINING_COACH, type TrainingCoachContext } from './coach';
-
-export { COACH_TEMPLATE_V13 };
+import { TRAINING_COACH, type TrainingCoachContext } from './coach';
 
 /**
  * v14 (coach-quality-proof T4 / AC-CQ-4, owner decision 2026-10-08 — «прогрессия веса попробуем через промпт»):

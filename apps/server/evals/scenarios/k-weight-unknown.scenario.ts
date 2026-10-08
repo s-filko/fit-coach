@@ -1,5 +1,5 @@
 import type { Scenario } from '../schema/scenario.schema';
-import { T1_SQUAT_ID, singleExercisePast, trainingSetupSteps } from './weight-logging-shared';
+import { SQUAT_ID, singleExercisePast, trainingSetupSteps } from './weight-logging-shared';
 
 /**
  * Journey k — the weight is unknown (coach-quality-proof T1 / AC-CQ-1,
@@ -18,7 +18,7 @@ export const scenario: Scenario = {
   description:
     'no history, «сделал 10» with no weight — the reps-only call is rejected by the schema (BR-TRAINING-047), nothing stored, the coach asks',
   past: singleExercisePast({
-    exerciseId: T1_SQUAT_ID,
+    exerciseId: SQUAT_ID,
     exerciseName: 'Barbell Back Squat',
     sessionKey: 'lower_a',
     sessionTitle: 'Lower A',
@@ -28,7 +28,7 @@ export const scenario: Scenario = {
   steps: [
     ...trainingSetupSteps(
       {
-        exerciseId: T1_SQUAT_ID,
+        exerciseId: SQUAT_ID,
         exerciseName: 'Barbell Back Squat',
         sessionKey: 'lower_a',
         sessionTitle: 'Lower A',
@@ -42,7 +42,7 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'сделал 10',
       script: [
-        { toolCall: { name: 'log_set', args: { exerciseId: T1_SQUAT_ID, reps: 10 } } },
+        { toolCall: { name: 'log_set', args: { exerciseId: SQUAT_ID, reps: 10 } } },
         { text: ASK_WEIGHT_TEXT },
       ],
       expect: {

@@ -6,14 +6,21 @@
  * exercised by the script's own --dry-run.
  */
 
-import { pickCoachCall, pickCoachContext, resolveSystemText } from '../../lib/write-requests-sidecar';
+import {
+  formatToolCallLine,
+  mergeSidecars,
+  pickCoachCall,
+  pickCoachContext,
+  resolveSystemText,
+} from '../../lib/write-requests-sidecar';
+import { parseTranscriptMarkdown } from '../../lib/transcript-parser';
 import type { NLoadExpectation } from '../../scenarios/n-load-shared';
 import {
   buildJudgePrompt,
+  hitRateLine,
   judgeReplyVia,
   parseJudgeVerdict,
   parseRequestsSidecar,
-  parseTranscriptMarkdown,
   summarizeRun,
   summarizeVerdicts,
   weightHit,
@@ -523,5 +530,84 @@ describe('system message evidence', () => {
     expect(at).toBeGreaterThan(-1);
     expect(prompt.indexOf('Client: Alex')).toBeGreaterThan(at);
     expect(prompt).toMatch(/fake clock|not the real date/);
+  });
+});
+
+// --- review pass 1: a naming slip is not a progression miss; unjudged asks are counted; multipart content ---
+
+describe('weightHit — the exercise match is normalised (case/whitespace), accepts the catalog id and aliases', () => {
+  const expectation: NLoadExpectation = {
+    scenarioId: 'n-load-up',
+    exercise: 'Barbell Bench Press',
+    exerciseId: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
+    aliases: ['жим лёжа', 'bench press'],
+    direction: 'up',
+    expectedKg: 82.5,
+    acceptableKg: [82.5],
+    reason: 'r',
+  };
+  const hitFor = (exercise: string | null): boolean =>
+    weightHit({ exercise, proposedKg: 82.5, asked: false, reasonStated: false }, expectation).hit;
+
+  it.each([
+    ['barbell  bench press'],
+    ['  BARBELL BENCH PRESS '],
+    ['Жим лёжа'],
+    ['bench press'],
+    ['c7b0899c-a0f9-47ca-a69d-4bcd531b0c95'],
+    [null],
+  ])('%p counts as the case exercise', name => {
+    expect(hitFor(name)).toBe(true);
+  });
+
+  it('another exercise still misses', () => {
+    expect(hitFor('Barbell Back Squat')).toBe(false);
+  });
+});
+
+describe('hitRateLine — unjudged ask steps are shown, not silently dropped', () => {
+  it('says judged/total, the rate and the unjudged count', () => {
+    expect(hitRateLine(3, 4, 2)).toBe('0.75 (3/4 judged, 2 unjudged)');
+  });
+
+  it('is explicit when nothing was judged', () => {
+    expect(hitRateLine(0, 0, 1)).toBe('n/a (0/0 judged, 1 unjudged)');
+  });
+});
+
+describe('formatToolCallLine — one formatter for sidecar and DB evidence', () => {
+  it('prints name and JSON args; missing args are {}', () => {
+    expect(formatToolCallLine({ name: 'log_set', args: { reps: 8 } })).toBe('log_set {"reps":8}');
+    expect(formatToolCallLine({ name: 'x' })).toBe('x {}');
+    expect(formatToolCallLine({})).toBe('? {}');
+  });
+});
+
+describe('pickCoachContext — multipart user content', () => {
+  it('reads a user message whose content is an array of text parts', () => {
+    const rows = [
+      {
+        callIndex: 0,
+        request: { messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }, { type: 'text', text: '<context>\nNOW\n</context>' }] }] },
+        response: null,
+      },
+    ];
+    expect(pickCoachContext(rows)).toContain('<context>');
+    expect(pickCoachCall(rows)).toBe(rows[0]);
+  });
+});
+
+describe('mergeSidecars — a regeneration never drops old entries', () => {
+  const old = { a: { requestContext: 'old-a', coachSystem: '', toolCalls: [] }, b: { requestContext: 'old-b', coachSystem: '', toolCalls: [] } };
+
+  it('keeps entries absent from the fresh set and replaces the ones present', () => {
+    const merged = mergeSidecars(old, { b: { requestContext: 'new-b', coachSystem: 'S', toolCalls: [] }, c: { requestContext: 'new-c', coachSystem: 'S', toolCalls: [] } });
+    expect(Object.keys(merged).sort()).toEqual(['a', 'b', 'c']);
+    expect((merged['b'] as { requestContext: string }).requestContext).toBe('new-b');
+  });
+
+  it('an error entry never overwrites a good old one', () => {
+    const merged = mergeSidecars(old, { a: { error: 'read failed' } });
+    expect((merged['a'] as { requestContext: string }).requestContext).toBe('old-a');
   });
 });

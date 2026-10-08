@@ -1,6 +1,10 @@
 import type { Scenario } from '../schema/scenario.schema';
 import { predictNextLoad, type OracleVerdict } from '../lib/weight-oracle';
 
+import { BENCH_PRESS_ID, SQUAT_ID } from './b-full-workout.scenario';
+import { FL_USER } from './fl-shared';
+import { trainingSetupSteps } from './weight-logging-shared';
+
 /**
  * The n-load-* journey family (coach-quality-proof T2 / AC-CQ-2): six seeded
  * history patterns, one exercise each, where the expected next load is
@@ -19,9 +23,7 @@ import { predictNextLoad, type OracleVerdict } from '../lib/weight-oracle';
  * and every scenario run is a fresh user.
  */
 
-/** Fixed test-catalog exercise IDs (src/app/test/setup.ts). */
-export const N_BENCH_PRESS_ID = 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95';
-export const N_SQUAT_ID = '3818f94a-0543-4241-83b4-6840d06a4e6a';
+/** The Gravitron's fixed test-catalog id (src/app/test/setup.ts); bench and squat come from journey B's exports. */
 export const N_GRAVITRON_ID = '6b1d2f39-8c47-4e5a-9d20-7f3a8b4c1e57';
 
 /** One seeded workout of a case's history (the scenario schema's strength sets). */
@@ -79,6 +81,9 @@ export function verdictOf(c: NLoadCase): OracleVerdict {
 export interface NLoadExpectation {
   scenarioId: string;
   exercise: string;
+  /** The catalog id and known spellings the judge may extract instead of the name (a slip is not a miss). */
+  exerciseId?: string;
+  aliases?: string[];
   direction: OracleVerdict['direction'];
   expectedKg: number | null;
   acceptableKg: number[];
@@ -86,6 +91,13 @@ export interface NLoadExpectation {
   holdWithReason?: number;
   reason: string;
 }
+
+/** Spellings a reply or the judge's extraction may use for the case exercises (lower/upper case is normalised). */
+const EXERCISE_ALIASES: Record<string, string[]> = {
+  'Barbell Bench Press': ['bench press', 'barbell bench', 'bench', 'жим лёжа', 'жим лежа', 'жим'],
+  'Barbell Back Squat': ['back squat', 'barbell squat', 'squat', 'присед', 'приседания', 'приседания со штангой'],
+  'Assisted Pull-ups (Gravitron)': ['assisted pull-ups', 'assisted pull-up', 'gravitron', 'гравитрон', 'подтягивания в гравитроне'],
+};
 
 /**
  * The T3 helper: {exercise, expectedKg | ask} per case, computed — the live
@@ -97,6 +109,8 @@ export function nLoadExpectations(): NLoadExpectation[] {
     return {
       scenarioId: c.id,
       exercise: c.exerciseName,
+      exerciseId: c.exerciseId,
+      aliases: EXERCISE_ALIASES[c.exerciseName] ?? [],
       direction: v.direction,
       expectedKg: v.expectedKg,
       acceptableKg: v.acceptableKg,
@@ -105,24 +119,6 @@ export function nLoadExpectations(): NLoadExpectation[] {
     };
   });
 }
-
-const USER: Scenario['past']['user'] = {
-  languageCode: 'ru',
-  timezone: 'Europe/Berlin',
-  firstName: 'Alex',
-  age: 30,
-  gender: 'male',
-  height: 180,
-  weight: 80,
-  fitnessLevel: 'intermediate',
-  fitnessGoal: 'strength',
-  registrationCompleted: true,
-};
-
-const GREETING_REQUEST = 'привет, хочу потренироваться';
-const GREETING_AND_TRANSITION_TEXT = 'Привет, Алекс! Отлично, давай подберём тренировку.';
-const PLANNING_FINAL_TEXT = 'Перешли к планированию. Какую группу сегодня нагружаем?';
-const LETS_GO = 'да, поехали';
 
 /** Builds the whole journey of one case: setup to training, the ask, the report. */
 export function nLoadScenarioOf(c: NLoadCase): Scenario {
@@ -145,7 +141,7 @@ export function nLoadScenarioOf(c: NLoadCase): Scenario {
     description: `${c.pattern} — the ask and the report turn; expected ${verdict.direction}` +
       (expectedKg != null ? ` ${expectedKg} kg (${verdict.reason})` : ` (${verdict.reason})`),
     past: {
-      user: USER,
+      user: FL_USER,
       facts: [],
       plan: {
         name: 'Single Exercise Progression',
@@ -164,59 +160,18 @@ export function nLoadScenarioOf(c: NLoadCase): Scenario {
       })),
     },
     steps: [
-      // --- step 0: greeting, chat → session_planning ---
-      {
-        action: 'user',
-        text: GREETING_REQUEST,
-        script: [
-          {
-            text: GREETING_AND_TRANSITION_TEXT,
-            toolCall: { name: 'request_transition', args: { toPhase: 'session_planning', reason: 'user wants to train' } },
-          },
-          { text: PLANNING_FINAL_TEXT },
-        ],
-        expect: {
-          tools: { must: ['request_transition'] },
-          delivered: { mustMatch: [PLANNING_FINAL_TEXT] },
-          persisted: { turnRecorded: true },
-          phaseAfter: { phase: 'session_planning' },
+      // --- steps 0-2: greeting → session_planning → start_training_session (+5m): the family's shared setup ---
+      ...trainingSetupSteps(
+        {
+          exerciseId: c.exerciseId,
+          exerciseName: c.exerciseName,
+          sessionKey: c.sessionKey,
+          sessionTitle: c.sessionTitle,
+          sets: 3,
+          reps: `${c.range.floor}-${c.range.top}`,
         },
-      },
-      // --- step 1: start_training_session with the plan exercise ---
-      {
-        action: 'user',
-        text: LETS_GO,
-        script: [
-          {
-            toolCall: {
-              name: 'start_training_session',
-              args: {
-                sessionKey: c.sessionKey,
-                sessionName: c.sessionTitle,
-                reasoning: 'The active plan has one session; the user is ready to start.',
-                exercises: [
-                  {
-                    exerciseId: c.exerciseId,
-                    exerciseName: c.exerciseName,
-                    targetSets: 3,
-                    targetReps: `${c.range.floor}-${c.range.top}`,
-                    restSeconds: 120,
-                  },
-                ],
-                estimatedDuration: 45,
-              },
-            },
-          },
-          { text: startFinalText },
-        ],
-        expect: {
-          tools: { must: ['start_training_session'] },
-          delivered: { mustMatch: ['Поехали!'] },
-          phaseAfter: { phase: 'training' },
-          persisted: { session: { key: c.sessionKey, status: 'in_progress', hasStartedAt: true } },
-        },
-      },
-      { action: 'advance', at: '+5m' },
+        startFinalText,
+      ),
       // --- step 3: the ask — the first training turn carries the History rows ---
       {
         action: 'user',
@@ -278,7 +233,7 @@ export const N_LOAD_CASES: NLoadCase[] = [
     id: 'n-load-up',
     pattern: 'all sets at the top of the range twice — one step up',
     exerciseName: 'Barbell Bench Press',
-    exerciseId: N_BENCH_PRESS_ID,
+    exerciseId: BENCH_PRESS_ID,
     sessionKey: 'upper_a',
     sessionTitle: 'Upper A',
     range: { floor: 8, top: 10 },
@@ -294,7 +249,7 @@ export const N_LOAD_CASES: NLoadCase[] = [
     reportReps: 10,
     todayRows: [
       'Previous workout: 2 days ago, Friday Sep 18 — Barbell Bench Press.',
-      `- Barbell Bench Press [id ${N_BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
+      `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
     ],
     historyRows: [
       'Barbell Bench Press (today 3×8-10)',
@@ -304,13 +259,13 @@ export const N_LOAD_CASES: NLoadCase[] = [
       'Trend Sep 12 → Sep 15 → Sep 18:',
       '- Loads used: 77.5, 80 kg.',
     ],
-    todayAfterReport: `- Barbell Bench Press [id ${N_BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 10×82.5`,
+    todayAfterReport: `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 10×82.5`,
   },
   {
     id: 'n-load-miss',
     pattern: 'a miss below the floor even by capacity — one step down',
     exerciseName: 'Barbell Back Squat',
-    exerciseId: N_SQUAT_ID,
+    exerciseId: SQUAT_ID,
     sessionKey: 'lower_a',
     sessionTitle: 'Lower A',
     range: { floor: 8, top: 10 },
@@ -326,7 +281,7 @@ export const N_LOAD_CASES: NLoadCase[] = [
     reportReps: 9,
     todayRows: [
       'Previous workout: 2 days ago, Friday Sep 18 — Barbell Back Squat.',
-      `- Barbell Back Squat [id ${N_SQUAT_ID}] — plan 3×8-10 — nothing yet`,
+      `- Barbell Back Squat [id ${SQUAT_ID}] — plan 3×8-10 — nothing yet`,
     ],
     historyRows: [
       'Barbell Back Squat (today 3×8-10)',
@@ -336,13 +291,13 @@ export const N_LOAD_CASES: NLoadCase[] = [
       'Trend Sep 12 → Sep 15 → Sep 18:',
       '- Loads used: 97.5, 100 kg.',
     ],
-    todayAfterReport: `- Barbell Back Squat [id ${N_SQUAT_ID}] — plan 3×8-10 — in progress: 9×97.5`,
+    todayAfterReport: `- Barbell Back Squat [id ${SQUAT_ID}] — plan 3×8-10 — in progress: 9×97.5`,
   },
   {
     id: 'n-load-early-stop',
     pattern: 'an early stop below the floor by reps but not by capacity (RPE ≤ 7) — hold',
     exerciseName: 'Barbell Bench Press',
-    exerciseId: N_BENCH_PRESS_ID,
+    exerciseId: BENCH_PRESS_ID,
     sessionKey: 'upper_a',
     sessionTitle: 'Upper A',
     range: { floor: 8, top: 10 },
@@ -358,7 +313,7 @@ export const N_LOAD_CASES: NLoadCase[] = [
     reportReps: 8,
     todayRows: [
       'Previous workout: 2 days ago, Friday Sep 18 — Barbell Bench Press.',
-      `- Barbell Bench Press [id ${N_BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
+      `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
     ],
     historyRows: [
       'Barbell Bench Press (today 3×8-10)',
@@ -368,13 +323,13 @@ export const N_LOAD_CASES: NLoadCase[] = [
       'Trend Sep 12 → Sep 15 → Sep 18:',
       '- Loads used: 77.5, 80 kg.',
     ],
-    todayAfterReport: `- Barbell Bench Press [id ${N_BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 8×80`,
+    todayAfterReport: `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 8×80`,
   },
   {
     id: 'n-load-break',
     pattern: 'a 3-week break — the return ladder, one step down (owner-unconfirmed alternative ~10 % lighter)',
     exerciseName: 'Barbell Back Squat',
-    exerciseId: N_SQUAT_ID,
+    exerciseId: SQUAT_ID,
     sessionKey: 'lower_a',
     sessionTitle: 'Lower A',
     range: { floor: 8, top: 10 },
@@ -389,7 +344,7 @@ export const N_LOAD_CASES: NLoadCase[] = [
     reportReps: 9,
     todayRows: [
       'Previous workout: 21 days ago, Sunday Aug 30 — Barbell Back Squat.',
-      `- Barbell Back Squat [id ${N_SQUAT_ID}] — plan 3×8-10 — nothing yet`,
+      `- Barbell Back Squat [id ${SQUAT_ID}] — plan 3×8-10 — nothing yet`,
     ],
     historyRows: [
       'Barbell Back Squat (today 3×8-10)',
@@ -398,13 +353,13 @@ export const N_LOAD_CASES: NLoadCase[] = [
       'Trend Aug 27 → Aug 30:',
       '- Loads used: 97.5, 100 kg.',
     ],
-    todayAfterReport: `- Barbell Back Squat [id ${N_SQUAT_ID}] — plan 3×8-10 — in progress: 9×97.5`,
+    todayAfterReport: `- Barbell Back Squat [id ${SQUAT_ID}] — plan 3×8-10 — in progress: 9×97.5`,
   },
   {
     id: 'n-load-uneven',
     pattern: 'an uneven drop-off — hold, neither growth nor a step down',
     exerciseName: 'Barbell Bench Press',
-    exerciseId: N_BENCH_PRESS_ID,
+    exerciseId: BENCH_PRESS_ID,
     sessionKey: 'upper_a',
     sessionTitle: 'Upper A',
     range: { floor: 8, top: 10 },
@@ -419,7 +374,7 @@ export const N_LOAD_CASES: NLoadCase[] = [
     reportReps: 10,
     todayRows: [
       'Previous workout: 2 days ago, Friday Sep 18 — Barbell Bench Press.',
-      `- Barbell Bench Press [id ${N_BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
+      `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
     ],
     historyRows: [
       'Barbell Bench Press (today 3×8-10)',
@@ -428,13 +383,13 @@ export const N_LOAD_CASES: NLoadCase[] = [
       'Trend Sep 13 → Sep 18:',
       '- Loads used: 80 kg.',
     ],
-    todayAfterReport: `- Barbell Bench Press [id ${N_BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 10×80`,
+    todayAfterReport: `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 10×80`,
   },
   {
     id: 'n-load-ask',
     pattern: 'no history — no number, the coach asks',
     exerciseName: 'Barbell Back Squat',
-    exerciseId: N_SQUAT_ID,
+    exerciseId: SQUAT_ID,
     sessionKey: 'lower_a',
     sessionTitle: 'Lower A',
     range: { floor: 8, top: 10 },
@@ -445,9 +400,9 @@ export const N_LOAD_CASES: NLoadCase[] = [
     reportText: 'ну, пусть 50 на 10',
     reportReps: 10,
     reportWeight: 50,
-    todayRows: [`- Barbell Back Squat [id ${N_SQUAT_ID}] — plan 3×8-10 — nothing yet`],
+    todayRows: [`- Barbell Back Squat [id ${SQUAT_ID}] — plan 3×8-10 — nothing yet`],
     historyRows: ['Barbell Back Squat (today 3×8-10)', '- no earlier record'],
-    todayAfterReport: `- Barbell Back Squat [id ${N_SQUAT_ID}] — plan 3×8-10 — in progress: 10×50`,
+    todayAfterReport: `- Barbell Back Squat [id ${SQUAT_ID}] — plan 3×8-10 — in progress: 10×50`,
     seenMustNot: ['Previous workout:', 'Loads used:'],
   },
   {

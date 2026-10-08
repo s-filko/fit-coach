@@ -1,5 +1,14 @@
 import type { Scenario } from '../schema/scenario.schema';
-import { BENCH_PRESS_ID, PULL_UPS_ID } from './b-full-workout.scenario';
+import {
+  BENCH_PRESS_ID,
+  GREETING_AND_TRANSITION_TEXT,
+  GREETING_REQUEST,
+  LETS_GO,
+  PLANNING_FINAL_TEXT,
+  PULL_UPS_ID,
+  SQUAT_ID,
+} from './b-full-workout.scenario';
+import { FL_USER } from './fl-shared';
 
 /**
  * The T1 weight-logging journeys (coach-quality-proof T1 / AC-CQ-1):
@@ -14,23 +23,8 @@ import { BENCH_PRESS_ID, PULL_UPS_ID } from './b-full-workout.scenario';
  * NOT part of this family yet.
  */
 
-/** The fixed test-catalog squat (src/app/test/setup.ts); bench and pull-ups come from journey B's exports. */
-export const T1_SQUAT_ID = '3818f94a-0543-4241-83b4-6840d06a4e6a';
-
-export { BENCH_PRESS_ID, PULL_UPS_ID };
-
-const USER: Scenario['past']['user'] = {
-  languageCode: 'ru',
-  timezone: 'Europe/Berlin',
-  firstName: 'Alex',
-  age: 30,
-  gender: 'male',
-  height: 180,
-  weight: 80,
-  fitnessLevel: 'intermediate',
-  fitnessGoal: 'strength',
-  registrationCompleted: true,
-};
+/** The fixed test-catalog exercises (src/app/test/setup.ts) come from journey B's exports. */
+export { BENCH_PRESS_ID, PULL_UPS_ID, SQUAT_ID };
 
 /** One planned exercise of the single-session active plan. */
 export interface PlannedExercise {
@@ -45,7 +39,7 @@ export interface PlannedExercise {
 /** A past with just the user and a one-exercise active plan (no seeded history). */
 export function singleExercisePast(p: PlannedExercise): Scenario['past'] {
   return {
-    user: USER,
+    user: FL_USER,
     facts: [],
     plan: {
       name: 'Single Exercise Plan',
@@ -60,11 +54,6 @@ export function singleExercisePast(p: PlannedExercise): Scenario['past'] {
     workouts: [],
   };
 }
-
-const GREETING_REQUEST = 'привет, хочу потренироваться';
-const GREETING_AND_TRANSITION_TEXT = 'Привет, Алекс! Отлично, давай подберём тренировку.';
-const PLANNING_FINAL_TEXT = 'Перешли к планированию. Какую группу сегодня нагружаем?';
-const LETS_GO = 'да, поехали';
 
 /**
  * The two setup steps every training journey of this family starts with

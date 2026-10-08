@@ -37,6 +37,7 @@ import {
   type CostRecord,
 } from './lib/cost-ledger';
 import { readQuota } from './lib/quota';
+import { argValue, closePool } from './lib/cli-args';
 import { runWithCleanup, type CleanupDeps } from './lib/run-cleanup';
 import { guardDecision, planCallCount } from './lib/run-guard';
 import { buildReport, type CheckResult, exitCodeFor, formatScenarioTranscript, printReport } from './lib/reporter';
@@ -46,17 +47,9 @@ const LEDGER_PATH = join(process.cwd(), 'evals', 'COST_LEDGER.md');
 /** AC-SM-2: every L3 run's per-step transcripts land here as <scenario>-<ISO>.md (gitignored). */
 const REPORTS_DIR = join(process.cwd(), 'evals', 'reports');
 
-function argValue(flag: string, fallback: string): string {
-  const index = process.argv.indexOf(flag);
-  return index >= 0 ? (process.argv[index + 1] ?? fallback) : fallback;
-}
-
 const realCleanupDeps: CleanupDeps = {
   disposeEmbeddings: disposeAllEmbeddingServices,
-  closePool: async () => {
-    const { pool } = await import('@infra/db/drizzle');
-    await pool.end();
-  },
+  closePool,
 };
 
 function ledgerText(): string {

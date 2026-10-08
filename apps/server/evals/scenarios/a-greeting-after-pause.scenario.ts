@@ -1,4 +1,5 @@
 import type { Scenario } from '../schema/scenario.schema';
+import { FL_USER } from './fl-shared';
 
 /**
  * Journey A — greeting after a pause, with past workouts
@@ -39,18 +40,7 @@ export const scenario: Scenario = {
   description:
     'BUG-018: "привет" after a 14 h pause — past workouts, a pending-save episode, one earlier exchange; the model greets and transitions to session_planning',
   past: {
-    user: {
-      languageCode: 'ru',
-      timezone: 'Europe/Berlin',
-      firstName: 'Alex',
-      age: 30,
-      gender: 'male',
-      height: 180,
-      weight: 80,
-      fitnessLevel: 'intermediate',
-      fitnessGoal: 'strength',
-      registrationCompleted: true,
-    },
+    user: FL_USER,
     plan: {
       name: 'Upper/Lower Split',
       sessions: [

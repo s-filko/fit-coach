@@ -7,12 +7,13 @@
  * (every jest DB suite resets the schema), so judging from the DB alone is
  * fragile; the sidecar is the durable copy.
  *
- * SELF-CONTAINED ON PURPOSE: this one file is copied verbatim into the
- * baseline-dev worktree, where the same run.ts wiring writes the same sidecar
- * for the baseline transcripts — no other module of this plan is needed
- * (everything below is dynamic imports + node:fs).
+ * It reuses the observability reader (fetchRunTranscript, resolvePromptBlobs) and the formatter's
+ * describeSystemBlob rather than re-querying; a baseline-dev worktree that copies this file with the same run.ts
+ * wiring needs those two modules (and evals/lib/cli-args.ts is NOT needed here) at the same revision.
  */
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+
+import { describeSystemBlob } from '@infra/observability/transcript-formatter';
 
 /** What the rubric needs for one run — nothing more. */
 export interface SidecarRunEvidence {
@@ -24,7 +25,7 @@ export interface SidecarRunEvidence {
   toolCalls: Array<{ name: string; args: unknown }>;
 }
 
-/** One stored model call of a run. */
+/** One stored model call of a run (a structural subset of transcript-reader's LlmCallRecord). */
 export interface StoredCall {
   callIndex: number;
   request: unknown;
@@ -33,11 +34,25 @@ export interface StoredCall {
 
 type RequestMessages = { messages?: Array<{ role: string; content?: unknown; contentHash?: unknown }> } | null;
 
-/** The userMessage of a stored request: its last `user` message with string content. */
+/** A message's text: a string as is, a multipart content (array of text parts) joined; null for anything else. */
+function textOfContent(content: unknown): string | null {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    const parts = content.map(part =>
+      typeof part === 'string' ? part : typeof (part as { text?: unknown })?.text === 'string' ? (part as { text: string }).text : '',
+    );
+    return parts.join('\n');
+  }
+  return null;
+}
+
+/** The last `user` message of a stored request, as text. */
 function lastUserContent(request: unknown): string | null {
   const messages = (request as RequestMessages)?.messages ?? [];
   const lastUser = [...messages].reverse().find(m => m.role === 'user');
-  return lastUser !== undefined && typeof lastUser.content === 'string' ? lastUser.content : null;
+  return lastUser === undefined ? null : textOfContent(lastUser.content);
 }
 
 /**
@@ -62,8 +77,8 @@ export function pickCoachContext(rows: readonly StoredCall[]): string {
 
 /**
  * The system message(s) of a stored request as text. llm_calls stores them as `{ contentHash }` pointing at
- * prompt_blobs (`blobs` = the resolved map, as print-transcript --payloads uses); a missing or pruned blob is
- * said in the text, never silently empty.
+ * prompt_blobs (`blobs` = the resolved map, as print-transcript --payloads uses); the hash → text step is the
+ * formatter's `describeSystemBlob`, so a missing or pruned blob is said in the text, never silently empty.
  */
 export function resolveSystemText(request: unknown, blobs: ReadonlyMap<string, string | null>): string {
   const messages = (request as RequestMessages)?.messages ?? [];
@@ -71,31 +86,28 @@ export function resolveSystemText(request: unknown, blobs: ReadonlyMap<string, s
     .filter(m => m.role === 'system')
     .map(m => {
       if (typeof m.contentHash === 'string') {
-        if (!blobs.has(m.contentHash)) {
-          return `(system prompt ${m.contentHash} not found in prompt_blobs)`;
-        }
-        return blobs.get(m.contentHash) ?? `(system prompt ${m.contentHash} aged out — retention pruned it)`;
+        const blob = describeSystemBlob(m.contentHash, blobs);
+        return 'content' in blob ? blob.content : blob.note;
       }
-      return typeof m.content === 'string' ? m.content : '';
+      return textOfContent(m.content) ?? '';
     })
     .join('\n\n');
 }
 
+/** One tool call as a text line — the one format the sidecar reader and the DB fallback share. */
+export function formatToolCallLine(call: { name?: unknown; args?: unknown }): string {
+  return `${String(call.name ?? '?')} ${JSON.stringify(call.args ?? {})}`;
+}
+
 /**
- * Collects one run's evidence from `llm_calls` (best effort — a read error
- * becomes `{ error }` in the sidecar, never a crash of the L3 run).
+ * Collects one run's evidence from `llm_calls` via the observability reader (the same rows and blob resolution
+ * print-transcript --payloads uses). A read error propagates; the caller records it as `{ error }`.
  */
 export async function collectRunEvidence(runId: string): Promise<SidecarRunEvidence> {
-  // Dynamic: importing the pool at module load would open a DB connection even
-  // where this module is only copied around.
-  const { db } = await import('@infra/db/drizzle');
-  const { llmCalls } = await import('@infra/db/schema');
-  const { eq } = await import('drizzle-orm');
-  const rows = (await db
-    .select({ callIndex: llmCalls.callIndex, request: llmCalls.request, response: llmCalls.response, promptHashes: llmCalls.promptHashes })
-    .from(llmCalls)
-    .where(eq(llmCalls.runId, runId))
-    .orderBy(llmCalls.callIndex)) as Array<StoredCall & { promptHashes: string[] | null }>;
+  // Dynamic: importing the reader at module load would open a DB connection even where this module is
+  // only copied around.
+  const { fetchRunTranscript, resolvePromptBlobs } = await import('@infra/observability/transcript-reader');
+  const { llmCalls: rows } = await fetchRunTranscript(runId);
 
   const toolCalls: Array<{ name: string; args: unknown }> = [];
   for (const row of rows) {
@@ -106,30 +118,50 @@ export async function collectRunEvidence(runId: string): Promise<SidecarRunEvide
   }
   const coach = pickCoachCall(rows);
   const requestContext = coach === undefined ? '' : (lastUserContent(coach.request) ?? '');
-  let coachSystem = '';
-  if (coach !== undefined) {
-    // The same resolution print-transcript --payloads uses.
-    const { resolvePromptBlobs } = await import('@infra/observability/transcript-reader');
-    const blobs = await resolvePromptBlobs([coach] as never);
-    coachSystem = resolveSystemText(coach.request, blobs);
-  }
+  const coachSystem = coach === undefined ? '' : resolveSystemText(coach.request, await resolvePromptBlobs([coach]));
   return { requestContext, coachSystem, toolCalls };
 }
 
+type SidecarFile = Record<string, SidecarRunEvidence | { error: string }>;
+
 /**
- * Writes `<transcriptPath>.requests.json` — `{ [runId]: evidence | { error } }`
- * for every distinct run id. Called by the L3 runner between the transcript
- * write and the next scenario; the judge reads the sidecar first and falls
- * back to the DB only when it is absent.
+ * Old entries plus fresh ones: a fresh entry replaces the old of the same run id, except an `{ error }` never
+ * overwrites a good entry; entries absent from `fresh` are kept — a regeneration never drops evidence.
+ */
+export function mergeSidecars(old: SidecarFile, fresh: SidecarFile): SidecarFile {
+  const merged: SidecarFile = { ...old };
+  for (const [runId, entry] of Object.entries(fresh)) {
+    if ('error' in entry && merged[runId] !== undefined && !('error' in merged[runId]!)) {
+      continue;
+    }
+    merged[runId] = entry;
+  }
+  return merged;
+}
+
+/**
+ * Writes `<transcriptPath>.requests.json` — `{ [runId]: evidence | { error } }` for every distinct run id,
+ * merged into an existing sidecar of the same transcript (never dropping its entries). Called by the L3 runner
+ * between the transcript write and the next scenario; the judge reads the sidecar first and falls back to the
+ * DB only when it is absent.
  */
 export async function writeRequestsSidecar(transcriptPath: string, runIds: readonly string[]): Promise<void> {
-  const sidecar: Record<string, SidecarRunEvidence | { error: string }> = {};
+  const fresh: SidecarFile = {};
   for (const runId of new Set(runIds)) {
     try {
-      sidecar[runId] = await collectRunEvidence(runId);
+      fresh[runId] = await collectRunEvidence(runId);
     } catch (err) {
-      sidecar[runId] = { error: err instanceof Error ? err.message : String(err) };
+      fresh[runId] = { error: err instanceof Error ? err.message : String(err) };
     }
   }
-  writeFileSync(`${transcriptPath}.requests.json`, JSON.stringify(sidecar, null, 2));
+  const path = `${transcriptPath}.requests.json`;
+  let old: SidecarFile = {};
+  if (existsSync(path)) {
+    try {
+      old = JSON.parse(readFileSync(path, 'utf8')) as SidecarFile;
+    } catch {
+      old = {};
+    }
+  }
+  writeFileSync(path, JSON.stringify(mergeSidecars(old, fresh), null, 2));
 }

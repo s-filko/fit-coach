@@ -1,4 +1,5 @@
 import type { Scenario } from '../schema/scenario.schema';
+import { FL_USER } from './fl-shared';
 
 /**
  * Journey g — a greeting after an open session (coach-quality-proof T1 /
@@ -18,18 +19,7 @@ export const scenario: Scenario = {
   description:
     'BUG-053: «привет» three days after a workout left in_progress — the session auto-closes (timeout), chat greets, no continuation of the old workout',
   past: {
-    user: {
-      languageCode: 'ru',
-      timezone: 'Europe/Berlin',
-      firstName: 'Alex',
-      age: 30,
-      gender: 'male',
-      height: 180,
-      weight: 80,
-      fitnessLevel: 'intermediate',
-      fitnessGoal: 'strength',
-      registrationCompleted: true,
-    },
+    user: FL_USER,
     facts: [],
     plan: {
       name: 'Upper/Lower Split',

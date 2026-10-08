@@ -61,21 +61,36 @@ function formatCallLine(c: LlmCallRecord): string {
  * repeats of its own system prompt. First reference prints it in full; every later one, anywhere in
  * this run, points back to it instead.
  */
+/**
+ * What a system message's `contentHash` resolves to in `prompt_blobs`: the content, or a note saying what
+ * happened to it — never an empty string. The one resolution print-transcript and the eval judge share.
+ */
+export function describeSystemBlob(
+  contentHash: string,
+  blobs: ReadonlyMap<string, string | null>,
+): { content: string } | { note: string } {
+  if (!blobs.has(contentHash)) {
+    return { note: `[hash ${contentHash} — not found in prompt_blobs]` };
+  }
+  const content = blobs.get(contentHash);
+  if (content === null || content === undefined) {
+    return { note: `[payload aged out — retention pruned this prompt, hash ${contentHash}]` };
+  }
+  return { content };
+}
+
 function formatRequestMessage(m: RequestMessage, blobs: Map<string, string | null>, seenHashes: Set<string>): string {
   if (m.role === 'system' && m.contentHash) {
     const { contentHash } = m;
-    if (!blobs.has(contentHash)) {
-      return `      [system] [hash ${contentHash} — not found in prompt_blobs]`;
-    }
-    const content = blobs.get(contentHash);
-    if (content === null) {
-      return `      [system] [payload aged out — retention pruned this prompt, hash ${contentHash}]`;
+    const blob = describeSystemBlob(contentHash, blobs);
+    if ('note' in blob) {
+      return `      [system] ${blob.note}`;
     }
     if (seenHashes.has(contentHash)) {
       return `      [system] [same prompt as shown earlier, hash ${contentHash}]`;
     }
     seenHashes.add(contentHash);
-    return `      [system] ${content}`;
+    return `      [system] ${blob.content}`;
   }
   const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? null);
   return `      [${m.role}] ${text}`;

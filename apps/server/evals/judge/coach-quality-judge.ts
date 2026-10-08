@@ -6,10 +6,13 @@
  * Per coach reply of an L3 run it assembles the evidence — the delivered text
  * and the run's tool calls from the L3 transcript (evals/reports/
  * <scenario>-<ISO>.md, reporter.formatScenarioTranscript's format, which
- * carries the run id), plus the stored request of the run's last model call
- * (the `<transcript>.requests.json` sidecar the L3 runner writes right after
+ * carries the run id), plus what the COACH call saw: its resolved system
+ * message (profile, rules) and its user message with the `<context>` block —
+ * the last call carrying one, not simply the last stored call (the
+ * `<transcript>.requests.json` sidecar the L3 runner writes right after
  * each scenario — evals/lib/write-requests-sidecar.ts; llm_calls is only the
- * fallback, its rows die at every jest DB reset on this host) — and asks a
+ * fallback, its rows die at every jest DB reset on this host). The prompt also
+ * says the clock is the request's fake clock, not the real date. It asks a
  * judge CLI (env JUDGE_CMD, default `claude-glm -p --model glm-5.3`) for ONE
  * JSON verdict on the fixed rubric (evals/rubrics/coach-quality.md). Bad JSON
  * is retried exactly once.
@@ -31,95 +34,13 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
-import { collectRunEvidence } from '../lib/write-requests-sidecar';
+import { argValue, closePool } from '../lib/cli-args';
+import { parseTranscriptMarkdown, type ParsedTranscript, type TranscriptStep } from '../lib/transcript-parser';
+import { collectRunEvidence, formatToolCallLine } from '../lib/write-requests-sidecar';
+import { BENCH_PRESS_ID } from '../scenarios/b-full-workout.scenario';
 import { nLoadExpectations, type NLoadExpectation } from '../scenarios/n-load-shared';
 
 // --- the pure core (unit-tested) ---------------------------------------------------------------
-
-/** One user step of an L3 transcript, as the judge needs it. */
-export interface TranscriptStep {
-  stepIndex: number;
-  userText: string;
-  delivered: string;
-  tools: string[];
-  runId: string | null;
-  phase: string | null;
-}
-
-export interface ParsedTranscript {
-  scenarioId: string;
-  steps: TranscriptStep[];
-}
-
-/** `coach: ` lines are prefixed with 7 spaces on continuation (reporter.withContinuation). */
-const COACH_PAD = ' '.repeat('coach: '.length);
-
-/**
- * Parses one `<scenario>-<ISO>.md` L3 transcript. Only `#N user:` steps come
- * out; advance steps, check lines and the trailing summary are not the judge's
- * concern. Delivered multi-line text is re-joined without the padding.
- */
-export function parseTranscriptMarkdown(md: string): ParsedTranscript {
-  const lines = md.split('\n');
-  // Real L3 files open with run.ts's `# L3 transcript: <id> (<stamp>)` header
-  // line; the `## <scenarioId>` marker sits below it — take its first match.
-  const scenarioId = lines.map(line => /^## (.+)$/.exec(line)?.[1]).find(id => id !== undefined) ?? '';
-  const steps: TranscriptStep[] = [];
-  let current: { step: TranscriptStep; coachLines: string[] } | null = null;
-  const finishCoach = (): void => {
-    if (current !== null && current.coachLines.length > 0) {
-      current.step.delivered = current.coachLines.join('\n');
-    }
-    current = null;
-  };
-  for (const line of lines.slice(1)) {
-    const userMatch = /^#(\d+) user: ?(.*)$/.exec(line);
-    if (userMatch !== null) {
-      finishCoach();
-      current = {
-        step: {
-          stepIndex: Number(userMatch[1]),
-          userText: userMatch[2] ?? '',
-          delivered: '',
-          tools: [],
-          runId: null,
-          phase: null,
-        },
-        coachLines: [],
-      };
-      steps.push(current.step);
-      continue;
-    }
-    if (current === null) {
-      continue;
-    }
-    if (line.startsWith('coach: ')) {
-      const text = line.slice('coach: '.length);
-      current.coachLines.push(text === '(no delivered text)' ? '' : text);
-      continue;
-    }
-    if (line.startsWith(COACH_PAD)) {
-      current.coachLines.push(line.slice(COACH_PAD.length));
-      continue;
-    }
-    if (line.startsWith('tools: ')) {
-      const names = line.slice('tools: '.length);
-      current.step.tools = names === '(none)' ? [] : names.split(', ').map(n => n.trim()).filter(n => n !== '');
-      continue;
-    }
-    if (line.startsWith('run: ')) {
-      current.step.runId = line.slice('run: '.length).trim();
-      continue;
-    }
-    if (line.startsWith('phase: ')) {
-      current.step.phase = line.slice('phase: '.length).trim();
-      finishCoach();
-      continue;
-    }
-  }
-  finishCoach();
-  return { scenarioId, steps };
-}
 
 /** The T2 extraction the rubric asks for alongside the scores. */
 export interface WeightExtraction {
@@ -222,6 +143,22 @@ export interface WeightHitResult {
   detail: string;
 }
 
+const normalizeName = (name: string): string => name.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** A naming slip is not a progression miss: case/whitespace-insensitive match on the name, the catalog id or an alias. */
+function exerciseMatches(extracted: string, expectation: NLoadExpectation): boolean {
+  const wanted = [expectation.exercise, expectation.exerciseId ?? '', ...(expectation.aliases ?? [])]
+    .filter(n => n !== '')
+    .map(normalizeName);
+  return wanted.includes(normalizeName(extracted));
+}
+
+/** The weight-hit-rate cell: judged hits over judged asks, with the asks the judge could not judge said aloud. */
+export function hitRateLine(hits: number, judged: number, unjudged: number): string {
+  const rate = judged > 0 ? String(hits / judged) : 'n/a';
+  return `${rate} (${hits}/${judged} judged, ${unjudged} unjudged)`;
+}
+
 /**
  * The T2 weight-hit computation: the judge's extraction against the oracle's
  * expectation for the same case. `ask` expects the coach to ask (BR-TRAINING-036:
@@ -229,7 +166,7 @@ export interface WeightHitResult {
  * load must be one the rules allow (acceptableKg).
  */
 export function weightHit(extraction: WeightExtraction, expectation: NLoadExpectation): WeightHitResult {
-  if (extraction.exercise !== null && extraction.exercise !== expectation.exercise) {
+  if (extraction.exercise !== null && !exerciseMatches(extraction.exercise, expectation)) {
     return {
       scenarioId: expectation.scenarioId,
       exercise: expectation.exercise,
@@ -373,11 +310,6 @@ const STUB_VERDICT: JudgeVerdict = {
   note: 'stub verdict (dry run)',
 };
 
-function argValue(flag: string, fallback: string): string {
-  const index = process.argv.indexOf(flag);
-  return index >= 0 ? (process.argv[index + 1] ?? fallback) : fallback;
-}
-
 /** One reply's evidence handed to the judge. */
 export interface Evidence {
   scenarioId: string;
@@ -510,12 +442,6 @@ function isNLoadAskStep(scenarioId: string, userText: string, expectations: NLoa
   return expectation !== undefined && /вес/i.test(userText) ? expectation : null;
 }
 
-interface LlmCallRow {
-  callIndex: number;
-  request: unknown;
-  response: unknown;
-}
-
 /** The judge-side view of one run's sidecar entry. */
 export interface SidecarEvidence {
   requestContext: string;
@@ -547,7 +473,7 @@ export function parseRequestsSidecar(raw: string): Map<string, SidecarEvidence> 
     const e = entry as { requestContext?: unknown; coachSystem?: unknown; toolCalls?: unknown };
     const calls = Array.isArray(e.toolCalls)
       ? e.toolCalls
-          .map((c: { name?: unknown; args?: unknown }) => `${String((c as { name?: unknown }).name ?? '?')} ${JSON.stringify((c as { args?: unknown }).args ?? {})}`)
+          .map((c: { name?: unknown; args?: unknown }) => formatToolCallLine(c))
           .join('\n')
       : '';
     out.set(runId, {
@@ -572,7 +498,7 @@ async function loadRunEvidence(runId: string): Promise<SidecarEvidence> {
     return {
       requestContext: stored.requestContext || '(stored request unavailable)',
       coachSystem: stored.coachSystem,
-      toolCallsWithArgs: stored.toolCalls.map(c => `${c.name} ${JSON.stringify(c.args ?? {})}`).join('\n'),
+      toolCallsWithArgs: stored.toolCalls.map(formatToolCallLine).join('\n'),
     };
   } catch {
     return { requestContext: '(stored request unavailable)', coachSystem: '', toolCallsWithArgs: '' };
@@ -590,7 +516,7 @@ const DRY_RUN_STEP = (stepIndex: number, userText: string, delivered: string, to
 
 const DRY_RUN_CONTEXT = [
   '# Today (sets as reps×kg)',
-  '- Barbell Bench Press [id c7b0899c-a0f9-47ca-a69d-4bcd531b0c95] — plan 3×8-10 — nothing yet',
+  `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
   '# History (before today)',
   'Barbell Bench Press (today 3×8-10)',
   '- 2 days ago, Friday Sep 18: 10×80, 10×80, 10×80 (all RPE 8)',
@@ -673,6 +599,7 @@ async function main(): Promise<number> {
   writeFileSync(verdictsPath, '');
   const runReplies: Array<RunReply & { evidence: Evidence; outcome: JudgementOutcome; raw?: string }> = [];
   const hits: WeightHitResult[] = [];
+  let unjudgedAsks = 0;
   let totalSteps = 0;
 
   for (const input of inputs) {
@@ -706,10 +633,13 @@ async function main(): Promise<number> {
       const record = { file: input.file, scenarioId: input.parsed.scenarioId, stepIndex: step.stepIndex, evidence, outcome };
       runReplies.push(record);
       appendFileSync(verdictsPath, `${JSON.stringify({ ...record, evidence: undefined })}\n`);
+      const expectation = isNLoadAskStep(input.parsed.scenarioId, step.userText, expectations);
       if ('unjudged' in outcome) {
+        if (expectation !== null) {
+          unjudgedAsks += 1; // an ask the judge could not read is not a hit nor a miss — but it is counted
+        }
         continue; // one refused or mangled reply never aborts the run
       }
-      const expectation = isNLoadAskStep(input.parsed.scenarioId, step.userText, expectations);
       if (expectation !== null) {
         hits.push(weightHit(outcome.verdict.extraction, expectation));
       }
@@ -718,13 +648,14 @@ async function main(): Promise<number> {
 
   const summary = summarizeRun(runReplies, totalSteps);
   const judged = runReplies.filter((r): r is typeof r & { outcome: { verdict: JudgeVerdict; raw: string; usedFallback: boolean } } => !('unjudged' in r.outcome));
-  const hitRate = hits.length > 0 ? hits.filter(h => h.hit).length / hits.length : 0;
+  const hitCount = hits.filter(h => h.hit).length;
   writeFileSync(
     join(outDir, `coach-quality-${stamp}.json`),
     JSON.stringify(
       {
         summary,
         weightHits: hits,
+        unjudgedAsks,
         replies: judged.map(j => ({
           file: j.file,
           scenarioId: j.scenarioId,
@@ -758,7 +689,7 @@ async function main(): Promise<number> {
     `| honest (rate) | ${fmt(summary.means.honestRate)} |`,
     `| coaching logic (0–2, mean) | ${fmt(summary.means.coachingLogicMean)} |`,
     `| brevity (rate) | ${fmt(summary.means.brevityRate)} |`,
-    `| weight hit rate (T2) | ${hitRate} (${hits.filter(h => h.hit).length}/${hits.length}) |`,
+    `| weight hit rate (T2) | ${hitRateLine(hitCount, hits.length, unjudgedAsks)} |`,
     '',
     '## Honesty failures (every one quoted)',
     ...(summary.means.honestyFailures.length > 0
@@ -790,8 +721,7 @@ if (process.argv[1]?.endsWith('coach-quality-judge.ts')) {
 async function runWithPoolClosed(task: () => Promise<number>): Promise<void> {
   const code = await task();
   try {
-    const { db } = await import('@infra/db/drizzle');
-    await db.$client?.end?.();
+    await closePool();
   } catch {
     // no pool was opened (dry run) — nothing to close
   }

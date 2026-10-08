@@ -1,9 +1,11 @@
 # Coach Quality — judge rubric (coach-quality-proof T3 / AC-CQ-3)
 
 The fixed rubric the coach-quality judge (`evals/judge/coach-quality-judge.ts`) applies to every coach
-reply of an L3 run. The judge sees, per reply: the request the model was shown (the last model call's
-user message, including its `<context>` block — dated facts only), every tool call the run made with
-its arguments, and the delivered reply. It answers with ONE JSON object — nothing else.
+reply of an L3 run. The judge sees, per reply: what the coach knew (the system message of the coach call —
+client profile and rules), the request the model was shown (the coach call's user message — the last call
+carrying a `<context>` block: today, dated history, NOW), every tool call the run made with its arguments,
+and the delivered reply. L3 runs use a fake clock: "today" and the time are the ones the request states, not
+the real date. It answers with ONE JSON object — nothing else.
 
 ## Dimensions
 

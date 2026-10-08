@@ -70,7 +70,7 @@ Verify: scripted layer pins that the LOAD PLAN row is present in the request for
   friendly/supportive (0–2), honest — every number and claim matches the request's data and the run's tool calls (0/1,
   with the offending span), coaching logic — the advice follows from the history and LOAD PLAN (0–2), brevity (0–1),
   plus the T2 extraction. Opus spot-check on 10 % of replies → agreement rate.
-- Report `evals/reports/2026-10-08-coach-quality.md` (committed; transcripts stay gitignored): per journey pass/fail per
+- Report `docs/superpowers/reports/2026-10-08-coach-quality.md` (committed; the folder is created when the report exists; transcripts and judge output stay gitignored under `evals/reports/`): per journey pass/fail per
   assertion, per-sample variance, weight hit rate (T2) with every miss quoted, rubric means and every honesty failure
   quoted, baseline vs candidate, and the judge agreement rate.
 
@@ -78,6 +78,20 @@ Acceptance (the proof): scripted layer green; live — no honesty failure on the
 T2 asks with every miss explained; friendliness mean ≥ 1.5; no regression vs the dev baseline beyond its min–max
 spread. A miss is a finding: it goes to `BUGS.md` with the exact request span (cause first, `prompt-doctor` rules), not
 into a prompt patch inside this plan.
+
+### T4 — Weight progression through the training prompt (AC-CQ-4)
+
+The T3 measurement showed the coach holding a load the history says to raise or lower (v13's only load rule anchors every
+try to a load already used). Per owner decision 2026-10-08 the fix is tried through the prompt, as `prompt-doctor`
+candidates selected by `PROMPT_VERSION_TRAINING` (v13 stays the default and the baseline, byte-identical):
+v14 (the progression principle replaces the load rule) and v15 (load vs reps: after a miss holding the load with a lower
+rep target and a stated reason is a legitimate choice). The weight oracle and the judge treat the miss as that choice.
+
+Acceptance (the proof): a candidate is accepted only if, over ≥ 3 samples per journey on GLM, the growth hit rate and
+the miss-choice hit rate (step down, or hold with a stated reason) beat v13 beyond v13's min–max spread, and no guard
+journey (the T3 set outside `n-load`) gets worse beyond its baseline spread. Otherwise revert and report; two failed
+candidates stop the work (`prompt-doctor` rule). The measurement report is committed at
+`docs/superpowers/reports/2026-10-08-coach-quality.md` (with T3's).
 
 ## 2. Close
 
@@ -389,3 +403,33 @@ progression principle)**. The sentence replaced: 125 → 313 chars.
   has no exported member 'pickCoachCall'`.
 - Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 192 passed, 192 total`,
   `Tests: 1921 passed, 1921 total`.
+
+### Close-out review pass 1 — Opus-zone findings fixed (worker, 2026-10-08)
+
+Every item is **fixed in the commit titled `… (coach-quality-proof review)`** (its hash is quoted in the worker report).
+Red first, recorded: `coach-quality-judge.unit.test.ts(10,3): error TS2305: Module '"../../lib/write-requests-sidecar"'
+has no exported member 'formatToolCallLine'` (and `mergeSidecars`, `hitRateLine`, `NLoadExpectation.exerciseId`,
+`../transcript-parser`, `describeSystemBlob` — six TS errors before any code).
+
+| # | Finding | Fix | Class search |
+|---|---|---|---|
+| R2-1 (blocking) | `collectRunEvidence` re-queried `llm_calls`; `as never` cast; `resolveSystemText` copied the formatter's hash resolution | uses `fetchRunTranscript().llmCalls` + `resolvePromptBlobs`; the formatter exports `describeSystemBlob` (the one hash→blob step, used by `formatRequestMessage` too) | grepped `llmCalls`/`as never` in `evals/**`: no other re-query |
+| R2-2 (blocking) | n-load-shared copied `trainingSetupSteps` + greeting constants | n-load uses `trainingSetupSteps`; constants come from `b-full-workout.scenario.ts` (also dropped from `weight-logging-shared.ts`) | grepped the greeting/go texts: only `smoke.scenario.ts` (own plan, its own journey) and `tests/integration/.../bug-042-…` (outside `evals/**`) still hold literals — left, listed here |
+| R2-3 (blocking) | `N_BENCH_PRESS_ID` / `N_SQUAT_ID` / `T1_SQUAT_ID` re-declared catalog ids | one source: `BENCH_PRESS_ID`, `PULL_UPS_ID`, new `SQUAT_ID` in `b-full-workout.scenario.ts`; also `fl-e-advisory-plan.scenario.ts` and the judge's dry-run context now import them | grepped the three uuids in `evals/` + `tests/`: remaining hits are `src/app/test/setup.ts` (the seed itself) and two unit tests in `tests/unit/` (outside ownership) |
+| R2-4 (blocking) | `USER` literal copied in n-load-shared, weight-logging-shared, g, m | all use `FL_USER` from `fl-shared.ts` (also `a` and `b`, identical) | `smoke.scenario.ts` keeps its own user on purpose (age 32, `en`, different story) |
+| R3 | weightHit exercise match exact | normalised (case/whitespace) and matches the catalog id or an alias list per case (`NLoadExpectation.exerciseId/aliases`) | one matcher (`exerciseMatches`) for every case |
+| R3 | unjudged n-load ask steps dropped silently | counted; hit-rate line `x/y judged, z unjudged` (`hitRateLine`), `unjudgedAsks` in the JSON | — |
+| R3 | `lastUserContent` ignored multipart content | reads an array of text parts (`textOfContent`, also for system messages) | both the user and the system reader use it |
+| R3 | backfill dropped old sidecar entries | `writeRequestsSidecar` merges via `mergeSidecars` (an `{error}` never overwrites a good entry) | the L3 runner path goes through the same merge |
+| R2 | dead `LlmCallRow`; `argValue`/`closePool` copied; two tool-call line formats | removed; `evals/lib/cli-args.ts` (`argValue`, `closePool`) used by run.ts, ledger.ts, export.ts, the judge, the backfill (4 copies → 1); `formatToolCallLine` | grepped `function argValue` and `pool.end` in `evals/` |
+| R1 | `parseTranscriptMarkdown` lived in the judge | moved to `evals/lib/transcript-parser.ts` (next to `reporter.ts`); judge and backfill import it | — |
+| — | `COACH_TEMPLATE_V13` export | removed from `coach.ts`/`coach.v14.ts`; the v14 test uses `TRAINING_COACH.render` | grepped: no other user |
+| R4 | docs | `evals/datasets/README.md` § L3 (n-load, new-journeys, sidecar, judge, `backfill:sidecars`, `PROMPT_VERSION_TRAINING`, `EVALS_FULL_RUN`), rubric intro, judge header; plan § 1 defines T4 / AC-CQ-4 and the report location `docs/superpowers/reports/2026-10-08-coach-quality.md` (folder created when the report exists) | — |
+
+- **Owner-gated (durable docs, not edited):** `docs/PROMPT_EVAL_FRAMEWORK.md` and ADR-0013 — the judge/sidecar/prompt-version
+  workflow and the `PROMPT_VERSION_TRAINING` switch belong there; the owner decides.
+- Note for the baseline-dev worktree: `write-requests-sidecar.ts` is no longer self-contained — a copy needs the
+  observability reader and the formatter's `describeSystemBlob` at the same revision.
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 193 passed, 193 total`,
+  `Tests: 1936 passed, 1936 total`; flock `npm run test:scenarios` → `Test Suites: 27 passed, 27 total`,
+  `Tests: 1 todo, 511 passed, 512 total`; judge `--dry-run` → `weight hit rate (T2) | 1 (1/1 judged, 0 unjudged)`.

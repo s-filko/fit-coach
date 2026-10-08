@@ -1,4 +1,4 @@
-import { formatRunTranscript, formatTranscripts } from '../transcript-formatter';
+import { describeSystemBlob, formatRunTranscript, formatTranscripts } from '../transcript-formatter';
 import type { LlmCallRecord, RunSummary, RunTranscript, TurnRecord } from '../transcript-reader';
 
 const T0 = new Date('2026-09-21T09:00:00.000Z');
@@ -340,5 +340,15 @@ describe('formatTranscripts (multi-run)', () => {
     expect(out.match(/RULES: shared static block\./g)).toHaveLength(1);
     expect(out).toContain('=== RUN run-a ===');
     expect(out).toContain('=== RUN run-b ===');
+  });
+});
+
+describe('describeSystemBlob — the one hash → prompt_blobs resolution', () => {
+  it('returns the content, or a note that says what happened to the blob', () => {
+    expect(describeSystemBlob('h1', new Map([['h1', 'text']]))).toEqual({ content: 'text' });
+    expect(describeSystemBlob('h2', new Map([['h2', null]]))).toEqual({
+      note: '[payload aged out — retention pruned this prompt, hash h2]',
+    });
+    expect(describeSystemBlob('h3', new Map())).toEqual({ note: '[hash h3 — not found in prompt_blobs]' });
   });
 });
