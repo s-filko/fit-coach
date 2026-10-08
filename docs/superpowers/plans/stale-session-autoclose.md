@@ -295,7 +295,7 @@ Suites after the fixes (`957a5593`): check-all 0 errors; unit 1840/1840; integra
 ### T4 — spec texts applied (orchestrator, 2026-10-08)
 
 Owner-approved in chat 2026-10-08 ("в остальном ок" for auto-close; "ок" for edit_last_workout). Applied:
-`docs/domain/training.spec.md` INV-TRAINING-005, BR-TRAINING-011, BR-TRAINING-030 (rewritten for edit_last_workout),
+`docs/domain/training.spec.md` INV-TRAINING-005, BR-TRAINING-011, BR-TRAINING-049 (sets added to a finished workout; BR-TRAINING-030 kept unchanged — it still defines in-progress retro-logging),
 new BR-TRAINING-048 (048, not 047: `plan/plan-and-tool-fixes` adds 047); `docs/features/FEAT-0010-training-session-management.md`
 S-0114, AC-0207, BR-TRAINING-024 (no scheduled job). ADR-0013 needs no amendment: the close now executes in commit
 (review pass 2, item R1). Owner-gated, not applied: ADR-0011 (training correction tool set) does not list
