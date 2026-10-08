@@ -1,10 +1,9 @@
 /**
- * Stale session auto-close (BUG-053, stale-session-autoclose plan T1 / AC-SSA-1):
- * `prepare` closes an in_progress session idle past SESSION_TIMEOUT_MS at the
- * user's next message — through the training service's timeout auto-close — and
- * routes THIS message to chat with no canned reply (the chat agent answers the
- * user's words itself, unlike the `session_ended` short-circuit). A planning
- * session and a fresh in_progress session are untouched.
+ * Stale session auto-close (BUG-053, stale-session-autoclose plan T1 / AC-SSA-1, review R1):
+ * `prepare` DETECTS an in_progress session idle past SESSION_TIMEOUT_MS and requests the close
+ * as a transition to chat (reason 'session_timeout') routed to `commit` with no canned reply —
+ * the session-completion side effect is commit's (the session lifecycle handler, ADR-0013 §4.1),
+ * never prepare's. A planning session and a fresh in_progress session are untouched.
  */
 import type { AIMessage, BaseMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
@@ -73,19 +72,16 @@ function sessionIdle(idleMs: number, status = 'in_progress') {
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 describe('prepare — stale session auto-close (BUG-053, AC-SSA-1)', () => {
-  it('in_progress idle 3 days → closed through the service timeout path, message routed to chat, no catalog AIMessage', async () => {
+  it('in_progress idle 3 days → a session_timeout transition to chat goes to commit; prepare closes nothing, no catalog AIMessage', async () => {
     const autoClose = jest.fn().mockResolvedValue(undefined);
     const { goto, update, aiText } = outcomeOf(
       await buildPrepare(jest.fn().mockResolvedValue(sessionIdle(THREE_DAYS_MS)), autoClose)(trainingState, configOf()),
     );
 
-    expect(autoClose).toHaveBeenCalledTimes(1);
-    expect(autoClose).toHaveBeenCalledWith('u1');
-    expect(goto).toBe('route');
-    expect(update.phase).toBe('chat');
-    expect(update.activeSessionId).toBeNull();
-    // The transition is a direct phase write (like the registration sync), not a pendingTransition.
-    expect(update.pendingTransition).toBeNull();
+    expect(autoClose).not.toHaveBeenCalled();
+    expect(goto).toBe('commit');
+    expect(update.pendingTransition).toEqual({ toPhase: 'chat', reason: 'session_timeout' });
+    expect(update.phase).toBeUndefined();
     expect(aiText).toBe('');
   });
 
@@ -130,13 +126,5 @@ describe('prepare — stale session auto-close (BUG-053, AC-SSA-1)', () => {
     expect(goto).toBe('route');
     expect(update.phase).toBeUndefined();
     expect(update.activeSessionId).toBeUndefined();
-  });
-
-  it('a failed close propagates (infrastructure failure, nothing committed)', async () => {
-    const failing = jest.fn().mockRejectedValue(new Error('database unavailable'));
-
-    await expect(
-      buildPrepare(jest.fn().mockResolvedValue(sessionIdle(THREE_DAYS_MS)), failing)(trainingState, configOf()),
-    ).rejects.toThrow('database unavailable');
   });
 });

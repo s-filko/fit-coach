@@ -11,6 +11,13 @@ export interface TransitionRequest {
   reason?: string;
 }
 
+/**
+ * The reason of the transition `prepare` requests when it finds an in_progress session idle past
+ * the timeout (INV-TRAINING-005): commit's session lifecycle handler performs the timeout
+ * auto-close, and the run hands off to chat in the same run to answer the user's message.
+ */
+export const SESSION_TIMEOUT_REASON = 'session_timeout';
+
 /** Today's guard matrix, verbatim (BR-CONV-015). */
 export const TRANSITION_MATRIX: Readonly<Record<ConversationPhase, readonly ConversationPhase[]>> = {
   registration: ['chat', 'plan_creation'],

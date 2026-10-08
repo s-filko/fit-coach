@@ -360,6 +360,12 @@ describe.each([
       expect(open).toEqual([]);
     });
 
+    it('review R3: the Pull-ups row (a skipped D7 row at the close) is completed once it gained its sets', () => {
+      const rows = upperASessionOf(9).exercises;
+      expect(rows.find(ex => ex.exercise.name === 'Pull-ups')?.status).toBe('completed');
+      expect(rows.find(ex => ex.exercise.name === 'Barbell Bench Press')?.status).toBe('completed');
+    });
+
     it('the catch-up sets carry RETRO timestamps: last activity + 5 min, inside the pre-pause window', () => {
       const session = upperASessionOf(9);
       const pullUpSets = session.exercises.find(ex => ex.exercise.name === 'Pull-ups')?.sets ?? [];

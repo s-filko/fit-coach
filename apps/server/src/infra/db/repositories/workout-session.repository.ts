@@ -290,7 +290,14 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     const [session] = await db
       .select()
       .from(workoutSessions)
-      .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.status, 'completed')))
+      // completed_at NULL would sort FIRST on DESC: a completed row without a date is not "the latest".
+      .where(
+        and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.status, 'completed'),
+          isNotNull(workoutSessions.completedAt),
+        ),
+      )
       .orderBy(desc(workoutSessions.completedAt))
       .limit(1);
 

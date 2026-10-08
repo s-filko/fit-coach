@@ -380,6 +380,12 @@ export class TrainingService implements ITrainingService {
           setKind,
         });
 
+    // A row that gains its first set in a finished workout ends `completed` (the reconcilePlanItems
+    // rule: sets > 0 → completed) — a `skipped` row from the finish reconciliation included.
+    if (opts.finishedSession && sessionExercise.status !== 'completed') {
+      await this.sessionExerciseRepo.update(sessionExercise.id, { status: 'completed' });
+    }
+
     return { set, setNumber: set.setNumber, autoCompleted };
   }
 
@@ -556,6 +562,11 @@ export class TrainingService implements ITrainingService {
     }
 
     await this.sessionSetRepo.deleteById(target.id);
+
+    // The reconcilePlanItems rule for a finished workout: a row that lost its last set ends `skipped`.
+    if (session.status === 'completed' && sessionExercise.sets.length === 1) {
+      await this.sessionExerciseRepo.update(sessionExercise.id, { status: 'skipped' });
+    }
 
     return {
       exerciseId,

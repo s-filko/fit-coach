@@ -14,7 +14,7 @@ import { RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { buildEditLastWorkoutTool } from '@infra/ai/tools/edit-last-workout.tool';
 import { toToolMessage } from '@infra/ai/tools/outcome';
 import { db } from '@infra/db/drizzle';
-import { workoutSessions } from '@infra/db/schema';
+import { sessionExercises, workoutSessions } from '@infra/db/schema';
 
 import { buildRealTrainingService } from '../../helpers/training-service';
 import { createTestUserData } from '../../shared/test-factories';
@@ -128,5 +128,50 @@ describe('edit_last_workout (BUG-053 T5, AC-SSA-5) — integration', () => {
 
     const sets = (await service.getSessionDetails(sessionId))!.exercises.find(e => e.exerciseId === bench)!.sets;
     expect(sets).toHaveLength(3);
+  });
+
+  const statusOf = async (sessionId: string, exId: string) =>
+    (await service.getSessionDetails(sessionId))!.exercises.find(e => e.exerciseId === exId)!.status;
+
+  it('review R3: adding a set to a skipped row (finish reconciliation) makes it completed', async () => {
+    const { userId, sessionId } = await userWithFinishedWorkout('skipped_row');
+    const pullUps = await exerciseId('Pull-ups');
+    const [row] = await db
+      .insert(sessionExercises)
+      .values({ sessionId, exerciseId: pullUps, orderIndex: 1, status: 'skipped' })
+      .returning();
+    expect(row!.status).toBe('skipped');
+
+    await callTool(userId, { action: 'add', exerciseId: pullUps, reps: 8 });
+
+    expect(await statusOf(sessionId, pullUps)).toBe('completed');
+  });
+
+  it('review R3: deleting the last set of an exercise in a finished workout makes its row skipped; other rows keep their status', async () => {
+    const { userId, sessionId, bench } = await userWithFinishedWorkout('delete_last');
+    const pullUps = await exerciseId('Pull-ups');
+    await callTool(userId, { action: 'add', exerciseId: pullUps, reps: 8 });
+    expect(await statusOf(sessionId, pullUps)).toBe('completed');
+
+    await callTool(userId, { action: 'delete', exerciseId: pullUps, setNumber: 1 });
+
+    expect(await statusOf(sessionId, pullUps)).toBe('skipped');
+    expect(await statusOf(sessionId, bench)).toBe('completed');
+    // a set still left on the row: the status stays
+    await callTool(userId, { action: 'delete', exerciseId: bench, setNumber: 2 });
+    expect(await statusOf(sessionId, bench)).toBe('completed');
+  });
+
+  it('review R3: findLastCompletedByUserId ignores a completed session without completed_at (NULLs sort first on DESC)', async () => {
+    const { userId, sessionId } = await userWithFinishedWorkout('null_completed');
+    const broken = await service.startSession(userId, {});
+    await db
+      .update(workoutSessions)
+      .set({ status: 'completed', completedAt: null })
+      .where(eq(workoutSessions.id, broken.id));
+
+    const last = await service.getLastFinishedSession(userId);
+
+    expect(last?.id).toBe(sessionId);
   });
 });

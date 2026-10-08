@@ -1,8 +1,8 @@
 /**
  * `chat.context` v2 (BUG-053, stale-session-autoclose plan T3 / AC-SSA-3): the recent-sessions
  * list states the fact that a workout was closed automatically — `closed automatically after
- * inactivity` on a `auto_close_reason = 'timeout'` line, nothing on any other (a reopened
- * session that finished again carries no auto-close reason, so it shows no marker). Facts only;
+ * inactivity` on a `auto_close_reason = 'timeout'` line, nothing on any other (a
+ * session finished by the user carries no auto-close reason, so it shows no marker). Facts only;
  * without a timeout-closed session the render is v1 byte for byte.
  */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';

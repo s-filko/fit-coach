@@ -103,6 +103,43 @@ describe('TrainingService.logSetWithContext — finishedSession (AC-SSA-5)', () 
   });
 });
 
+describe('review R3 — row statuses of a finished workout', () => {
+  it('a set added to a skipped row makes the row completed', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockSessionSetRepo, mockExerciseRepo } =
+      createMocks();
+    const session = finishedSession();
+    session.exercises[0]!.status = 'skipped';
+    session.exercises[0]!.sets = [];
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(session);
+    mockExerciseRepo.findById.mockResolvedValue({ id: EX_ID, equipment: 'barbell' } as never);
+    mockSessionSetRepo.create.mockResolvedValue(makeSessionSet({ id: 'set-n', setNumber: 1 }));
+
+    await trainingService.logSetWithContext('session-1', {
+      exerciseId: EX_ID,
+      setData: { type: 'strength', reps: 6, weight: 55, weightUnit: 'kg' },
+      finishedSession: true,
+    });
+
+    expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-bench', { status: 'completed' });
+  });
+
+  it("deleting the last set of a completed session's row makes it skipped; a row with sets left keeps its status", async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
+    const session = finishedSession();
+    session.exercises[0]!.sets = [session.exercises[0]!.sets[0]!];
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(session);
+
+    await trainingService.deleteSet('session-1', EX_ID, 1);
+
+    expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-bench', { status: 'skipped' });
+
+    mockSessionExerciseRepo.update.mockClear();
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(finishedSession());
+    await trainingService.deleteSet('session-1', EX_ID, 2);
+    expect(mockSessionExerciseRepo.update).not.toHaveBeenCalled();
+  });
+});
+
 describe('TrainingService.updateLastSet — setNumber (AC-SSA-5)', () => {
   it('updates the named set instead of the last one', async () => {
     const { trainingService, mockSessionRepo, mockSessionSetRepo } = createMocks();

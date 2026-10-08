@@ -20,7 +20,7 @@
  * longer than 1 means the SAME thing, from its own vantage point).
  */
 import type { ConversationPhase } from '@domain/conversation/phases';
-import { evaluateTransition, type TransitionRequest } from '@domain/conversation/transitions';
+import { evaluateTransition, SESSION_TIMEOUT_REASON, type TransitionRequest } from '@domain/conversation/transitions';
 
 /**
  * The hand-off tool-result wording (D-5, close-out review Blocking 3): one
@@ -39,7 +39,13 @@ export function isAcceptedHandoff(
   pendingTransition: TransitionRequest | null | undefined,
   alreadyHopped: boolean,
 ): boolean {
-  if (alreadyHopped || !pendingTransition || !handoffTargets.has(pendingTransition.toPhase) || phase === undefined) {
+  if (alreadyHopped || !pendingTransition || phase === undefined) {
+    return false;
+  }
+  // Review R1 (INV-TRAINING-005): the stale-session close always hands off — the user's message
+  // is answered by the target phase in the same run, whatever TRANSITION_HANDOFF_TARGETS says.
+  const forced = pendingTransition.reason === SESSION_TIMEOUT_REASON;
+  if (!forced && !handoffTargets.has(pendingTransition.toPhase)) {
     return false;
   }
   const verdict = evaluateTransition({

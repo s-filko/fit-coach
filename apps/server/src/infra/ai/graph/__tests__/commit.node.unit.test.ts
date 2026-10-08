@@ -240,6 +240,24 @@ describe('hand-off loop (transition-handoff plan Task 2, D-1/D-3, AC-TH-1/AC-TH-
     expect(result.pendingTransition).toBeNull();
   });
 
+  it("review R1: a session_timeout transition to chat hops with the flag off — the user's message is answered in the same run", async () => {
+    const { node, recordRun } = makeDeps([]);
+    const { config } = makeConfig();
+
+    const result = await node(
+      stateOf({
+        phase: 'training',
+        activeSessionId: 's-stale',
+        pendingTransition: { toPhase: 'chat', reason: 'session_timeout' },
+      }),
+      config as never,
+    );
+
+    expect((config.context as { hopping?: boolean }).hopping).toBe(true);
+    expect(recordRun).not.toHaveBeenCalled();
+    expect(result.phase).toBe('chat');
+  });
+
   it('flag off (no transitionHandoffTargets): never hops even for the same target', async () => {
     const { node, recordRun } = makeDeps([]);
     const { config } = makeConfig();

@@ -27,16 +27,6 @@ export function isStale(session: Pick<TimedSession, 'lastActivityAt' | 'updatedA
 }
 
 /**
- * BUG-053 (INV-TRAINING-005): the moment an in_progress session's idleness is measured from for
- * the lazy auto-close at the user's next message — the last activity (`lastActivityOf`'s fallback
- * chain). A finished workout is edited in place (`edit_last_workout`), never reopened, so no other
- * base exists. Kept apart from `isStale` so the auto-close rule has one named home.
- */
-export function autoCloseIdleSince(session: Pick<TimedSession, 'lastActivityAt' | 'updatedAt' | 'createdAt'>): Date {
-  return lastActivityOf(session);
-}
-
-/**
  * BUG-043: a set is retro-logged (catch-up on a workout that already happened) only when the session
  * has been idle past the timeout AND already holds sets. A session with no sets never began — the
  * first set after a long gap is a late start, so it is live.

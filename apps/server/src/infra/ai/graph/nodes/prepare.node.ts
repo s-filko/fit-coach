@@ -4,13 +4,18 @@
  * dead training states straight to commit (D-E — one path for every phase
  * change that is a conversation transition; the registration ↔ chat sync is
  * not a transition and stays a direct write).
+ *
+ * Stale-session case (BUG-053, INV-TRAINING-005): an in_progress training session idle past the
+ * timeout is detected here and closed as a `session_timeout` transition to chat that commit
+ * executes (session lifecycle handler) and hands off — prepare itself completes nothing.
  */
 import { AIMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { Command, END } from '@langchain/langgraph';
 
+import { SESSION_TIMEOUT_REASON } from '@domain/conversation/transitions';
 import type { ITrainingService } from '@domain/training/ports';
-import { autoCloseIdleSince, SESSION_TIMEOUT_MS } from '@domain/training/session-timing';
+import { isStale } from '@domain/training/session-timing';
 import type { IUserService } from '@domain/user/ports';
 
 import type { CourseCheckStep } from '@infra/ai/course-check/course-check.step';
@@ -67,11 +72,8 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
     // sync so every path (including the short-circuits) carries its updates.
     const compactUpdates = await compact(state, config);
 
-    // Training phase — check whether the active session has ended, and close a
-    // stale one at the user's next message (INV-TRAINING-005, BUG-053): an
-    // in_progress session idle longer than SESSION_TIMEOUT_MS (idle from
-    // `autoCloseIdleSince`) is completed through the timeout auto-close path
-    // before the phase runs; a planning session is untouched.
+    // Training phase — check whether the active session has ended, or has gone stale
+    // (INV-TRAINING-005, BUG-053); a planning session is untouched.
     if (state.phase === 'training' && state.activeSessionId) {
       // A REJECTED read is an infrastructure failure, not a domain fact: it propagates (the run
       // adapter records it and throws a typed error → HTTP status + code, ADR-0013 §6) and commits
@@ -96,25 +98,23 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
         });
       }
 
-      // BUG-053 (INV-TRAINING-005): the stale session closes here — status
-      // 'completed', auto_close_reason 'timeout', completed_at = the last
-      // activity (INV-TRAINING-006). The message itself is answered by chat:
-      // like the registration sync below, this is a direct phase write (the
-      // conversation moved on while the user was away, so this is a state
-      // sync, not a conversation transition), and NO canned reply rides along —
-      // the chat agent answers the user's words.
-      if (
-        session &&
-        session.status === 'in_progress' &&
-        now.getTime() - autoCloseIdleSince(session).getTime() > SESSION_TIMEOUT_MS
-      ) {
-        await trainingService.autoCloseTimedOutSessions(userId);
+      // BUG-053 (INV-TRAINING-005): an in_progress session idle past the timeout is closed at the
+      // user's next message. prepare only DETECTS it (ADR-0013 §4.1): the close is a transition to
+      // chat that commit executes (session lifecycle handler → timeout auto-close) and hands off,
+      // so chat answers the user's words in this same run — no canned reply rides along.
+      if (session.status === 'in_progress' && isStale(session, now)) {
         log.info(
           { userId, sessionId: state.activeSessionId, lastActivityAt: session.lastActivityAt },
-          'Stale session auto-closed — answering in chat',
+          'Stale session — closing at commit, answering in chat',
         );
-        updates.phase = 'chat';
-        updates.activeSessionId = null;
+        return new Command({
+          goto: 'commit',
+          update: {
+            ...updates,
+            ...compactUpdates,
+            pendingTransition: { toPhase: 'chat', reason: SESSION_TIMEOUT_REASON },
+          },
+        });
       }
     }
 
