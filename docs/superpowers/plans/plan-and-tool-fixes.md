@@ -97,7 +97,7 @@ Do:
   confirmation.
 - `update_last_set` with `weight: 0` on a `strength` set → converts it to `functional_reps` with the same reps
   (mirror of the existing D15 conversion at `training.service.ts:481-490`).
-- Reps-only without a weight keeps the D15 carry-over unchanged.
+- Reps-only without a weight keeps the D15 carry-over unchanged. *(Superseded by T5 and T6: no carry-over; reps without a weight are rejected, BR-TRAINING-047.)*
 
 Verify: unit tests next to the existing D15 ones (`log-set.carry-over.unit.test.ts` and the service's
 `update_last_set` tests): weighted pull-up 10 kg, then `log_set` reps 8 weight 0 → functional_reps 8, no carry;
@@ -323,6 +323,14 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
 - `npm run test:integration` → 55/55 suites, 660 passed + 1 todo.
 - `npm run test:scenarios` → 23/23 suites, 392 passed + 1 todo.
 
+### § 2 close suites after T6 (orchestrator, `2081d474` + `f78ca5db`, from `apps/server`)
+
+- `npm run check-all` → 0 errors; `npm run test:unit` → 182/182 suites, 1818/1818 tests (at `f78ca5db`).
+- `flock … npm run test:integration` → 55/55 suites, 660 passed + 1 todo (at `2081d474`).
+- `flock … npm run test:scenarios` → 23/23 suites, 392 passed + 1 todo (at `2081d474` and again at `f78ca5db`).
+- Journey B pinned the pre-T6 `8 reps` rendering; fixed in `2081d474` (`8×bodyweight`).
+- Live evidence for T1–T6 after T5/T6: plan `coach-quality-proof` journeys i–n and b (report in that plan).
+
 ## Review
 
 Close-out review 2026-10-04 (orchestrator; four independent Opus zones R1–R4 over `git diff $(merge-base origin/dev)...HEAD`
@@ -380,6 +388,25 @@ R4 advisories (closed in the plan text, same commit): T3 marked superseded; live
 check; stale pointers in § 3 and this section corrected; title no longer says "carry-over tails". Open advisory: the
 `log_set` description says only "Omit for bodyweight exercises" — the meaning of `weight: 0` is visible nowhere to the
 model (a tool-description change → `prompt-doctor`, see the inventory).
+
+**Pass 4** (2026-10-08, after T6; four independent zones run as subagents by a GLM reviewer session — owner order
+2026-10-08, GLM accent; (D) instead of Opus; raw findings `data/investigations/2026-10-08-review-ptf-pass4.md`, local).
+Closures of passes 1–3 re-verified by search: all hold. Blocking:
+
+8. `blocking | R3/R4 | apps/server/src/infra/ai/tools/log-set.tool.ts:154,183 | BR-TRAINING-047 | the tool description
+   still taught "For bodyweight exercises: provide reps only." / "Omit for bodyweight exercises." — exactly the calls the
+   T6 refine rejects` — closed in `f78ca5db` (T6 texts step 1, a tool-contract fix: "provide reps and weight 0 (no
+   external load)", "Weight in kilograms (kg); required with reps. 0 = no external load (a bodyweight set).").
+9. `blocking | R4 | docs/domain/training.spec.md:40 | BR-TRAINING-040 + SUPERPOWERS_INTEGRATION rule 7 | "a reps-only call
+   on an isometric exercise is stored as given" (owner-approved 2026-10-01) is false after T6 — the refine rejects every
+   reps-without-weight call, isometric included; BR-040 and BR-047 conflict` — **open, owner-gated.** Proposed: amend
+   BR-TRAINING-040's last clause to "a reps call on an isometric exercise carries a weight like any reps call
+   (BR-TRAINING-047)".
+
+Pass-4 advisories → BACKLOG § plan-and-tool-fixes close-out review advisories (appended): the port still offers
+`update`/`archive` around BR-046; `set-format.ts` is now a shared tool-reply module living under prompts/blocks; the
+bodyweight classification is repeated in `session-planning-recent-history.v1.ts:30`; that line mixes `8x80kg` with
+`8×bodyweight`; ADR-0011 Fix 6a still describes `update_last_set` as a plain merge; FEAT-0008 AC-0203 (pass 2, owner).
 
 Decisions:
 
