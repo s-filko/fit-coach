@@ -446,20 +446,20 @@ bodyweight classification is repeated in `session-planning-recent-history.v1.ts:
 
 10. `blocking | R2/R1 | apps/server/src/infra/ai/tools/log-set.tool.ts (resolveTargetExercise + findById) | duplicated catalog-row
     step | the weight_mode rule lived in the tool and re-read the catalog row that TrainingService already resolves
-    (applyPerHand, ensureCurrentExercise)` — fixed in @@SHA@@: the decision moved into `TrainingService.shapeSetData`
+    (applyPerHand, ensureCurrentExercise)` — fixed in 6082ad93: the decision moved into `TrainingService.shapeSetData`
     (ex-`applyPerHand`) on the row it reads once — `required` + reps without a weight → `WeightRequiredError`
     (`<exercise>: weight is required`, mapped by the tool's catch to `llmError`), `optional` without a weight →
     `functional_reps`, `none` → no weight stored; `resolveTargetExercise`, the tool's `exerciseRepository` dependency
     and its wiring are gone; one catalog read per `log_set`. The tool passes `weightOmitted` (reps without weight).
     Tool texts unchanged.
-11. `fix | update_last_set ignored weight_mode` — fixed in @@SHA@@: on a `none` exercise no weight is stored (no `weight`
+11. `fix | update_last_set ignored weight_mode` — fixed in 6082ad93: on a `none` exercise no weight is stored (no `weight`
     key in cardio setData either).
-12. `fix | Ab Coaster` — fixed in @@SHA@@: `optional` via `deriveWeightMode(category, equipment, exerciseType)` (a reps-only
+12. `fix | Ab Coaster` — fixed in 6082ad93: `optional` via `deriveWeightMode(category, equipment, exerciseType)` (a reps-only
     machine movement) and a backfill UPDATE in the same `0024` migration.
-13. `fix | tests` — fixed in @@SHA@@: a required exercise reached by `exerciseName` is rejected on the resolved row
+13. `fix | tests` — fixed in 6082ad93: a required exercise reached by `exerciseName` is rejected on the resolved row
     (one `findById`, by the resolved id); a reps call on an `optional` exercise stores a bodyweight set; the
     weight-mode integration test derives expected values from `deriveWeightMode` (plus anchors).
-14. `fix | docs` — fixed in @@SHA@@: T6's blanket rule marked superseded by T7; § 0 rule 3 names T7's migration and
+14. `fix | docs` — fixed in 6082ad93: T6's blanket rule marked superseded by T7; § 0 rule 3 names T7's migration and
     BR-047/BR-040 as owner-approved exceptions; § 2a step 4 has a T7 live-check line; BR-TRAINING-047 `none` wording
     = "cardio or no equipment (e.g. jump rope): no weight" (the only edit in `docs/domain/training.spec.md`).
 
