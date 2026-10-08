@@ -12,6 +12,7 @@ import {
   pickCoachCall,
   pickCoachContext,
   resolveSystemText,
+  toolCallsOfRows,
 } from '../../lib/write-requests-sidecar';
 import { parseTranscriptMarkdown } from '../../lib/transcript-parser';
 import type { NLoadExpectation } from '../../scenarios/n-load-shared';
@@ -24,6 +25,7 @@ import {
   summarizeRun,
   summarizeVerdicts,
   weightHit,
+  withStepTools,
   type Evidence,
   type JudgeSpawn,
   type JudgeVerdict,
@@ -609,5 +611,51 @@ describe('mergeSidecars — a regeneration never drops old entries', () => {
   it('an error entry never overwrites a good old one', () => {
     const merged = mergeSidecars(old, { a: { error: 'read failed' } });
     expect((merged['a'] as { requestContext: string }).requestContext).toBe('old-a');
+  });
+});
+
+// --- coach-quality-proof merge: the judge checks a "logged" claim against EVERY model call of the run, and the
+// honesty dimension judges claims of fact and action, not recommended numbers ---
+
+describe('toolCallsOfRows — every model call of the run, not only the coach call', () => {
+  const coachRequest = { messages: [{ role: 'user', content: 'hi\n<context>\n# Today\n</context>' }] };
+  const otherRequest = { messages: [{ role: 'user', content: 'a tool-loop continuation' }] };
+  const rows = [
+    { callIndex: 0, request: otherRequest, response: { toolCalls: [{ name: 'log_set', args: { reps: 8, weight: 80 } }] } },
+    { callIndex: 1, request: coachRequest, response: { toolCalls: null } },
+    { callIndex: 2, request: otherRequest, response: { toolCalls: [{ name: 'edit_last_workout', args: { action: 'add' } }] } },
+  ];
+
+  it('lists the tool calls of all calls in call order, including those the coach call did not make', () => {
+    expect(toolCallsOfRows(rows)).toEqual([
+      { name: 'log_set', args: { reps: 8, weight: 80 } },
+      { name: 'edit_last_workout', args: { action: 'add' } },
+    ]);
+  });
+});
+
+describe('withStepTools — a tool the transcript names stays visible when the stored calls lack it', () => {
+  it('appends a name-only line for a step tool missing from the stored lines, keeps the rest', () => {
+    const lines = withStepTools('log_set {"reps":8}', ['log_set', 'edit_last_workout']);
+    expect(lines).toBe('log_set {"reps":8}\nedit_last_workout (arguments not stored)');
+  });
+
+  it('is the stored lines unchanged when every step tool is present', () => {
+    expect(withStepTools('log_set {"reps":8}', ['log_set'])).toBe('log_set {"reps":8}');
+  });
+});
+
+describe('the rubric — honesty judges claims, not recommendations', () => {
+  const rubric = readFileSync(join(process.cwd(), 'evals', 'rubrics', 'coach-quality.md'), 'utf8');
+  const honest = rubric.slice(rubric.indexOf('### honest'), rubric.indexOf('### coaching logic'));
+
+  it('says recommended numbers (warm-up loads, durations, suggested weights) are coaching logic, not honesty', () => {
+    expect(honest).toMatch(/recommended|suggested/i);
+    expect(honest).toMatch(/warm-up/i);
+    expect(honest).toMatch(/coaching logic/i);
+  });
+
+  it('judges a claimed action against ALL the run\'s tool calls', () => {
+    expect(honest).toMatch(/EVERY model call/);
   });
 });

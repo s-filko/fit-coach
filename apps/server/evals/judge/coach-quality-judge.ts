@@ -325,6 +325,17 @@ export interface Evidence {
   toolCallsWithArgs: string;
 }
 
+/**
+ * The run's tool-call lines plus a name-only line for every tool the transcript names for the step but the
+ * stored lines lack (an old or partial sidecar): a "logged" claim is judged against the run's full tool list.
+ */
+export function withStepTools(toolCallsWithArgs: string, stepTools: readonly string[]): string {
+  const lines = toolCallsWithArgs === '' ? [] : toolCallsWithArgs.split('\n');
+  const stored = new Set(lines.map(line => line.split(' ')[0]));
+  const missing = [...new Set(stepTools)].filter(name => !stored.has(name));
+  return [...lines, ...missing.map(name => `${name} (arguments not stored)`)].join('\n');
+}
+
 export function buildJudgePrompt(evidence: Evidence, rubric: string): string {
   return [
     rubric,
@@ -345,7 +356,7 @@ export function buildJudgePrompt(evidence: Evidence, rubric: string): string {
     evidence.requestContext,
     '```',
     '',
-    '## The run\'s tool calls (name + arguments)',
+    '## The run\'s tool calls (name + arguments) — every model call of the run, not only the coach call',
     '```',
     evidence.toolCallsWithArgs === '' ? '(none)' : evidence.toolCallsWithArgs,
     '```',
@@ -629,6 +640,7 @@ async function main(): Promise<number> {
         evidence.coachSystem = stored.coachSystem;
         evidence.toolCallsWithArgs = stored.toolCallsWithArgs;
       }
+      evidence.toolCallsWithArgs = withStepTools(evidence.toolCallsWithArgs, step.tools);
       const outcome = judgeReplyVia(evidence, rubric, cliSpawn, judgeCmd, fallbackCmd);
       const record = { file: input.file, scenarioId: input.parsed.scenarioId, stepIndex: step.stepIndex, evidence, outcome };
       runReplies.push(record);

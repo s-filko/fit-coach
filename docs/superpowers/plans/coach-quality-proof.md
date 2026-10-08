@@ -453,6 +453,23 @@ has no exported member 'formatToolCallLine'` (and `mergeSidecars`, `hitRateLine`
   `Tests: 1936 passed, 1936 total`; flock `npm run test:scenarios` → `Test Suites: 27 passed, 27 total`,
   `Tests: 1 todo, 511 passed, 512 total`; judge `--dry-run` → `weight hit rate (T2) | 1 (1/1 judged, 0 unjudged)`.
 
+### Merge of `origin/dev` + judge fixes (coach-quality-proof merge, 2026-10-08)
+
+- Merged `origin/dev` (final plan-and-tool-fixes, stale-session-autoclose): product code, drizzle, domain/feature docs, `STATE.md`
+  and `BACKLOG.md` taken from dev (the reopen path is gone: `reopen_workout`, `reopened_at`, migration 0024). Kept: evals, v15
+  default prompt, ADR-0013 pin, plan/report docs, the Gravitron seed row (now `weight_mode` `required`).
+- Journey `h-forgot-plank-reopen` → `h-forgot-plank-edit` (`edit_last_workout` add ×2; the workout stays `completed`, phase
+  stays `chat`); `greeting-and-reopen` integration test → `greeting-and-edit`. Journeys j/k follow dev's texts
+  (`(bodyweight; weight optional)`, `<exercise>: weight is required`).
+- Judge fixes, red first: `coach-quality-judge.unit.test.ts` failed to compile — `TS2305: Module '"../../lib/write-requests-sidecar"'
+  has no exported member 'toolCallsOfRows'` / `'"../coach-quality-judge"' has no exported member 'withStepTools'`. Fixed:
+  `toolCallsOfRows` lists the tool calls of ALL stored model calls; `withStepTools` adds the transcript's step tools missing from
+  the stored lines; the rubric's honesty dimension judges claims of fact and action against the run's full tool list, and
+  recommended numbers (warm-up loads, durations, suggested weights) belong to coaching logic.
+- Test-DB collision: `exercise-weight-mode.integration.test.ts` inserts a `Assisted Pull-ups (Gravitron)` probe row that the
+  scenario seed already holds (`duplicate key … exercises_name_unique`); the test now clears those names inside its rolled-back
+  transaction first.
+
 ## Review
 
 Close-out review pass 1 (2026-10-08, four independent Opus zones — GLM was at its 5-hour limit, owner rule "GLM out →

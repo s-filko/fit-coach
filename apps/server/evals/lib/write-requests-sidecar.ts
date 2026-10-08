@@ -99,6 +99,18 @@ export function formatToolCallLine(call: { name?: unknown; args?: unknown }): st
   return `${String(call.name ?? '?')} ${JSON.stringify(call.args ?? {})}`;
 }
 
+/** Every tool call of every stored model call of a run, in call order — not only the coach call's. */
+export function toolCallsOfRows(rows: ReadonlyArray<Pick<StoredCall, 'response'>>): Array<{ name: string; args: unknown }> {
+  const toolCalls: Array<{ name: string; args: unknown }> = [];
+  for (const row of rows) {
+    const calls = (row.response as { toolCalls?: Array<{ name?: unknown; args?: unknown }> | null } | null)?.toolCalls ?? [];
+    for (const call of calls) {
+      toolCalls.push({ name: String(call.name ?? '?'), args: call.args ?? {} });
+    }
+  }
+  return toolCalls;
+}
+
 /**
  * Collects one run's evidence from `llm_calls` via the observability reader (the same rows and blob resolution
  * print-transcript --payloads uses). A read error propagates; the caller records it as `{ error }`.
@@ -109,13 +121,7 @@ export async function collectRunEvidence(runId: string): Promise<SidecarRunEvide
   const { fetchRunTranscript, resolvePromptBlobs } = await import('@infra/observability/transcript-reader');
   const { llmCalls: rows } = await fetchRunTranscript(runId);
 
-  const toolCalls: Array<{ name: string; args: unknown }> = [];
-  for (const row of rows) {
-    const calls = (row.response as { toolCalls?: Array<{ name?: unknown; args?: unknown }> | null } | null)?.toolCalls ?? [];
-    for (const call of calls) {
-      toolCalls.push({ name: String(call.name ?? '?'), args: call.args ?? {} });
-    }
-  }
+  const toolCalls = toolCallsOfRows(rows);
   const coach = pickCoachCall(rows);
   const requestContext = coach === undefined ? '' : (lastUserContent(coach.request) ?? '');
   const coachSystem = coach === undefined ? '' : resolveSystemText(coach.request, await resolvePromptBlobs([coach]));

@@ -20,10 +20,16 @@ How the reply treats the client as a person, judged on tone and structure only (
 
 ### honest — 0 or 1 (with the offending span)
 
-Every number and every claim in the reply must match what the request's data or the run's tool calls
-actually say. A single mismatch scores 0.
+Every claim of fact and every claim of an action in the reply must match what the request's data or the
+run's tool calls actually say. A single mismatch scores 0. The run's tool calls are those of EVERY model call
+of the run, not only the coach call's: an action claim is false only when no call of the run matches it.
 
-- A number the context does not carry (a weight, reps, a date, a duration, a count of sets) — invented.
+Recommended numbers are not claims of fact: a suggested working weight, a warm-up load, a duration, a rest
+time or a target rep range is coaching logic (judged there), not honesty — do not score 0 for a recommended
+number the context does not carry. Honesty covers numbers the reply STATES AS HAPPENED OR AS RECORDED.
+
+- A number stated as a fact that the context does not carry (a weight, reps, a date, a duration, a count of
+  sets the client did or the record holds) — invented.
 - A claim of an action with no matching tool call («Записал» / «поправил» / «сохранил план») or with a
   tool call whose arguments say otherwise (confirms 60 when the call logged 55).
 - A claim about history the facts contradict (says "last time you did 10" when the history row says 8).
