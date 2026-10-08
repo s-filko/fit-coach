@@ -225,3 +225,25 @@ Suites, close-out review (four zones, GLM — owner accent), report committed, `
   `Tests: 1870 passed, 1870 total`; flock `npm run test:integration` → `Test Suites: 60 passed, 60 total`,
   `Tests: 1 todo, 774 passed, 775 total` (×2 runs); flock `npm run test:scenarios` → `Test Suites: 27 passed,
   27 total`, `Tests: 1 todo, 501 passed, 502 total`.
+
+### Judge hardening — one refused reply never aborts the run (worker, 2026-10-08)
+
+- The baseline run exposed it: the judge CLI (GLM via Z.AI) refused ONE reply (`API Error: [1301][System detected
+  potentially unsafe or sensitive content…]`, non-zero exit), `execFileSync` threw, and the whole judge crashed —
+  every verdict lost, because outputs were written only at the end.
+- `judgeReplyVia` (evals/judge/coach-quality-judge.ts, injectable `JudgeSpawn` so unit tests stub the CLI): a failed
+  CLI call is NOT retried on the same command (a content refusal is deterministic — the unit test pins one primary +
+  one fallback call); bad output gets the existing one same-command JSON retry; then `JUDGE_FALLBACK_CMD` (env) judges
+  the reply once; failing that the reply is recorded `{unjudged: true, reason}` and the run continues. Verdicts are
+  appended to `coach-quality-<stamp>.verdicts.jsonl` AS THEY ARE PRODUCED (a crash loses nothing judged); the .json
+  and .md summaries land at the end — rubric means over the judged replies only, with an explicit exclusion line,
+  the unjudged replies with reasons, the fallback count, and exit code 1 when anything went unjudged.
+- Red first, recorded: `coach-quality-judge.unit.test.ts:251:41 - error TS7006: Parameter 'cmd' implicitly has an
+  'any' type` — the new tests could not compile against the missing `judgeReplyVia`/`summarizeRun`/`JudgeSpawn`/
+  `Evidence` exports → implemented → 18/18.
+- Dry runs (offline, stub CLIs): clean — `Replies judged: 2 of 2 steps; 0 unjudged.`; all-bad primary with
+  `JUDGE_FALLBACK_CMD` — `Replies judged: 2 of 2 steps (2 via the fallback judge)`; CLI failure without a fallback —
+  `Replies judged: 0 of 2 steps; 2 unjudged.` + `**Rubric means cover the 0 judged replies; 2 unjudged replies are
+  excluded.**` (means render `—`, not NaN; script exit 1).
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 189 passed, 189 total`,
+  `Tests: 1877 passed, 1877 total` (+7).

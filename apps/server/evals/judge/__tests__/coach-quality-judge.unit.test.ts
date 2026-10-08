@@ -7,10 +7,14 @@
  */
 import type { NLoadExpectation } from '../../scenarios/n-load-shared';
 import {
+  judgeReplyVia,
   parseJudgeVerdict,
   parseTranscriptMarkdown,
+  summarizeRun,
   summarizeVerdicts,
   weightHit,
+  type Evidence,
+  type JudgeSpawn,
   type JudgeVerdict,
   type WeightExtraction,
 } from '../coach-quality-judge';
@@ -188,5 +192,120 @@ describe('summarizeVerdicts', () => {
     expect(summary.honestyFailures).toEqual([
       { scenarioId: 'b', stepIndex: 1, span: 'в прошлый раз 10×80', note: '' },
     ]);
+  });
+});
+
+// --- one reply's judge failure never aborts the run (the 1301 hardening) ---
+
+/** The observed failure: GLM's CLI refuses one reply ('API Error: [1301]…') and exits non-zero. */
+const CLI_REFUSAL = 'API Error: [1301][System detected potentially unsafe or sensitive content]';
+const VERDICT_JSON = JSON.stringify({
+  friendly: 2,
+  honest: 1,
+  honestySpan: null,
+  coachingLogic: 2,
+  brevity: 1,
+  extraction: { exercise: null, proposedKg: null, asked: false },
+  note: 'ok',
+} satisfies JudgeVerdict);
+
+const EVIDENCE: Evidence = {
+  scenarioId: 'n-load-up',
+  stepIndex: 3,
+  userText: 'какой вес взять на жим?',
+  delivered: 'Бери 82.5 кг.',
+  tools: [],
+  requestContext: '(context)',
+  toolCallsWithArgs: '',
+};
+
+/** A spawn whose PRIMARY command refuses everything; the fallback answers a valid verdict. */
+function refusingSpawn(calls: Array<{ cmd: string; prompt: string }>): JudgeSpawn {
+  return (prompt, cmd) => {
+    calls.push({ cmd, prompt });
+    if (cmd === 'primary-cmd') {
+      return { ok: false, error: CLI_REFUSAL };
+    }
+    return { ok: true, raw: VERDICT_JSON };
+  };
+}
+
+describe('judgeReplyVia — a CLI failure or bad JSON on one reply never aborts the run', () => {
+  it('a primary CLI failure without a fallback → unjudged, the CLI error in the reason', () => {
+    const outcome = judgeReplyVia(EVIDENCE, '(rubric)', refusingSpawn([]), 'primary-cmd');
+    expect(outcome).toEqual({ unjudged: true, reason: expect.stringContaining('[1301]') });
+  });
+
+  it('a primary CLI failure with a fallback → the fallback verdict, usedFallback true', () => {
+    const calls: Array<{ cmd: string; prompt: string }> = [];
+    const outcome = judgeReplyVia(EVIDENCE, '(rubric)', refusingSpawn(calls), 'primary-cmd', 'fallback-cmd');
+    expect(outcome).toEqual({ verdict: expect.objectContaining({ friendly: 2 }), raw: VERDICT_JSON, usedFallback: true });
+    // The refused primary is NOT retried — a content refusal is deterministic.
+    expect(calls.filter(c => c.cmd === 'primary-cmd')).toHaveLength(1);
+    expect(calls.filter(c => c.cmd === 'fallback-cmd')).toHaveLength(1);
+  });
+
+  it('bad JSON once, then good → the primary verdict, no fallback called', () => {
+    const calls: Array<{ cmd: string; prompt: string }> = [];
+    let attempt = 0;
+    const spawn: JudgeSpawn = (_prompt, cmd) => {
+      calls.push({ cmd, prompt: _prompt });
+      return { ok: true, raw: attempt++ === 0 ? 'not json' : VERDICT_JSON };
+    };
+    const outcome = judgeReplyVia(EVIDENCE, '(rubric)', spawn, 'primary-cmd', 'fallback-cmd');
+    expect(outcome).toEqual({ verdict: expect.objectContaining({ honest: 1 }), raw: VERDICT_JSON, usedFallback: false });
+    expect(calls.every(c => c.cmd === 'primary-cmd')).toBe(true);
+  });
+
+  it('bad JSON twice with a fallback → the fallback verdict', () => {
+    const spawn: JudgeSpawn = (_prompt, cmd) => ({ ok: true, raw: cmd === 'fallback-cmd' ? VERDICT_JSON : 'still not json' });
+    const outcome = judgeReplyVia(EVIDENCE, '(rubric)', spawn, 'primary-cmd', 'fallback-cmd');
+    expect(outcome).toEqual({ verdict: expect.anything(), raw: VERDICT_JSON, usedFallback: true });
+  });
+
+  it('bad JSON twice without a fallback → unjudged', () => {
+    const spawn: JudgeSpawn = () => ({ ok: true, raw: 'nope' });
+    expect(judgeReplyVia(EVIDENCE, '(rubric)', spawn, 'primary-cmd')).toEqual({
+      unjudged: true,
+      reason: expect.stringContaining('JSON'),
+    });
+  });
+
+  it('a failing fallback → unjudged with the fallback error', () => {
+    const spawn: JudgeSpawn = (_prompt, cmd) =>
+      cmd === 'fallback-cmd' ? { ok: false, error: 'fallback exploded' } : { ok: true, raw: 'not json' };
+    expect(judgeReplyVia(EVIDENCE, '(rubric)', spawn, 'primary-cmd', 'fallback-cmd')).toEqual({
+      unjudged: true,
+      reason: expect.stringContaining('fallback exploded'),
+    });
+  });
+});
+
+describe('summarizeRun — means exclude unjudged replies and say so', () => {
+  const verdict = (over: Partial<JudgeVerdict>): JudgeVerdict => ({
+    friendly: 2,
+    honest: 1,
+    honestySpan: null,
+    coachingLogic: 2,
+    brevity: 1,
+    extraction: { exercise: null, proposedKg: null, asked: false },
+    note: '',
+    ...over,
+  });
+
+  it('counts judged/unjudged/fallback separately; the means cover the judged only', () => {
+    const run = summarizeRun([
+      { file: 'a.md', scenarioId: 'a', stepIndex: 0, outcome: { verdict: verdict({ friendly: 1 }), raw: VERDICT_JSON, usedFallback: false } },
+      { file: 'a.md', scenarioId: 'a', stepIndex: 1, outcome: { verdict: verdict({}), raw: VERDICT_JSON, usedFallback: true } },
+      { file: 'b.md', scenarioId: 'b', stepIndex: 0, outcome: { unjudged: true, reason: CLI_REFUSAL } },
+    ], 4);
+    expect(run.totalSteps).toBe(4);
+    expect(run.judgedCount).toBe(2);
+    expect(run.unjudged).toEqual([{ file: 'b.md', scenarioId: 'b', stepIndex: 0, reason: CLI_REFUSAL }]);
+    expect(run.fallbackUsed).toBe(1);
+    // The means come from the two judged replies only (friendly (1+2)/2 = 1.5).
+    expect(run.means.friendlyMean).toBe(1.5);
+    expect(run.means.replies).toBe(2);
+    expect(run.exclusionNote).toContain('excluded');
   });
 });

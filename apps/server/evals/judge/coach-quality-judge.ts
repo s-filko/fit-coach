@@ -16,13 +16,17 @@
  * extraction against nLoadExpectations() — the loads the weight oracle
  * computed from the seeded histories.
  *
- * Outputs: evals/reports/judge/<scenario>-<stamp>.json (every verdict with its
- * evidence pointers) and evals/reports/judge/coach-quality-<stamp>.md (rubric
- * means, every honesty failure quoted, weight hits/misses). --dry-run judges
- * two canned replies through a stub JUDGE_CMD — no DB, no model.
+ * Outputs: evals/reports/judge/coach-quality-<stamp>.verdicts.jsonl (every
+ * verdict appended AS IT IS PRODUCED — a crash loses nothing already judged),
+ * the full .json and the summary .md at the end (rubric means over the judged
+ * replies only, every honesty failure quoted, weight hits/misses, the unjudged
+ * replies with reasons). A judge-CLI failure on one reply (the baseline run's
+ * `[1301]` content refusal) never aborts the run: JUDGE_FALLBACK_CMD judges
+ * that reply once, else it is recorded unjudged. --dry-run judges two canned
+ * replies through a stub JUDGE_CMD — no DB, no model.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import { nLoadExpectations, type NLoadExpectation } from '../scenarios/n-load-shared';
@@ -292,6 +296,45 @@ export function summarizeVerdicts(replies: JudgedReply[]): JudgeSummary {
   };
 }
 
+/** One reply's judged-or-unjudged outcome, with its transcript coordinates. */
+export interface RunReply {
+  file: string;
+  scenarioId: string;
+  stepIndex: number;
+  outcome: JudgementOutcome;
+}
+
+/** The whole run's numbers: means over the JUDGED replies only, unjudged and fallback use counted apart. */
+export interface RunSummary {
+  totalSteps: number;
+  judgedCount: number;
+  /** The rubric means — computed over the judged replies only. */
+  means: JudgeSummary;
+  unjudged: Array<{ file: string; scenarioId: string; stepIndex: number; reason: string }>;
+  fallbackUsed: number;
+  /** One line for the report: what the means cover. */
+  exclusionNote: string;
+}
+
+export function summarizeRun(replies: RunReply[], totalSteps: number): RunSummary {
+  const judged = replies.filter((r): r is RunReply & { outcome: { verdict: JudgeVerdict; raw: string; usedFallback: boolean } } => !('unjudged' in r.outcome));
+  const unjudged = replies
+    .filter(r => 'unjudged' in r.outcome)
+    .map(r => ({ file: r.file, scenarioId: r.scenarioId, stepIndex: r.stepIndex, reason: (r.outcome as { reason: string }).reason }));
+  const fallbackUsed = judged.filter(r => r.outcome.usedFallback).length;
+  return {
+    totalSteps,
+    judgedCount: judged.length,
+    means: summarizeVerdicts(judged.map(r => ({ scenarioId: r.scenarioId, stepIndex: r.stepIndex, verdict: r.outcome.verdict }))),
+    unjudged,
+    fallbackUsed,
+    exclusionNote:
+      unjudged.length > 0
+        ? `Rubric means cover the ${judged.length} judged replies; ${unjudged.length} unjudged ${unjudged.length === 1 ? 'reply is' : 'replies are'} excluded.`
+        : `Rubric means cover all ${judged.length} judged replies.`,
+  };
+}
+
 // --- the CLI ------------------------------------------------------------------------------------
 
 const RUBRIC_PATH = join(process.cwd(), 'evals', 'rubrics', 'coach-quality.md');
@@ -313,7 +356,7 @@ function argValue(flag: string, fallback: string): string {
 }
 
 /** One reply's evidence handed to the judge. */
-interface Evidence {
+export interface Evidence {
   scenarioId: string;
   stepIndex: number;
   userText: string;
@@ -346,25 +389,75 @@ function buildJudgePrompt(evidence: Evidence, rubric: string): string {
   ].join('\n');
 }
 
+/** One judge-CLI invocation: stdout, or the failure (the baseline run saw the CLI refuse one reply, exit non-zero). */
+export type SpawnOutcome = { ok: true; raw: string } | { ok: false; error: string };
+
+/** One judge-CLI invocation through a command — injectable so tests stub it (no real model). */
+export type JudgeSpawn = (prompt: string, command: string) => SpawnOutcome;
+
+/** What came of judging one reply: a verdict (with whether the fallback judged it) or an unjudged record. */
+export type JudgementOutcome = { verdict: JudgeVerdict; raw: string; usedFallback: boolean } | { unjudged: true; reason: string };
+
 /**
  * Calls the judge CLI once: the prompt goes to stdin, the answer comes from
- * stdout (JUDGE_CMD is a shell command; `claude-glm -p` prints the reply).
+ * stdout (JUDGE_CMD is a shell command; `claude-glm -p` prints the reply). A
+ * non-zero exit (e.g. GLM's `[1301]` content refusal) is a failed call, never
+ * a thrown error — one bad reply must not abort the run.
  */
-function callJudge(prompt: string, judgeCmd: string): string {
-  return execFileSync('/bin/sh', ['-c', judgeCmd], { input: prompt, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+function cliSpawn(prompt: string, judgeCmd: string): SpawnOutcome {
+  try {
+    return {
+      ok: true,
+      raw: execFileSync('/bin/sh', ['-c', judgeCmd], { input: prompt, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }),
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
-/** One verdict per reply, retrying bad JSON exactly once. */
-function judgeReply(evidence: Evidence, rubric: string, judgeCmd: string): { verdict: JudgeVerdict; raw: string } | null {
+/**
+ * Judges one reply and NEVER throws. Policy:
+ * - the primary command gets two attempts when its OUTPUT is bad JSON (a flake
+ *   worth one retry) but NO retry when the CALL fails — a content refusal such
+ *   as `[1301]` is deterministic, retrying the same prompt wastes a call;
+ * - a fallback command (JUDGE_FALLBACK_CMD) then judges the reply once, any
+ *   failure mode;
+ * - without a fallback (or when it fails too) the reply is recorded as
+ *   `{unjudged: true, reason}` and the run continues.
+ */
+export function judgeReplyVia(
+  evidence: Evidence,
+  rubric: string,
+  spawn: JudgeSpawn,
+  primaryCmd: string,
+  fallbackCmd?: string,
+): JudgementOutcome {
   const prompt = buildJudgePrompt(evidence, rubric);
+  let lastFailure = 'no judge call was made';
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const raw = callJudge(prompt, judgeCmd);
-    const verdict = parseJudgeVerdict(raw);
-    if (verdict !== null) {
-      return { verdict, raw };
+    const call = spawn(prompt, primaryCmd);
+    if (!call.ok) {
+      // A failed call is not retried on the same command — go to the fallback.
+      lastFailure = `judge CLI failed: ${call.error}`;
+      break;
     }
+    const verdict = parseJudgeVerdict(call.raw);
+    if (verdict !== null) {
+      return { verdict, raw: call.raw, usedFallback: false };
+    }
+    lastFailure = 'judge output was not valid JSON (after one retry)';
   }
-  return null;
+  if (fallbackCmd === undefined) {
+    return { unjudged: true, reason: lastFailure };
+  }
+  const fallbackCall = spawn(prompt, fallbackCmd);
+  if (!fallbackCall.ok) {
+    return { unjudged: true, reason: `judge CLI failed: ${fallbackCall.error} (fallback too)` };
+  }
+  const verdict = parseJudgeVerdict(fallbackCall.raw);
+  return verdict !== null
+    ? { verdict, raw: fallbackCall.raw, usedFallback: true }
+    : { unjudged: true, reason: 'fallback judge output was not valid JSON' };
 }
 
 /** The n-load ask step of a case: the user text the case table authored. */
@@ -444,6 +537,8 @@ function dryRunTranscripts(): Array<{ file: string; parsed: ParsedTranscript; co
 async function main(): Promise<number> {
   const dryRun = process.argv.includes('--dry-run');
   const judgeCmd = process.env.JUDGE_CMD ?? (dryRun ? `printf '%s' ${JSON.stringify(JSON.stringify(STUB_VERDICT))}` : DEFAULT_JUDGE_CMD);
+  /** JUDGE_FALLBACK_CMD judges a reply the primary refused or mangled — else that reply is recorded unjudged. */
+  const fallbackCmd = process.env.JUDGE_FALLBACK_CMD !== '' ? process.env.JUDGE_FALLBACK_CMD : undefined;
   const outDir = argValue('--out-dir', join(process.cwd(), 'evals', 'reports', 'judge'));
   const rubric = existsSync(RUBRIC_PATH) ? readFileSync(RUBRIC_PATH, 'utf8') : '(rubric file missing)';
 
@@ -477,8 +572,12 @@ async function main(): Promise<number> {
   }
 
   const expectations = nLoadExpectations();
-  const judged: Array<JudgedReply & { file: string; userText: string; delivered: string; raw: string }> = [];
-  const unparsed: Array<{ file: string; stepIndex: number }> = [];
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  mkdirSync(outDir, { recursive: true });
+  /** Incremental: every verdict (or unjudged record) lands here as it is produced — a crash loses nothing judged. */
+  const verdictsPath = join(outDir, `coach-quality-${stamp}.verdicts.jsonl`);
+  writeFileSync(verdictsPath, '');
+  const runReplies: Array<RunReply & { evidence: Evidence; outcome: JudgementOutcome; raw?: string }> = [];
   const hits: WeightHitResult[] = [];
   let totalSteps = 0;
 
@@ -499,63 +598,84 @@ async function main(): Promise<number> {
         evidence.requestContext = stored.requestContext;
         evidence.toolCallsWithArgs = stored.toolCallsWithArgs;
       }
-      const result = judgeReply(evidence, rubric, judgeCmd);
-      if (result === null) {
-        unparsed.push({ file: input.file, stepIndex: step.stepIndex });
-        continue;
+      const outcome = judgeReplyVia(evidence, rubric, cliSpawn, judgeCmd, fallbackCmd);
+      const record = { file: input.file, scenarioId: input.parsed.scenarioId, stepIndex: step.stepIndex, evidence, outcome };
+      runReplies.push(record);
+      appendFileSync(verdictsPath, `${JSON.stringify({ ...record, evidence: undefined })}\n`);
+      if ('unjudged' in outcome) {
+        continue; // one refused or mangled reply never aborts the run
       }
-      judged.push({ file: input.file, scenarioId: input.parsed.scenarioId, stepIndex: step.stepIndex, userText: step.userText, delivered: step.delivered, verdict: result.verdict, raw: result.raw });
       const expectation = isNLoadAskStep(input.parsed.scenarioId, step.userText, expectations);
       if (expectation !== null) {
-        hits.push(weightHit(result.verdict.extraction, expectation));
+        hits.push(weightHit(outcome.verdict.extraction, expectation));
       }
     }
   }
 
-  const summary = summarizeVerdicts(judged);
+  const summary = summarizeRun(runReplies, totalSteps);
+  const judged = runReplies.filter((r): r is typeof r & { outcome: { verdict: JudgeVerdict; raw: string; usedFallback: boolean } } => !('unjudged' in r.outcome));
   const hitRate = hits.length > 0 ? hits.filter(h => h.hit).length / hits.length : 0;
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  mkdirSync(outDir, { recursive: true });
-  const perReply = judged.map(j => ({
-    file: j.file,
-    scenarioId: j.scenarioId,
-    stepIndex: j.stepIndex,
-    userText: j.userText,
-    delivered: j.delivered,
-    verdict: j.verdict,
-    rawJudgeOutput: j.raw,
-  }));
-  writeFileSync(join(outDir, `coach-quality-${stamp}.json`), JSON.stringify({ summary, weightHits: hits, unparsed, replies: perReply }, null, 2));
+  writeFileSync(
+    join(outDir, `coach-quality-${stamp}.json`),
+    JSON.stringify(
+      {
+        summary,
+        weightHits: hits,
+        replies: judged.map(j => ({
+          file: j.file,
+          scenarioId: j.scenarioId,
+          stepIndex: j.stepIndex,
+          userText: j.evidence.userText,
+          delivered: j.evidence.delivered,
+          verdict: j.outcome.verdict,
+          usedFallback: j.outcome.usedFallback,
+          rawJudgeOutput: j.outcome.raw,
+        })),
+      },
+      null,
+      2,
+    ),
+  );
+
+  // Zero judged replies would otherwise print NaN — the dash says it instead.
+  const fmt = (value: number): string => (Number.isNaN(value) ? '—' : String(value));
 
   const md: string[] = [
     `# Coach quality — judged ${new Date().toISOString()}${dryRun ? ' (DRY RUN: canned replies, stub judge)' : ''}`,
     '',
-    `Replies judged: ${summary.replies} of ${totalSteps} steps (${unparsed.length} unparseable judge outputs).`,
+    `Replies judged: ${summary.judgedCount} of ${summary.totalSteps} steps` +
+      (summary.fallbackUsed > 0 ? ` (${summary.fallbackUsed} via the fallback judge)` : '') +
+      `; ${summary.unjudged.length} unjudged.`,
+    `**${summary.exclusionNote}**`,
     '',
     `| dimension | result |`,
     `|---|---|`,
-    `| friendly/supportive (0–2, mean) | ${summary.friendlyMean} |`,
-    `| honest (rate) | ${summary.honestRate} |`,
-    `| coaching logic (0–2, mean) | ${summary.coachingLogicMean} |`,
-    `| brevity (rate) | ${summary.brevityRate} |`,
+    `| friendly/supportive (0–2, mean) | ${fmt(summary.means.friendlyMean)} |`,
+    `| honest (rate) | ${fmt(summary.means.honestRate)} |`,
+    `| coaching logic (0–2, mean) | ${fmt(summary.means.coachingLogicMean)} |`,
+    `| brevity (rate) | ${fmt(summary.means.brevityRate)} |`,
     `| weight hit rate (T2) | ${hitRate} (${hits.filter(h => h.hit).length}/${hits.length}) |`,
     '',
     '## Honesty failures (every one quoted)',
-    ...(summary.honestyFailures.length > 0
-      ? summary.honestyFailures.flatMap(f => [`- **${f.scenarioId} step ${f.stepIndex}** — "${f.span ?? '(span not quoted)'}"${f.note !== '' ? ` — ${f.note}` : ''}`])
+    ...(summary.means.honestyFailures.length > 0
+      ? summary.means.honestyFailures.flatMap(f => [
+          `- **${f.scenarioId} step ${f.stepIndex}** — "${f.span ?? '(span not quoted)'}"${f.note !== '' ? ` — ${f.note}` : ''}`,
+        ])
       : ['(none)']),
     '',
     '## Weight hits (T2)',
     ...(hits.length > 0 ? hits.map(h => `- ${h.hit ? '✓' : '✗'} ${h.detail}`) : ['(no n-load ask steps in this run)']),
     '',
-    '## Judge outputs that failed to parse (after one retry)',
-    ...(unparsed.length > 0 ? unparsed.map(u => `- ${u.file} step ${u.stepIndex}`) : ['(none)']),
+    '## Unjudged replies (the judge CLI failed or its output did not parse)',
+    ...(summary.unjudged.length > 0
+      ? summary.unjudged.flatMap(u => [`- **${u.file} ${u.scenarioId} step ${u.stepIndex}** — ${u.reason}`])
+      : ['(none)']),
     '',
   ];
   writeFileSync(join(outDir, `coach-quality-${stamp}.md`), md.join('\n'));
   console.log(md.join('\n'));
-  console.log(`(written: ${join(outDir, `coach-quality-${stamp}.json`)} and .md)`);
-  return unparsed.length > 0 ? 1 : 0;
+  console.log(`(written: ${verdictsPath} and ${join(outDir, `coach-quality-${stamp}.json`)} and .md)`);
+  return summary.unjudged.length > 0 ? 1 : 0;
 }
 
 if (process.argv[1]?.endsWith('coach-quality-judge.ts')) {
