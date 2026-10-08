@@ -2,7 +2,7 @@
 
 - Status: in progress
 - After: plan-and-tool-fixes, stale-session-autoclose (measured on an integration branch that contains both)
-- Branch: `plan/coach-quality-proof`, cut from `dev`.
+- Branch: plan/coach-quality-proof
 - Owner order (2026-10-08): finish everything, add tests so existing problems are not missed, test known scenarios on
   real models in our own test environment, and prove that the coach is friendly, honest, and guides and suggests the
   weight correctly — not guessing, but "in rhythm" and informed: its proposals are logical from a coach's point of view
