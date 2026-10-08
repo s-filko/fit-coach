@@ -13,7 +13,6 @@ _Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **In progress**
 - `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
-- `stale-session-autoclose.md` — Stale Session Auto-Close — a forgotten workout closes on return; the model edits a finished workout in place (BUG-053) (branch: `plan/stale-session-autoclose`, last commit 2026-10-08)
 
 **Planned**
 - `coach-tone.md` — Coach Tone — the coach knows the trend and encourages progress Implementation Plan
@@ -68,6 +67,7 @@ _Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `session-investigation-0925.md` — Live Session 2026-09-25 — Investigation and Red Tests Before Remediation Implementation Plan
 - `set-kind.md` — Set Kind — Warm-up vs Working Sets, Dumbbell Load Basis, Session Place, Skipped Plan Items (Roadmap U4) Implementation Plan
 - `smoke-test.md` — Smoke Test Implementation Plan
+- `stale-session-autoclose.md` — Stale Session Auto-Close — a forgotten workout closes on return; the model edits a finished workout in place (BUG-053)
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
 - `training-exercise-history.md` — Training Exercise History (BUG-030, Roadmap R1.3a) Implementation Plan

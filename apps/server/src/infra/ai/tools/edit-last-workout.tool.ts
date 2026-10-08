@@ -4,7 +4,7 @@
  * field (the manage_fact shape), edits the user's most recent FINISHED workout in place — the
  * workout stays closed and the conversation stays where it is. It owns no set logic: `add` goes
  * through `logSetWithContext` (the path `log_set` uses — the same set-data mapping, weight carry
- * and per-hand rules — with the workout's retro timestamp, BR-TRAINING-030), `update` through
+ * and per-hand rules — with the workout's retro timestamp, BR-TRAINING-049), `update` through
  * `updateLastSet` (the conversions `update_last_set` applies), `delete` through `deleteSet`.
  */
 import { tool } from '@langchain/core/tools';
@@ -225,7 +225,7 @@ export function buildEditLastWorkoutTool(deps: EditLastWorkoutToolDeps) {
       return llmError(`Invalid set data: ${parsed.error.message}`);
     }
     const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
-    // BR-TRAINING-030: the added set is dated to the workout (last activity + the retro offset).
+    // BR-TRAINING-049: the added set is dated to the workout (last activity + the retro offset).
     const createdAt = new Date(lastActivityOf(session).getTime() + RETRO_SET_OFFSET_MS);
 
     const { set, setNumber } = await trainingService.logSetWithContext(session.id, {

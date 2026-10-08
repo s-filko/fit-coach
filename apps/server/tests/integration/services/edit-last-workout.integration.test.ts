@@ -1,7 +1,7 @@
 /**
  * `edit_last_workout` over the real database (BUG-053, stale-session-autoclose plan T5 /
  * AC-SSA-5): the most recent FINISHED workout is edited in place — added sets carry the retro
- * timestamp (last activity + RETRO_SET_OFFSET_MS, BR-TRAINING-030), and the session stays
+ * timestamp (last activity + RETRO_SET_OFFSET_MS, BR-TRAINING-049), and the session stays
  * `completed` with `completed_at`, `duration_minutes` and `last_activity_at` unchanged; an
  * exercise not in the workout is added to it; update and delete address a numbered set.
  */

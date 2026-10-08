@@ -1,6 +1,7 @@
 # Stale Session Auto-Close — a forgotten workout closes on return; the model edits a finished workout in place (BUG-053)
 
-- Status: in progress
+- Status: done
+- Review: 2026-10-08 | clean | R1,R2,R3,R4
 - Branch: plan/stale-session-autoclose
 - Cut from `dev` (the § 0 base rule keeps the branch on the origin/dev merge-base).
 - Source: BUG-053 (`docs/BUGS.md` on `plan/plan-and-tool-fixes`; cause read from dev run `cf44f1fe`): a workout left
@@ -109,7 +110,7 @@ Proposed, shown to the owner before any edit of `docs/domain/training.spec.md`:
   next message; completed_at = last_activity_at; no scheduled job."
 - BR-TRAINING-011 → "Sessions auto-close after 2 hours inactivity, lazily at the user's next message (no scheduled job)
   [INV-TRAINING-005]."
-- BR-TRAINING-030 → rewritten: "Sets added to a finished workout (edit_last_workout) are dated last_activity_at + 5 min
+- BR-TRAINING-030 → rewritten: "Sets added to a finished workout (edit_last_workout) are dated last_activity_at + 5 min *(superseded: 030 kept, the rule is BR-TRAINING-049 — see the T4 note)*
   and do not change the workout's status, times or duration."
 - New BR: "edit_last_workout adds, updates or deletes sets in the user's most recent completed workout only; the workout
   stays completed; a row gaining its first set becomes completed, a row losing its last set becomes skipped."
@@ -312,3 +313,11 @@ edit_last_workout yet.
 Closure check (Opus): a new blocking defect of the R1 fix — the first commit stamped `lastUserMessageAt`, hiding the time
 gap from chat, and prepare skipped the course check on the timeout path — plus (a) a model-suppliable reason forcing the
 hop and (b) a swallowed close failure: all fixed in `e37ab45d`.
+
+**Final closure re-check (Opus, 2026-10-08, at `27494965`): verdict clean.** Leftovers fixed by the orchestrator
+(code comments cite BR-TRAINING-049; this plan's T4 line marked). Advisories → BACKLOG: the mocked full-graph timeout
+test does not assert the kept gap / course-check directive (covered per node and by the DB scenario); the stale-close
+rethrow also fails the run when the non-critical compaction-flag handler throws; FEAT-0010 vs training.spec.md give
+BR-TRAINING-010/011 different meanings (pre-existing on dev); ADR-0011 does not list edit_last_workout (owner-gated).
+(D) The stand live check is replaced by journeys g/h (plan coach-quality-proof) and the owner's test on dev.
+
