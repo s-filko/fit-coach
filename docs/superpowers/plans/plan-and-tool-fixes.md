@@ -425,9 +425,9 @@ Closures of passes 1–3 re-verified by search: all hold. Blocking:
    external load)", "Weight in kilograms (kg); required with reps. 0 = no external load (a bodyweight set).").
 9. `blocking | R4 | docs/domain/training.spec.md:40 | BR-TRAINING-040 + SUPERPOWERS_INTEGRATION rule 7 | "a reps-only call
    on an isometric exercise is stored as given" (owner-approved 2026-10-01) is false after T6 — the refine rejects every
-   reps-without-weight call, isometric included; BR-040 and BR-047 conflict` — **open, owner-gated.** Proposed: amend
-   BR-TRAINING-040's last clause to "a reps call on an isometric exercise carries a weight like any reps call
-   (BR-TRAINING-047)".
+   reps-without-weight call, isometric included; BR-040 and BR-047 conflict` — closed 2026-10-08: the owner approved the per-exercise weight mode (T7); BR-TRAINING-047 re-worded to it and
+   BR-TRAINING-040's last clause now reads "a reps call on an isometric exercise follows the exercise's weight mode
+   (BR-TRAINING-047)" (planks are `optional`).
 
 Pass-4 advisories → BACKLOG § plan-and-tool-fixes close-out review advisories (appended): the port still offers
 `update`/`archive` around BR-046; `set-format.ts` is now a shared tool-reply module living under prompts/blocks; the
@@ -658,6 +658,5 @@ Decisions:
     Tests: 1 todo, 392 passed, 393 total.
 
 **Merge note (orchestrator, 2026-10-08).** `plan/stale-session-autoclose` also adds a migration numbered 0024
-(`reopened_at`). Merge order: stale-session-autoclose first; then merge `dev` into this branch, drop this branch's
-`0024_flawless_felicia_hardy.sql` + its journal/snapshot entry and regenerate it (`npm run drizzle:generate`) so
-`weight_mode` lands as 0025 with the same SQL (including the backfill UPDATEs and the check constraint).
+(`reopened_at`). Merge order (updated): this branch first (its `weight_mode` migration stays 0024); stale-session-autoclose
+then regenerates its `reopened_at` migration as the next number after merging `dev`.
