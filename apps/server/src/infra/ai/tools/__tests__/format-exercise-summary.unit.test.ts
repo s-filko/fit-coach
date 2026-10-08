@@ -76,3 +76,26 @@ describe('formatExerciseSummary — Target line without the plan weight', () => 
     expect(text).toContain('Set 1: 15 reps @ 10 kg');
   });
 });
+
+// -------------------------------------------------------------------------
+// plan-and-tool-fixes T6 (AC-PTF-6): a set with no external load is named
+// "bodyweight" in the summary too (BR-TRAINING-047) — never a bare "N reps".
+// -------------------------------------------------------------------------
+
+describe('formatExerciseSummary — bodyweight wording (AC-PTF-6)', () => {
+  it('names a bodyweight set in the sets-performed lines', () => {
+    const exercise: AutoCompletedExercise = {
+      ...finishedExercise,
+      sets: [
+        { setNumber: 1, reps: 8, rpe: null },
+        { setNumber: 2, reps: 8, rpe: 7 },
+      ],
+    };
+
+    const text = formatExerciseSummary(exercise);
+
+    expect(text).toContain('Set 1: 8 reps @ bodyweight');
+    expect(text).toContain('Set 2: 8 reps @ bodyweight | RPE 7');
+    expect(text).not.toMatch(/Set \d: 8 reps(?: \|)?$/m);
+  });
+});

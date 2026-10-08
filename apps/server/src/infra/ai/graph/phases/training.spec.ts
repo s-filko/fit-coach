@@ -10,7 +10,7 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 // TrainingService's finish reconciliation reuses this one copy — a bad legacy `session_plan_json`
 // row never reaches a DB query (close-out review advisory 6).
 import { isValidExerciseId } from '@domain/training/plan-exercise-id';
-import type { WorkoutSessionWithDetails } from '@domain/training/types';
+import type { Exercise, WorkoutSessionWithDetails } from '@domain/training/types';
 import type { UserFact } from '@domain/user/ports';
 
 import type {
@@ -88,6 +88,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
   const tools = [
     buildSearchExercisesTool({ embeddingService, exerciseRepository }),
     buildGetExerciseHistoryTool({ trainingService, exerciseRepository, workoutSessionRepo }),
+    // T7 (AC-PTF-7): TrainingService decides the weight requirement from the exercise's weight_mode.
     buildLogSetTool({ trainingService }),
     buildCompleteCurrentExerciseTool({ trainingService }),
     buildFinishTrainingTool({ trainingService }),
@@ -129,6 +130,9 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       const todayExerciseIds = [...new Set([...planExerciseIds, ...offPlanStartedIds])];
 
       const nameById = new Map<string, string>();
+      // plan-and-tool-fixes T7 (AC-PTF-7): each today-exercise's weight contract, for the plan
+      // line's mode note — the catalog row of a started exercise, a lookup for a planned one.
+      const weightModeById = new Map<string, Exercise['weightMode']>();
       for (const p of validPlanExercises) {
         nameById.set(p.exerciseId, p.exerciseName ?? 'Exercise');
       }
@@ -137,6 +141,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       const startedById = new Map(session.exercises.map(ex => [ex.exerciseId, ex]));
       for (const ex of session.exercises) {
         nameById.set(ex.exerciseId, ex.exercise.name);
+        weightModeById.set(ex.exerciseId, ex.exercise.weightMode);
       }
       const notStartedPlanIds = planExerciseIds.filter(id => !startedById.has(id));
       if (notStartedPlanIds.length > 0) {
@@ -144,6 +149,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
           if (ex.name) {
             nameById.set(ex.id, ex.name);
           }
+          weightModeById.set(ex.id, ex.weightMode);
         }
       }
       const plannedTextById = new Map(validPlanExercises.map(p => [p.exerciseId, `${p.targetSets}×${p.targetReps}`]));
@@ -173,6 +179,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
         exerciseId,
         exerciseName: nameById.get(exerciseId) ?? 'Exercise',
         plannedText: plannedTextById.get(exerciseId) ?? null,
+        weightMode: weightModeById.get(exerciseId) ?? null,
         performances: (performancesById[i] ?? []).slice(0, PERFORMANCES_PER_EXERCISE),
         loadsUsed: collectLoadsUsed(performancesById[i] ?? []),
         lastSkippedAt: skipById.get(exerciseId) ?? null,

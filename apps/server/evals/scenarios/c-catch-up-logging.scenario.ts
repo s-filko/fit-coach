@@ -75,9 +75,9 @@ const BENCH_TWO_SETS = [
 /** The scripted catch-up turn: three retro pull-up sets, then the ruling's reply. */
 type UserStep = Extract<Scenario['steps'][number], { action: 'user' }>;
 const catchUpScript: NonNullable<UserStep['script']> = [
-  { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8 } } },
-  { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8 } } },
-  { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8 } } },
+  { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8, weight: 0 } } },
+  { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8, weight: 0 } } },
+  { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8, weight: 0 } } },
   { text: CATCH_UP_REPLY_TEXT },
 ];
 

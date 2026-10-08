@@ -188,7 +188,7 @@ describe('plan-save name/id check over the real catalog (AC-HL-5)', () => {
 
     it('rejects "Treadmill" naming Running\'s id — nothing persisted', async () => {
       const tool = buildTool();
-      const createSpy = jest.spyOn(workoutPlanRepo, 'create');
+      const createSpy = jest.spyOn(workoutPlanRepo, 'createActiveReplacingOthers');
 
       const result = (await tool.invoke(basePlan(runningId, 'Treadmill'), makeConfig(userId))) as ToolReturn;
 
@@ -200,7 +200,7 @@ describe('plan-save name/id check over the real catalog (AC-HL-5)', () => {
 
     it('accepts "Bench Press" naming Barbell Bench Press\'s id, stored as the catalog name', async () => {
       const tool = buildTool();
-      const createSpy = jest.spyOn(workoutPlanRepo, 'create');
+      const createSpy = jest.spyOn(workoutPlanRepo, 'createActiveReplacingOthers');
 
       const result = (await tool.invoke(basePlan(benchPressId, 'Bench Press'), makeConfig(userId))) as ToolReturn;
 

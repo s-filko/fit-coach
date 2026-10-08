@@ -1,4 +1,4 @@
-import { ActiveSessionExistsError, ExerciseNotFoundError } from '@domain/training/errors';
+import { ActiveSessionExistsError, ExerciseNotFoundError, WeightRequiredError } from '@domain/training/errors';
 import { isValidExerciseId } from '@domain/training/plan-exercise-id';
 import type {
   AutoCompletedExercise,
@@ -19,6 +19,7 @@ import type {
   CreateSessionDto,
   CreateSessionExerciseDto,
   CreateSessionSetDto,
+  Exercise,
   SessionExercise,
   SessionRecommendation,
   SessionSet,
@@ -170,7 +171,7 @@ export class TrainingService implements ITrainingService {
    */
   async ensureCurrentExercise(
     sessionId: string,
-    opts?: { exerciseId?: string; exerciseName?: string; skipActivityUpdate?: boolean },
+    opts?: { exerciseId?: string; exerciseName?: string; skipActivityUpdate?: boolean; catalogVerified?: boolean },
   ): Promise<EnsureExerciseResult> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
@@ -181,7 +182,7 @@ export class TrainingService implements ITrainingService {
     // share ONE path (existing-row reuse, switch/auto-complete, skipActivityUpdate). A second path
     // is how a name-logged set once forked the session into one row per set (AC-RRP-1).
     let exerciseId = opts?.exerciseId;
-    let resolvedFromCatalog = false;
+    let resolvedFromCatalog = opts?.catalogVerified ?? false;
     if (!exerciseId) {
       // We cannot guess which exercise the user is doing — only a name (off-plan exercise) is acceptable.
       if (!opts?.exerciseName) {
@@ -330,8 +331,17 @@ export class TrainingService implements ITrainingService {
       skipActivityUpdate?: boolean;
       setKind?: SetKind;
       weightBasis?: 'total';
+      weightOmitted?: boolean;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }> {
+    // AC-PTF-7: the weight rule is decided BEFORE any state changes. The target is resolved to a catalog id and its
+    // row read once here; a rejection must not have auto-completed the previous exercise, opened the new one or
+    // bumped activity. The row is handed on to the set shaping below.
+    const targetId =
+      opts.exerciseId ?? (opts.exerciseName ? await this.resolveExerciseIdByName(opts.exerciseName) : undefined);
+    const targetExercise = targetId ? await this.exerciseRepo.findById(targetId) : null;
+    this.assertWeightGiven(targetExercise, opts.setData, opts.weightOmitted);
+
     // BUG-043: the first live set of a session that never had one (plan accepted long ago) is when the
     // workout really began — re-anchor `startedAt` there. Read BEFORE ensureCurrentExercise bumps activity.
     if (!opts.skipActivityUpdate) {
@@ -342,15 +352,18 @@ export class TrainingService implements ITrainingService {
     }
 
     const { exercise: sessionExercise, autoCompleted } = await this.ensureCurrentExercise(sessionId, {
-      exerciseId: opts.exerciseId,
+      exerciseId: targetId,
       exerciseName: opts.exerciseName,
       skipActivityUpdate: opts.skipActivityUpdate,
+      catalogVerified: targetExercise != null,
     });
 
     // set-kind plan Task 1 (D2, D3): the app layer, not the DB, defaults to 'working' — the DB
     // default stays absent so legacy (pre-plan) rows keep reading NULL.
     const setKind: SetKind = opts.setKind ?? 'working';
-    const setData = await this.applyPerHand(sessionExercise.exerciseId, opts.setData, opts.weightBasis);
+    const setData = this.shapeSetData(targetExercise, opts.setData, {
+      weightBasis: opts.weightBasis,
+    });
 
     const set = opts.skipActivityUpdate
       ? await this.sessionSetRepo.create(sessionExercise.id, {
@@ -372,23 +385,40 @@ export class TrainingService implements ITrainingService {
   }
 
   /**
-   * Shapes `setData` by the exercise's catalog row, resolved once. set-kind plan Task 1 (D5): a dumbbell exercise's
-   * strength set gets `perHand` — true by default, false when the caller said the weight is a total; every other
-   * equipment leaves it untouched (no `perHand` key). plan-fixes item 2: `log_set` sends every duration as
-   * `cardio_duration`, so a duration on an isometric exercise (Plank, Side Plank) is re-keyed to an `isometric` set.
+   * plan-and-tool-fixes AC-PTF-7: the row's `weight_mode` decides the weight — `required` + reps without a weight is
+   * a WeightRequiredError. Called BEFORE any session state changes, so a rejected call leaves nothing behind.
    */
-  private async applyPerHand(exerciseId: string, setData: SetData, weightBasis?: 'total'): Promise<SetData> {
-    if (setData.type !== 'strength' && setData.type !== 'cardio_duration') {
+  private assertWeightGiven(exercise: Exercise | null | undefined, setData: SetData, weightOmitted?: boolean): void {
+    if (exercise?.weightMode === 'required' && weightOmitted && setData.type === 'functional_reps') {
+      throw new WeightRequiredError(exercise.name);
+    }
+  }
+
+  /**
+   * Shapes `setData` by the exercise's catalog row, read once by the caller. set-kind plan Task 1 (D5): a dumbbell
+   * exercise's strength set gets `perHand` — true by default, false when the caller said the weight is a total; every
+   * other equipment leaves it untouched (no `perHand` key). plan-fixes item 2: `log_set` sends every duration as
+   * `cardio_duration`, so a duration on an isometric exercise (Plank, Side Plank) is re-keyed to an `isometric` set.
+   * AC-PTF-7: `optional` without a weight is a bodyweight set, `none` never stores a weight.
+   */
+  private shapeSetData(
+    exercise: Exercise | null | undefined,
+    setData: SetData,
+    opts: { weightBasis?: 'total' } = {},
+  ): SetData {
+    if (setData.type !== 'strength' && setData.type !== 'cardio_duration' && setData.type !== 'functional_reps') {
       return setData;
     }
-    const exercise = await this.exerciseRepo.findById(exerciseId);
     if (setData.type === 'cardio_duration') {
       return exercise?.exerciseType === 'isometric' ? { type: 'isometric', duration: setData.duration } : setData;
     }
-    if (exercise?.equipment !== 'dumbbell') {
+    if (exercise?.weightMode === 'none' && setData.type === 'strength') {
+      return { type: 'functional_reps', reps: setData.reps };
+    }
+    if (setData.type === 'functional_reps' || exercise?.equipment !== 'dumbbell') {
       return setData;
     }
-    return { ...setData, perHand: weightBasis !== 'total' };
+    return { ...setData, perHand: opts.weightBasis !== 'total' };
   }
 
   /**
@@ -479,15 +509,25 @@ export class TrainingService implements ITrainingService {
     };
 
     // D15: a reps-only set given a weight is a weighted set (functional_reps cannot carry one), with the same
-    // per-hand basis a freshly logged strength set gets.
-    const baseSetData: SessionSet['setData'] =
-      updates.weight != null && lastSet.setData.type === 'functional_reps'
-        ? await this.applyPerHand(exerciseId, { type: 'strength', reps: lastSet.setData.reps, weightUnit: 'kg' })
-        : lastSet.setData;
+    // per-hand basis a freshly logged strength set gets. AC-PTF-4: an explicit weight of 0 is the opposite
+    // direction — a strength set becomes a bodyweight functional_reps set with the same reps.
+    // AC-PTF-7: on a `none` exercise (cardio, no equipment) a weight is not stored at all.
+    const weight = sessionExercise.exercise.weightMode === 'none' ? undefined : updates.weight;
+    const weightless = weight === 0;
+    let baseSetData: SessionSet['setData'] = lastSet.setData;
+    if (weight != null && !weightless && lastSet.setData.type === 'functional_reps') {
+      baseSetData = this.shapeSetData(await this.exerciseRepo.findById(exerciseId), {
+        type: 'strength',
+        reps: lastSet.setData.reps,
+        weightUnit: 'kg',
+      });
+    } else if (weightless && lastSet.setData.type === 'strength') {
+      baseSetData = { type: 'functional_reps', reps: lastSet.setData.reps };
+    }
 
     const updatedSetData: SessionSet['setData'] = {
       ...baseSetData,
-      ...(updates.weight != null ? { weight: updates.weight } : {}),
+      ...(weight != null && !weightless ? { weight } : {}),
       ...(updates.reps != null ? { reps: updates.reps } : {}),
       ...(updates.durationSeconds != null ? { duration: updates.durationSeconds } : {}),
       ...(updates.distanceKm != null ? { distance: updates.distanceKm, distanceUnit: 'km' } : {}),

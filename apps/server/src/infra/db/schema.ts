@@ -429,6 +429,10 @@ export const exercises = pgTable(
     category: text('category').notNull(),
     equipment: text('equipment').notNull(),
     exerciseType: exerciseTypeEnum('exercise_type').notNull(),
+    // plan-and-tool-fixes T7 (AC-PTF-7): the weight contract per exercise — required / optional
+    // (bodyweight: omitted = a bodyweight set, a number = added load) / none (never stores a
+    // weight). The T7 migration backfills existing rows; the seed derives it for fresh ones.
+    weightMode: text('weight_mode').notNull().default('required'),
     description: text('description'),
     energyCost: text('energy_cost').notNull(),
     complexity: text('complexity').notNull(),
@@ -449,6 +453,7 @@ export const exercises = pgTable(
     categoryIdx: index('idx_exercises_category').on(table.category),
     energyCostIdx: index('idx_exercises_energy_cost').on(table.energyCost),
     typeIdx: index('idx_exercises_type').on(table.exerciseType),
+    weightModeCheck: check('exercises_weight_mode_check', sql`${table.weightMode} in ('required', 'optional', 'none')`),
     // HNSW index for fast approximate nearest neighbor search (cosine similarity)
     embeddingIdx: index('idx_exercises_embedding').using('hnsw', table.embedding.op('vector_cosine_ops')),
   }),

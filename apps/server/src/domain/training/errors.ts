@@ -29,3 +29,15 @@ export class ExerciseNotFoundError extends Error {
     this.name = 'ExerciseNotFoundError';
   }
 }
+
+/**
+ * plan-and-tool-fixes review pass 5 (AC-PTF-7): reps were logged without a weight on an exercise
+ * whose catalog `weight_mode` is `required`. Raised by `TrainingService.logSetWithContext` on the
+ * catalog row it already resolves; the message is the fact the model reads.
+ */
+export class WeightRequiredError extends Error {
+  constructor(exerciseName: string) {
+    super(`${exerciseName}: weight is required`);
+    this.name = 'WeightRequiredError';
+  }
+}

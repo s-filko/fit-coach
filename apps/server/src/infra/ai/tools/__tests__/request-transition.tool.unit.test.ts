@@ -32,7 +32,7 @@ const makeUserService = (): jest.Mocked<IUserService> =>
 
 const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
   ({
-    create: jest.fn(),
+    createActiveReplacingOthers: jest.fn(),
     findById: jest.fn(),
     findActiveByUserId: jest.fn(),
     findByUserId: jest.fn(),
@@ -210,7 +210,7 @@ describe('request-transition.tool — plan_creation variant', () => {
 
     await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
 
-    expect(repo.create).not.toHaveBeenCalled();
+    expect(repo.createActiveReplacingOthers).not.toHaveBeenCalled();
   });
 
   it('each invocation requests its own transition — two users do not overwrite each other', async () => {

@@ -74,7 +74,7 @@ const MINIMAL_PLAN = {
 
 const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
   ({
-    create: jest.fn().mockResolvedValue({ id: 'plan-1', ...MINIMAL_PLAN }),
+    createActiveReplacingOthers: jest.fn().mockResolvedValue({ id: 'plan-2', ...MINIMAL_PLAN }),
     findById: jest.fn(),
     findActiveByUserId: jest.fn(),
     findByUserId: jest.fn(),
@@ -124,6 +124,7 @@ const makeExerciseWithMuscles = (
   category: 'compound',
   equipment: 'barbell',
   exerciseType: 'strength',
+  weightMode: 'required',
   description: null,
   energyCost: 'high',
   complexity: 'intermediate',
@@ -192,13 +193,13 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
     expect(isToolReturnWithUpdate(result)).toBe(true);
   });
 
-  it('calls workoutPlanRepository.create with correct userId and plan data', async () => {
+  it('calls workoutPlanRepository.createActiveReplacingOthers with correct userId and plan data', async () => {
     const repo = makeWorkoutPlanRepo();
     const { saveWorkoutPlan } = buildTools(repo);
 
     await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'));
 
-    expect(repo.create).toHaveBeenCalledWith(
+    expect(repo.createActiveReplacingOthers).toHaveBeenCalledWith(
       'u1',
       expect.objectContaining({
         name: MINIMAL_PLAN.name,
@@ -208,6 +209,21 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
           trainingStyle: MINIMAL_PLAN.trainingStyle,
         }),
       }),
+    );
+  });
+
+  // AC-PTF-1 (plan-and-tool-fixes T1): saving archives the user's other active plans
+  // atomically — createActiveReplacingOthers is the port's only insert path.
+  it('saves through createActiveReplacingOthers, the only insert path (AC-PTF-1)', async () => {
+    const repo = makeWorkoutPlanRepo();
+    const { saveWorkoutPlan } = buildTools(repo);
+
+    await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'));
+
+    expect(repo.createActiveReplacingOthers).toHaveBeenCalledTimes(1);
+    expect(repo.createActiveReplacingOthers).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({ name: MINIMAL_PLAN.name, status: 'active' }),
     );
   });
 
@@ -243,7 +259,7 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
       message: expect.stringContaining('User has a quad injury — avoid quad-dominant exercises.'),
     });
     // persists nothing
-    expect(repo.create).not.toHaveBeenCalled();
+    expect(repo.createActiveReplacingOthers).not.toHaveBeenCalled();
   });
 
   it('does NOT reject when the constrained muscle is only a secondary muscle', async () => {
@@ -269,7 +285,7 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
     const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'))) as ToolReturn;
 
     expect(isToolReturnWithUpdate(result)).toBe(true);
-    expect(repo.create).toHaveBeenCalledTimes(1);
+    expect(repo.createActiveReplacingOthers).toHaveBeenCalledTimes(1);
   });
 
   // AC-FL-6: only a `permanent` constraint blocks; everything else advises.
@@ -320,7 +336,7 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
 
         const result = (await saveWorkoutPlan.invoke(planWithThreeProblemExercises(), makeConfig('u1'))) as ToolReturn;
 
-        expect(repo.create).toHaveBeenCalledTimes(1); // persisted
+        expect(repo.createActiveReplacingOthers).toHaveBeenCalledTimes(1); // persisted
         expect(isToolReturnWithUpdate(result)).toBe(true); // the transition is still requested
         const text = renderedContent(result);
         expect(text).toContain('Plan saved');
@@ -353,7 +369,7 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
       for (const name of [DEADLIFT.name, ROW.name, HYPER.name]) {
         expect(message).toContain(name);
       }
-      expect(repo.create).not.toHaveBeenCalled();
+      expect(repo.createActiveReplacingOthers).not.toHaveBeenCalled();
     });
 
     it('a permanent constraint wins over a non-permanent one: rejected, and only the permanent fact is quoted', async () => {
@@ -372,7 +388,7 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
       expect(result).toMatchObject({ ok: false, kind: 'user_error' });
       expect((result as { message: string }).message).toContain('Fused spine');
       expect((result as { message: string }).message).not.toContain('Sore back today');
-      expect(repo.create).not.toHaveBeenCalled();
+      expect(repo.createActiveReplacingOthers).not.toHaveBeenCalled();
     });
 
     it('a non-permanent constraint with no intersecting exercise leaves the summary byte-identical (no advisory)', async () => {
@@ -411,13 +427,13 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
     expect(renderedContent(result)).toContain('Error: could not identify user');
   });
 
-  it('does NOT call create when userId is missing', async () => {
+  it('persists nothing when userId is missing', async () => {
     const repo = makeWorkoutPlanRepo();
     const { saveWorkoutPlan } = buildTools(repo);
 
     await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} });
 
-    expect(repo.create).not.toHaveBeenCalled();
+    expect(repo.createActiveReplacingOthers).not.toHaveBeenCalled();
   });
 
   it('does NOT request a transition when userId is missing', async () => {
@@ -464,7 +480,7 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
       const text = renderedContent(result);
       expect(text).toContain('LLM_ERROR');
       expect(text).toContain('"Treadmill" → id is "Rowing Machine"');
-      expect(workoutPlanRepo.create).not.toHaveBeenCalled();
+      expect(workoutPlanRepo.createActiveReplacingOthers).not.toHaveBeenCalled();
       expect(isToolReturnWithUpdate(result)).toBe(false);
     });
 
@@ -497,7 +513,7 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
       };
       await saveWorkoutPlan.invoke(plan, makeConfig());
 
-      expect(workoutPlanRepo.create).toHaveBeenCalledWith(
+      expect(workoutPlanRepo.createActiveReplacingOthers).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
           planJson: expect.objectContaining({
@@ -544,7 +560,7 @@ describe('save_workout_plan — the planner writes no weights (coach-simplificat
     input.sessionTemplates[0].exercises[0].targetWeight = 70;
     await saveWorkoutPlan.invoke(input, makeConfig('u1'));
 
-    const stored = repo.create.mock.calls[0][1].planJson as unknown as {
+    const stored = repo.createActiveReplacingOthers.mock.calls[0][1].planJson as unknown as {
       sessionTemplates: { exercises: Record<string, unknown>[] }[];
     };
     for (const template of stored.sessionTemplates) {

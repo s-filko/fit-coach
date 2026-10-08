@@ -98,7 +98,7 @@ describe('Training Repositories – integration', () => {
       };
 
       // Act
-      const plan = await planRepo.create(testUserId, planData);
+      const plan = await planRepo.createActiveReplacingOthers(testUserId, planData);
       const retrieved = await planRepo.findById(plan.id);
 
       // Assert
@@ -125,7 +125,7 @@ describe('Training Repositories – integration', () => {
 
     beforeAll(async () => {
       // Create a plan for session tests
-      const plan = await planRepo.create(testUserId, {
+      const plan = await planRepo.createActiveReplacingOthers(testUserId, {
         name: 'Session Test Plan',
         planJson: {
           goal: 'Test',

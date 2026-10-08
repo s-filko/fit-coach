@@ -36,6 +36,7 @@ const makeExercise = (overrides: Partial<ExerciseWithMuscles> = {}): ExerciseWit
   name: 'Deadlift',
   category: 'compound',
   equipment: 'barbell',
+  weightMode: 'required',
   exerciseType: 'strength',
   description: null,
   energyCost: 'very_high',
