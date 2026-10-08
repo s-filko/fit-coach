@@ -267,6 +267,14 @@ Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lo
 - `npm run test:integration` → Tests: 645 passed, 1 todo, 646 total (Suites: 56/56).
 - `npm run test:scenarios` → Tests: 372 passed, 1 todo, 373 total (Suites: 24/24).
 
+### Review closure — defects of the R1 fix (`957a5593`) — 2026-10-08, worker
+
+Red first: `commit.node.unit.test.ts` ✕ 'review closure: the session_timeout hop keeps the previous lastUserMessageAt and the course expiry questions for chat', ✕ '(a) a model-supplied session_timeout reason does not hop', ✕ '(b) a failing stale-session close fails the run'; `stale-session-autoclose.unit.test.ts` ✕ 'review closure: the course check runs for the chat phase on the timeout path'. The full-stack assertion (time-gap note in the chat request, `stale-session-autoclose.integration.test.ts`) was added with the fix, not run red.
+
+Code: `prepare` sets the run flag `ctx.staleSessionClose` (run context — a model cannot set it) and runs the course check for chat on the timeout path; `commit` forces the same-run hop only on that flag + reason + first commit (the forced branch left `handoff.ts`, which is back to its original predicate), keeps the previous `lastUserMessageAt` and the course expiry questions across the hop (chat sees the real gap: time-gap note, `cacheWarm`, long_gap), and rethrows a failing close handler (the run fails, ADR-0013 §6). (D) the user's inbound message is already projected when the close throws — same as any later-node failure.
+
+Verification: `npm run check-all` → 0 errors; `npm run test:unit` → Tests: 1844 passed, 1844 total (Suites: 186/186); `npm run test:integration` → Tests: 646 passed, 1 todo, 647 total (Suites: 56/56); `npm run test:scenarios` → Tests: 373 passed, 1 todo, 374 total (Suites: 24/24).
+
 ## Review
 
 Close-out review 2026-10-08 — pass 1 by a GLM reviewer session (four zones, owner order: everything on GLM until the
@@ -300,3 +308,7 @@ new BR-TRAINING-048 (048, not 047: `plan/plan-and-tool-fixes` adds 047); `docs/f
 S-0114, AC-0207, BR-TRAINING-024 (no scheduled job). ADR-0013 needs no amendment: the close now executes in commit
 (review pass 2, item R1). Owner-gated, not applied: ADR-0011 (training correction tool set) does not list
 edit_last_workout yet.
+
+Closure check (Opus): a new blocking defect of the R1 fix — the first commit stamped `lastUserMessageAt`, hiding the time
+gap from chat, and prepare skipped the course check on the timeout path — plus (a) a model-suppliable reason forcing the
+hop and (b) a swallowed close failure: all fixed in `e37ab45d`.
