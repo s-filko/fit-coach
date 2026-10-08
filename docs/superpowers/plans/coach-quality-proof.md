@@ -247,3 +247,26 @@ Suites, close-out review (four zones, GLM — owner accent), report committed, `
   excluded.**` (means render `—`, not NaN; script exit 1).
 - Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 189 passed, 189 total`,
   `Tests: 1877 passed, 1877 total` (+7).
+
+### Judge pipeline fixes for the real transcripts (worker, 2026-10-08)
+
+- **The parser now reads the real files.** The observed empty evidence ('the client's message is empty…',
+  `scenarioId ''`) had one cause: real L3 files open with run.ts's `# L3 transcript: <id> (<stamp>)` header line, which
+  pushed the `## <scenarioId>` marker off line 0 where the parser looked. Fix: take the first `## ` line anywhere.
+  Fixtures copied from BOTH real kinds — `evals/judge/__tests__/fixtures/candidate-b-full-workout.md` (this branch's
+  reporter) and `baseline-b-full-workout.md` (dev + the run-id reporter patch) — with tests asserting non-empty user
+  text, coach reply and run id for every step (9 user steps each).
+- **The requests sidecar.** `llm_calls` in fitcoach_test is wiped by every jest DB-suite schema reset, so judging from
+  the DB is fragile. New self-contained module `apps/server/evals/lib/write-requests-sidecar.ts`
+  (`writeRequestsSidecar(transcriptPath, runIds)` → `<transcript>.requests.json`, `{ [runId]: { requestContext,
+  toolCalls } | { error } }`, dynamic imports only — the orchestrator copies this ONE file into the baseline-dev
+  worktree and wires the same call into its run.ts). run.ts now writes it right after each L3 scenario's transcript,
+  reading llm_calls in the same process. The judge prefers the sidecar per run id and falls back to the DB
+  (`parseRequestsSidecar` skips error/malformed entries — unit-tested).
+- Red first, recorded: `✕ reads the scenario id (behind the L3-transcript header line)` ×2 (both fixture kinds;
+  22 other assertions already passed — the steps themselves were parsed fine) → parser fix → 26/26.
+- Offline end-to-end on the REAL candidate transcript with a file-based stub judge (no model): 9 prompts captured,
+  the sidecar's `<context>` present in the one prompt its run id keys, '(stored request unavailable)' in the other 8
+  (the DB fallback — no llm_calls rows for them in the test DB), `Replies judged: 9 of 9 steps; 0 unjudged.`, exit 0.
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 189 passed, 189 total`,
+  `Tests: 1885 passed, 1885 total` (+8).

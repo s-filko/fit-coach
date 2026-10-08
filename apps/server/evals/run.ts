@@ -40,6 +40,7 @@ import { readQuota } from './lib/quota';
 import { runWithCleanup, type CleanupDeps } from './lib/run-cleanup';
 import { guardDecision, planCallCount } from './lib/run-guard';
 import { buildReport, type CheckResult, exitCodeFor, formatScenarioTranscript, printReport } from './lib/reporter';
+import { writeRequestsSidecar } from './lib/write-requests-sidecar';
 
 const LEDGER_PATH = join(process.cwd(), 'evals', 'COST_LEDGER.md');
 /** AC-SM-2: every L3 run's per-step transcripts land here as <scenario>-<ISO>.md (gitignored). */
@@ -213,6 +214,12 @@ async function main(markPoolMayBeOpen: () => void): Promise<number> {
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
         const reportPath = join(REPORTS_DIR, `${transcript.scenarioId}-${stamp}.md`);
         writeFileSync(reportPath, `# L3 transcript: ${transcript.scenarioId} (${stamp})\n\n${body}\n`);
+        // coach-quality T3: the requests sidecar — the judge's evidence per run
+        // id, read from llm_calls NOW (the rows die at the next jest DB reset).
+        const runIds = transcript.observations
+          .map(obs => (obs.action === 'user' ? obs.runRow?.runId : undefined))
+          .filter((id): id is string => id !== undefined);
+        await writeRequestsSidecar(reportPath, runIds);
         console.log(`transcript written to ${reportPath}`);
       }
     } else {

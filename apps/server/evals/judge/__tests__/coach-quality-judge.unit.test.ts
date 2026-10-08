@@ -9,6 +9,7 @@ import type { NLoadExpectation } from '../../scenarios/n-load-shared';
 import {
   judgeReplyVia,
   parseJudgeVerdict,
+  parseRequestsSidecar,
   parseTranscriptMarkdown,
   summarizeRun,
   summarizeVerdicts,
@@ -307,5 +308,65 @@ describe('summarizeRun — means exclude unjudged replies and say so', () => {
     expect(run.means.friendlyMean).toBe(1.5);
     expect(run.means.replies).toBe(2);
     expect(run.exclusionNote).toContain('excluded');
+  });
+});
+
+// --- the real L3 transcript files (candidate + baseline-dev kinds) ---
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+/**
+ * The judge ran on the real transcripts and got empty evidence: the files open
+ * with run.ts's `# L3 transcript: <id> (<stamp>)` header line, which pushed the
+ * `## <scenarioId>` line off position 0. These fixtures are REAL files — one
+ * per kind (candidate = this branch's reporter, baseline = dev + the run-id
+ * reporter patch) — copied from the measurement runs of 2026-10-07/08.
+ */
+describe.each([
+  ['candidate', join(__dirname, 'fixtures', 'candidate-b-full-workout.md')],
+  ['baseline-dev', join(__dirname, 'fixtures', 'baseline-b-full-workout.md')],
+])('parseTranscriptMarkdown — the real %s transcript file', (_kind, path) => {
+  const parsed = parseTranscriptMarkdown(readFileSync(path, 'utf8'));
+
+  it('reads the scenario id (behind the L3-transcript header line)', () => {
+    expect(parsed.scenarioId).toBe('b-full-workout');
+  });
+
+  it('every step has non-empty user text, a coach reply and a run id', () => {
+    expect(parsed.steps.length).toBeGreaterThanOrEqual(9);
+    for (const step of parsed.steps) {
+      expect(step.userText).not.toBe('');
+      expect(step.delivered).not.toBe('');
+      expect(step.runId).toMatch(/^[0-9a-f-]{8,}$/);
+    }
+  });
+
+  it('the greeting step carries its delivered reply verbatim', () => {
+    expect(parsed.steps[0]?.delivered).toContain('Привет');
+  });
+});
+
+// --- the requests sidecar (written by the L3 runner next to each transcript) ---
+
+describe('parseRequestsSidecar', () => {
+  it('maps every run id to its context and tool calls; error and malformed entries are skipped', () => {
+    const sidecar = parseRequestsSidecar(
+      JSON.stringify({
+        'run-1': { requestContext: '# Today …', toolCalls: [{ name: 'log_set', args: { reps: 10, weight: 82.5 } }] },
+        'run-2': { error: 'llm_calls read failed' },
+        'run-3': 'not an object',
+      }),
+    );
+    expect(sidecar.get('run-1')).toEqual({
+      requestContext: '# Today …',
+      toolCallsWithArgs: `log_set ${JSON.stringify({ reps: 10, weight: 82.5 })}`,
+    });
+    expect(sidecar.has('run-2')).toBe(false);
+    expect(sidecar.has('run-3')).toBe(false);
+  });
+
+  it('a malformed file is an empty map (the judge falls back to the DB)', () => {
+    expect(parseRequestsSidecar('{not json')).toEqual(new Map());
   });
 });

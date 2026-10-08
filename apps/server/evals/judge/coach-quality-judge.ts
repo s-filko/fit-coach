@@ -7,10 +7,12 @@
  * and the run's tool calls from the L3 transcript (evals/reports/
  * <scenario>-<ISO>.md, reporter.formatScenarioTranscript's format, which
  * carries the run id), plus the stored request of the run's last model call
- * (llm_calls: the user message with its <context> facts, and every response's
- * tool calls with arguments) — and asks a judge CLI (env JUDGE_CMD, default
- * `claude-glm -p --model glm-5.3`) for ONE JSON verdict on the fixed rubric
- * (evals/rubrics/coach-quality.md). Bad JSON is retried exactly once.
+ * (the `<transcript>.requests.json` sidecar the L3 runner writes right after
+ * each scenario — evals/lib/write-requests-sidecar.ts; llm_calls is only the
+ * fallback, its rows die at every jest DB reset on this host) — and asks a
+ * judge CLI (env JUDGE_CMD, default `claude-glm -p --model glm-5.3`) for ONE
+ * JSON verdict on the fixed rubric (evals/rubrics/coach-quality.md). Bad JSON
+ * is retried exactly once.
  *
  * For the n-load journeys the T2 weight-hit computation compares the verdict's
  * extraction against nLoadExpectations() — the loads the weight oracle
@@ -58,7 +60,9 @@ const COACH_PAD = ' '.repeat('coach: '.length);
  */
 export function parseTranscriptMarkdown(md: string): ParsedTranscript {
   const lines = md.split('\n');
-  const scenarioId = /^## (.+)$/.exec(lines[0] ?? '')?.[1] ?? '';
+  // Real L3 files open with run.ts's `# L3 transcript: <id> (<stamp>)` header
+  // line; the `## <scenarioId>` marker sits below it — take its first match.
+  const scenarioId = lines.map(line => /^## (.+)$/.exec(line)?.[1]).find(id => id !== undefined) ?? '';
   const steps: TranscriptStep[] = [];
   let current: { step: TranscriptStep; coachLines: string[] } | null = null;
   const finishCoach = (): void => {
@@ -474,6 +478,50 @@ interface LlmCallRow {
   response: unknown;
 }
 
+/** The judge-side view of one run's sidecar entry. */
+export interface SidecarEvidence {
+  requestContext: string;
+  toolCallsWithArgs: string;
+}
+
+/**
+ * Parses a `<transcript>.requests.json` sidecar (written by the L3 runner via
+ * evals/lib/write-requests-sidecar.ts): `{ [runId]: { requestContext, toolCalls } | { error } }`.
+ * Entries with an error, or a malformed file, are skipped — the judge then
+ * falls back to reading llm_calls directly.
+ */
+export function parseRequestsSidecar(raw: string): Map<string, SidecarEvidence> {
+  const out = new Map<string, SidecarEvidence>();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return out;
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return out;
+  }
+  for (const [runId, entry] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof entry !== 'object' || entry === null || !('requestContext' in entry)) {
+      continue;
+    }
+    const e = entry as { requestContext?: unknown; toolCalls?: unknown };
+    const calls = Array.isArray(e.toolCalls)
+      ? e.toolCalls
+          .map((c: { name?: unknown; args?: unknown }) => `${String((c as { name?: unknown }).name ?? '?')} ${JSON.stringify((c as { args?: unknown }).args ?? {})}`)
+          .join('\n')
+      : '';
+    out.set(runId, { requestContext: typeof e.requestContext === 'string' ? e.requestContext : '', toolCallsWithArgs: calls });
+  }
+  return out;
+}
+
+/** Reads a transcript's sidecar when it exists — empty map otherwise (DB fallback then). */
+function readSidecar(transcriptPath: string): Map<string, SidecarEvidence> {
+  const sidecarPath = `${transcriptPath}.requests.json`;
+  return existsSync(sidecarPath) ? parseRequestsSidecar(readFileSync(sidecarPath, 'utf8')) : new Map();
+}
+
 /** Best-effort evidence from llm_calls for one run (dynamic import — no DB at unit-test time). */
 async function loadRunEvidence(runId: string): Promise<{ requestContext: string; toolCallsWithArgs: string }> {
   try {
@@ -534,6 +582,14 @@ function dryRunTranscripts(): Array<{ file: string; parsed: ParsedTranscript; co
   return [{ file: 'n-load-up-dry-run.md', parsed: nLoadUp, contexts: new Map([[3, DRY_RUN_CONTEXT], [5, DRY_RUN_CONTEXT]]) }];
 }
 
+/** One judged input: a parsed transcript, its dry-run contexts, and its requests sidecar (when present). */
+interface JudgeInput {
+  file: string;
+  parsed: ParsedTranscript;
+  contexts: Map<number, string>;
+  sidecar: Map<string, SidecarEvidence>;
+}
+
 async function main(): Promise<number> {
   const dryRun = process.argv.includes('--dry-run');
   const judgeCmd = process.env.JUDGE_CMD ?? (dryRun ? `printf '%s' ${JSON.stringify(JSON.stringify(STUB_VERDICT))}` : DEFAULT_JUDGE_CMD);
@@ -550,19 +606,30 @@ async function main(): Promise<number> {
     }
   }
   const canned = dryRunTranscripts();
-  const inputs: Array<{ file: string; parsed: ParsedTranscript; contexts: Map<number, string> }> = [];
+  const inputs: JudgeInput[] = [];
   if (dryRun) {
-    inputs.push(...canned);
+    inputs.push(...canned.map(c => ({ ...c, sidecar: new Map<string, SidecarEvidence>() })));
   } else {
     const reportsDir = argValue('--reports-dir', join(process.cwd(), 'evals', 'reports'));
     const stamp = argValue('--stamp', '');
     for (const p of transcriptPaths) {
-      inputs.push({ file: basename(p), parsed: parseTranscriptMarkdown(readFileSync(p, 'utf8')), contexts: new Map() });
+      inputs.push({
+        file: basename(p),
+        parsed: parseTranscriptMarkdown(readFileSync(p, 'utf8')),
+        contexts: new Map(),
+        sidecar: readSidecar(p),
+      });
     }
     if (stamp !== '') {
       const { readdirSync } = await import('node:fs');
       for (const name of readdirSync(reportsDir).filter(n => n.endsWith(`-${stamp}.md`))) {
-        inputs.push({ file: name, parsed: parseTranscriptMarkdown(readFileSync(join(reportsDir, name), 'utf8')), contexts: new Map() });
+        const path = join(reportsDir, name);
+        inputs.push({
+          file: name,
+          parsed: parseTranscriptMarkdown(readFileSync(path, 'utf8')),
+          contexts: new Map(),
+          sidecar: readSidecar(path),
+        });
       }
     }
   }
@@ -593,7 +660,14 @@ async function main(): Promise<number> {
         requestContext: input.contexts.get(step.stepIndex) ?? (dryRun ? '(dry run: canned context)' : ''),
         toolCallsWithArgs: step.tools.join(', '),
       };
-      if (!dryRun && step.runId !== null) {
+      // The sidecar first (durable, written by the L3 runner right after the
+      // run); the DB only when it is absent — llm_calls rows die at the next
+      // jest DB reset on this host.
+      const sidecarEvidence = step.runId !== null ? input.sidecar.get(step.runId) : undefined;
+      if (sidecarEvidence !== undefined) {
+        evidence.requestContext = sidecarEvidence.requestContext;
+        evidence.toolCallsWithArgs = sidecarEvidence.toolCallsWithArgs;
+      } else if (!dryRun && step.runId !== null) {
         const stored = await loadRunEvidence(step.runId);
         evidence.requestContext = stored.requestContext;
         evidence.toolCallsWithArgs = stored.toolCallsWithArgs;
