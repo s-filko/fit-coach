@@ -1,4 +1,4 @@
-import { ActiveSessionExistsError, ExerciseNotFoundError, NoCompletedSessionError } from '@domain/training/errors';
+import { ActiveSessionExistsError, ExerciseNotFoundError } from '@domain/training/errors';
 import { isValidExerciseId } from '@domain/training/plan-exercise-id';
 import type {
   AutoCompletedExercise,
@@ -170,7 +170,7 @@ export class TrainingService implements ITrainingService {
    */
   async ensureCurrentExercise(
     sessionId: string,
-    opts?: { exerciseId?: string; exerciseName?: string; skipActivityUpdate?: boolean },
+    opts?: { exerciseId?: string; exerciseName?: string; skipActivityUpdate?: boolean; finishedSession?: boolean },
   ): Promise<EnsureExerciseResult> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
@@ -206,8 +206,11 @@ export class TrainingService implements ITrainingService {
       );
     }
 
-    // Auto-complete current in_progress exercise if switching to a different one
-    const currentInProgress = session.exercises.find(ex => ex.status === 'in_progress');
+    // Auto-complete current in_progress exercise if switching to a different one. A finished
+    // session (AC-SSA-5) has no current exercise: its rows keep their statuses.
+    const currentInProgress = opts?.finishedSession
+      ? undefined
+      : session.exercises.find(ex => ex.status === 'in_progress');
     let autoCompleted: AutoCompletedExercise | undefined;
 
     if (currentInProgress && currentInProgress.exerciseId !== exerciseId) {
@@ -219,6 +222,9 @@ export class TrainingService implements ITrainingService {
     // Check if this exercise already exists in the session
     const existing = session.exercises.find(ex => ex.exerciseId === exerciseId);
     if (existing) {
+      if (opts?.finishedSession) {
+        return { exercise: existing, autoCompleted };
+      }
       if (existing.status !== 'in_progress') {
         await this.sessionExerciseRepo.update(existing.id, { status: 'in_progress' });
       }
@@ -234,11 +240,12 @@ export class TrainingService implements ITrainingService {
       targetReps: planEx?.targetReps,
       targetWeight: planEx?.targetWeight ?? undefined,
     });
-    await this.sessionExerciseRepo.update(created.id, { status: 'in_progress' });
-    if (!opts?.skipActivityUpdate) {
+    const createdStatus = opts?.finishedSession ? 'completed' : 'in_progress';
+    await this.sessionExerciseRepo.update(created.id, { status: createdStatus });
+    if (!opts?.skipActivityUpdate && !opts?.finishedSession) {
       await this.sessionRepo.updateActivity(sessionId);
     }
-    return { exercise: { ...created, status: 'in_progress' }, autoCompleted };
+    return { exercise: { ...created, status: createdStatus }, autoCompleted };
   }
 
   async completeSession(sessionId: string, durationMinutes?: number, completedAt?: Date): Promise<WorkoutSession> {
@@ -330,11 +337,15 @@ export class TrainingService implements ITrainingService {
       skipActivityUpdate?: boolean;
       setKind?: SetKind;
       weightBasis?: 'total';
+      finishedSession?: boolean;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }> {
+    // A finished session (AC-SSA-5) is edited in place: its activity clock and statuses stay as they are.
+    const skipActivityUpdate = opts.finishedSession === true || opts.skipActivityUpdate === true;
+
     // BUG-043: the first live set of a session that never had one (plan accepted long ago) is when the
     // workout really began — re-anchor `startedAt` there. Read BEFORE ensureCurrentExercise bumps activity.
-    if (!opts.skipActivityUpdate) {
+    if (!skipActivityUpdate) {
       const before = await this.sessionRepo.findByIdWithDetails(sessionId);
       if (before?.startedAt && isLateStart(before, new Date())) {
         await this.sessionRepo.update(sessionId, { startedAt: new Date() });
@@ -345,6 +356,7 @@ export class TrainingService implements ITrainingService {
       exerciseId: opts.exerciseId,
       exerciseName: opts.exerciseName,
       skipActivityUpdate: opts.skipActivityUpdate,
+      finishedSession: opts.finishedSession,
     });
 
     // set-kind plan Task 1 (D2, D3): the app layer, not the DB, defaults to 'working' — the DB
@@ -352,7 +364,7 @@ export class TrainingService implements ITrainingService {
     const setKind: SetKind = opts.setKind ?? 'working';
     const setData = await this.applyPerHand(sessionExercise.exerciseId, opts.setData, opts.weightBasis);
 
-    const set = opts.skipActivityUpdate
+    const set = skipActivityUpdate
       ? await this.sessionSetRepo.create(sessionExercise.id, {
           setData,
           rpe: opts.rpe,
@@ -451,6 +463,7 @@ export class TrainingService implements ITrainingService {
       inclinePct?: number;
       setKind?: SetKind;
     },
+    opts?: { setNumber?: number },
   ): Promise<UpdateSetResult> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
@@ -462,13 +475,21 @@ export class TrainingService implements ITrainingService {
       throw new Error(`Exercise ${exerciseId} not found in session ${sessionId}`);
     }
 
-    const lastSet = sessionExercise.sets.reduce<(typeof sessionExercise.sets)[0] | null>(
-      (max, s) => (s.setNumber > (max?.setNumber ?? -Infinity) ? s : max),
-      null,
-    );
+    // AC-SSA-5: `edit_last_workout` may name the set; without a number it is the last one.
+    const lastSet =
+      opts?.setNumber != null
+        ? sessionExercise.sets.find(s => s.setNumber === opts.setNumber)
+        : sessionExercise.sets.reduce<(typeof sessionExercise.sets)[0] | null>(
+            (max, s) => (s.setNumber > (max?.setNumber ?? -Infinity) ? s : max),
+            null,
+          );
 
     if (!lastSet) {
-      throw new Error(`No sets found for exercise ${exerciseId} in session ${sessionId}`);
+      throw new Error(
+        opts?.setNumber != null
+          ? `Set ${opts.setNumber} not found for exercise ${exerciseId} in session ${sessionId}`
+          : `No sets found for exercise ${exerciseId} in session ${sessionId}`,
+      );
     }
 
     const before = {
@@ -512,6 +533,40 @@ export class TrainingService implements ITrainingService {
         setKind: updatedSet.setKind,
       },
     };
+  }
+
+  /**
+   * AC-SSA-5 — delete one numbered set of an exercise (`edit_last_workout`); the sibling of
+   * `deleteLastSets`, which deletes from the end.
+   */
+  async deleteSet(sessionId: string, exerciseId: string, setNumber: number): Promise<DeletedSetsResult> {
+    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    const sessionExercise = session.exercises.find(ex => ex.exerciseId === exerciseId);
+    if (!sessionExercise) {
+      throw new Error(`Exercise ${exerciseId} not found in session ${sessionId}`);
+    }
+
+    const target = sessionExercise.sets.find(s => s.setNumber === setNumber);
+    if (!target) {
+      throw new Error(`Set ${setNumber} not found for exercise ${exerciseId} in session ${sessionId}`);
+    }
+
+    await this.sessionSetRepo.deleteById(target.id);
+
+    return {
+      exerciseId,
+      deletedSets: [{ setNumber: target.setNumber, setData: target.setData, rpe: target.rpe }],
+    };
+  }
+
+  /** AC-SSA-5: the user's most recent `completed` session (any close reason), with details. */
+  async getLastFinishedSession(userId: string): Promise<WorkoutSessionWithDetails | null> {
+    const last = await this.sessionRepo.findLastCompletedByUserId(userId);
+    return last ? this.sessionRepo.findByIdWithDetails(last.id) : null;
   }
 
   // --- Private helpers ---
@@ -583,36 +638,6 @@ export class TrainingService implements ITrainingService {
       }
     }
     await this.sessionRepo.autoCloseTimedOut(userId, cutoffTime);
-  }
-
-  /**
-   * BUG-053 T2 (AC-SSA-2): the user's most recent completed session (any close reason) returns
-   * to training — in_progress, completion fields cleared, `reopened_at` stamped; the timeout
-   * sweep runs first so a stale leftover does not refuse the reopen (INV-TRAINING-002 still
-   * refuses a live one). `last_activity_at` is deliberately untouched: sets logged into the
-   * reopened session stay retro-dated to the session's last activity (BR-TRAINING-030), and the
-   * auto-close measures idleness from `max(last_activity_at, reopened_at)` (INV-TRAINING-005).
-   */
-  async reopenLastSession(userId: string): Promise<WorkoutSessionWithDetails> {
-    await this.assertNoActiveSession(userId);
-
-    const last = await this.sessionRepo.findLastCompletedByUserId(userId);
-    if (!last) {
-      throw new NoCompletedSessionError();
-    }
-
-    await this.sessionRepo.update(last.id, {
-      status: 'in_progress',
-      completedAt: null,
-      autoCloseReason: null,
-      reopenedAt: new Date(),
-    });
-
-    const reopened = await this.sessionRepo.findByIdWithDetails(last.id);
-    if (!reopened) {
-      throw new Error('Session not found');
-    }
-    return reopened;
   }
 
   /**

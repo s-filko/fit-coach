@@ -6,11 +6,11 @@ import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
-import type { SetKind, WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { EFFORT_MAPPING_TEXT } from '@infra/ai/prompts/effort';
 import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
+import { carryWeight, flatSetData } from '@infra/ai/tools/set-input';
 
 import { createLogger } from '@shared/logger';
 import { isDatabaseFailure } from '@shared/pg-error-cause';
@@ -22,46 +22,6 @@ const log = createLogger('training-tools');
 
 export interface LogSetToolDeps {
   trainingService: ITrainingService;
-}
-
-type SetDataInput = z.infer<typeof SetDataSchema>;
-interface Carried {
-  weight: number;
-  weightUnit: 'kg' | 'lbs';
-  setNumber: number;
-}
-
-/**
- * D15: reps without a weight on an exercise already weighted in this session is shorthand ("did another 12"),
- * not a bodyweight set — carry the weight of the latest set of the same kind (a warm-up weight never reaches a
- * working set) and its total-weight basis; the confirmation says so.
- */
-function carryWeight(
-  base: SetDataInput,
-  input: { exerciseId?: string; exerciseName?: string; setKind?: SetKind; weightBasis?: 'total' },
-  session: WorkoutSessionWithDetails | null,
-): { setData: SetDataInput; weightBasis?: 'total'; carried?: Carried } {
-  if (base.type !== 'functional_reps') {
-    return { setData: base, weightBasis: input.weightBasis };
-  }
-  const wanted = input.exerciseName?.trim().toLowerCase();
-  // The same precedence as the service: an id wins over a name.
-  const sessionExercise = session?.exercises.find(se =>
-    input.exerciseId != null ? se.exerciseId === input.exerciseId : se.exercise.name.toLowerCase() === wanted,
-  );
-  const isWarmup = input.setKind === 'warmup';
-  const previous = [...(sessionExercise?.sets ?? [])]
-    .sort((a, b) => b.setNumber - a.setNumber)
-    .find(s => (s.setKind === 'warmup') === isWarmup && s.setData.type === 'strength' && (s.setData.weight ?? 0) > 0);
-  if (previous?.setData.type !== 'strength' || previous.setData.weight == null) {
-    return { setData: base, weightBasis: input.weightBasis };
-  }
-  const { weight, weightUnit = 'kg', perHand } = previous.setData;
-  return {
-    setData: { type: 'strength', reps: base.reps, weight, weightUnit },
-    weightBasis: input.weightBasis ?? (perHand === false ? 'total' : undefined),
-    carried: { weight, weightUnit, setNumber: previous.setNumber },
-  };
 }
 
 export function buildLogSetTool(deps: LogSetToolDeps) {
@@ -76,28 +36,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         return systemError('No active training session found. Cannot log set.');
       }
 
-      // Build setData from flat fields — avoids LLM confusion with nested object schemas
-      const baseSetData = (() => {
-        if (input.distanceKm != null) {
-          return {
-            type: 'cardio_distance' as const,
-            distance: input.distanceKm,
-            distanceUnit: 'km' as const,
-            duration: input.durationSeconds ?? 0,
-            ...(input.inclinePct != null && { inclinePct: input.inclinePct }),
-          };
-        }
-        if (input.durationSeconds != null) {
-          return { type: 'cardio_duration' as const, duration: input.durationSeconds };
-        }
-        if (input.reps != null && input.weight != null) {
-          return { type: 'strength' as const, reps: input.reps, weight: input.weight, weightUnit: 'kg' as const };
-        }
-        if (input.reps != null) {
-          return { type: 'functional_reps' as const, reps: input.reps };
-        }
-        return { type: 'strength' as const, reps: 0, weight: 0, weightUnit: 'kg' as const };
-      })();
+      const baseSetData = flatSetData(input);
 
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
 

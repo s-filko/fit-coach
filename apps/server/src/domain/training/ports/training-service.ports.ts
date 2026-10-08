@@ -97,14 +97,10 @@ export interface ITrainingService {
   autoCloseTimedOutSessions(userId: string): Promise<void>;
 
   /**
-   * BUG-053 T2 (AC-SSA-2): returns the user's most recent `completed` session (any close reason)
-   * to training — `status = in_progress`, `completed_at = null`, `auto_close_reason = null`,
-   * `reopened_at = now`; `last_activity_at` is not touched, so sets logged into it stay
-   * retro-dated to the session's last activity (BR-TRAINING-030). Refuses with
-   * `ActiveSessionExistsError` when another session is active (INV-TRAINING-002) and with
-   * `NoCompletedSessionError` when there is no completed session.
+   * BUG-053 T5 (AC-SSA-5): the user's most recent `completed` session (any close reason) with its
+   * exercises and sets — the one `edit_last_workout` edits in place — or null when there is none.
    */
-  reopenLastSession(userId: string): Promise<WorkoutSessionWithDetails>;
+  getLastFinishedSession(userId: string): Promise<WorkoutSessionWithDetails | null>;
 
   // Exercise management during training
   completeCurrentExercise(sessionId: string): Promise<AutoCompletedExercise>;
@@ -132,7 +128,11 @@ export interface ITrainingService {
       // set-kind plan Task 1 (D3, AC-SK-8)
       setKind?: SetKind;
     },
+    // AC-SSA-5: names the set to update; absent = the exercise's last set.
+    opts?: { setNumber?: number },
   ): Promise<UpdateSetResult>;
+  // AC-SSA-5: deletes one numbered set of an exercise.
+  deleteSet(sessionId: string, exerciseId: string, setNumber: number): Promise<DeletedSetsResult>;
 
   /**
    * Resolves an exercise name to its catalog id (exact ilike match, then semantic search) — the
@@ -158,6 +158,9 @@ export interface ITrainingService {
       // set-kind plan Task 1 (D5): 'total' overrides the per-hand default on a dumbbell/kettlebell
       // exercise — the user explicitly stated a combined weight.
       weightBasis?: 'total';
+      // AC-SSA-5: the session is completed and edited in place — exercise statuses and the session's
+      // activity clock stay as they are (implies skipActivityUpdate); a new exercise row is `completed`.
+      finishedSession?: boolean;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }>;
 }

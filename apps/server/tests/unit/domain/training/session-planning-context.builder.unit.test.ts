@@ -67,7 +67,6 @@ describe('SessionPlanningContextBuilder', () => {
     sessionPlanJson: null,
     lastActivityAt: completedAt,
     autoCloseReason: null,
-    reopenedAt: null,
     createdAt: completedAt,
     updatedAt: completedAt,
     exercises: [

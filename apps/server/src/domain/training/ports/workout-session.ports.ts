@@ -58,8 +58,8 @@ export interface IWorkoutSessionRepository {
   ): Promise<WorkoutSessionWithDetails[]>;
   findActiveByUserId(userId: string): Promise<WorkoutSession | null>;
   /**
-   * BUG-053 T2 (AC-SSA-2): the user's most recent `completed` session, any close reason, newest
-   * `completed_at` first — the one `reopenLastSession` returns to training.
+   * BUG-053 T5 (AC-SSA-5): the user's most recent `completed` session, any close reason, newest
+   * `completed_at` first — the one `edit_last_workout` edits.
    */
   findLastCompletedByUserId(userId: string): Promise<WorkoutSession | null>;
   update(sessionId: string, updates: Partial<WorkoutSession>): Promise<WorkoutSession>;

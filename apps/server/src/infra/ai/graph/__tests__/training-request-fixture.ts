@@ -178,7 +178,6 @@ export function sessionOf(
     },
     lastActivityAt: last,
     autoCloseReason: null,
-    reopenedAt: null,
     createdAt: started,
     updatedAt: started,
     exercises,

@@ -29,14 +29,3 @@ export class ExerciseNotFoundError extends Error {
     this.name = 'ExerciseNotFoundError';
   }
 }
-
-/**
- * BUG-053 (stale-session-autoclose plan T2): `reopenLastSession` found no `completed` session for
- * the user — there is nothing to return to training. The message is the fact the model relays.
- */
-export class NoCompletedSessionError extends Error {
-  constructor() {
-    super('No finished workout to reopen.');
-    this.name = 'NoCompletedSessionError';
-  }
-}

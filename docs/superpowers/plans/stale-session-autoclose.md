@@ -226,6 +226,24 @@ Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lo
 - `npm run test:scenarios` → Tests: 400 passed, 1 todo, 401 total (Suites: 24/24).
 - `node scripts/state.mjs --check` → state check: OK.
 
+### T5 — `edit_last_workout` replaces `reopen_workout` (AC-SSA-5) — 2026-10-08, worker
+
+Red first (before implementation):
+- `src/infra/ai/tools/__tests__/edit-last-workout.tool.unit.test.ts:22` — TS2307: module `../edit-last-workout.tool` not found.
+- `src/domain/training/services/__tests__/training-service-edit-finished.unit.test.ts` — suite FAIL (`getLastFinishedSession` / `deleteSet` / `finishedSession` / `setNumber` do not exist; exact TS lines not captured).
+- ✕ 'BR-CONV-015: matches today's guard matrix verbatim' (chat → training edge still present), ✕ phase-specs tools lists for chat / session_planning / training (no `edit_last_workout`), ✕ handoff 'rejects when evaluateTransition would block it' (chat → training still allowed).
+
+Code:
+- Removed: `reopen_workout` tool, `reopenLastSession`, `NoCompletedSessionError`, `reopened_at` (schema, type, migration `0024`, its snapshot and journal entry), the idle base `max(last_activity_at, reopened_at)` (back to `last_activity_at` in `session-timing.ts` and the repo), the chat → training matrix edge and its tests.
+- `edit_last_workout` (chat, session_planning, training): `action` add | update | delete; no action = the exercise's sets (no exercise = the whole workout). Target = most recent `completed` session (`getLastFinishedSession`). `add` → `logSetWithContext` (new `finishedSession` option: no exercise-status changes, no activity bump, a new exercise row is `completed`) with `createdAt` = last activity + `RETRO_SET_OFFSET_MS`; set-data mapping and weight carry-over moved from `log-set.tool.ts` to shared `set-input.ts`. `update` → `updateLastSet` (new optional `setNumber`). `delete` → new `deleteSet`. Replies state facts only.
+- Journeys: `c-catch-up-logging` (scenario + test): catch-up adds 3 pull-ups with `edit_last_workout`, workout stays completed/timeout, sets at last activity + 5 min; the finish step is gone. `retro-timestamps`: the gym turn adds one set with `edit_last_workout`; the 16-live-set journey and AC-RT-3/AC-RT-4 live assertions have no path any more (a finished workout is not reopened) and were removed.
+- (D) Test DB: `ALTER TABLE workout_sessions DROP COLUMN reopened_at` applied inside the lock (the test DB has no drizzle migrations table).
+
+Verification (from `apps/server`; DB suites under `flock /tmp/fitcoach-testdb.lock`):
+- `npm run check-all` → 0 errors (1281 warnings, pre-existing kind).
+- `npm run test:unit` → Tests: 1837 passed, 1837 total (Suites: 186/186).
+- `npm run test:integration` → Tests: 640 passed, 1 todo, 641 total (Suites: 56/56).
+- `npm run test:scenarios` → Tests: 370 passed, 1 todo, 371 total (Suites: 24/24).
 
 ## Review
 

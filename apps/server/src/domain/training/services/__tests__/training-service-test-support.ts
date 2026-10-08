@@ -87,7 +87,6 @@ export const makeSession = (exercises: SessionExerciseWithDetails[] = []): Worko
   sessionPlanJson: null,
   lastActivityAt: new Date(),
   autoCloseReason: null,
-  reopenedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   exercises,
@@ -103,6 +102,7 @@ export function createMocks() {
     findById: jest.fn(),
     findByExerciseId: jest.fn(),
     update: jest.fn(),
+    deleteById: jest.fn(),
   } as unknown as jest.Mocked<ISessionSetRepository>;
 
   const mockSessionExerciseRepo = {

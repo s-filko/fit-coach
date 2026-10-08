@@ -33,6 +33,7 @@ import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
 import {
   buildCompleteCurrentExerciseTool,
   buildDeleteLastSetsTool,
+  buildEditLastWorkoutTool,
   buildFinishTrainingTool,
   buildGetExerciseHistoryTool,
   buildLogSetTool,
@@ -95,6 +96,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     buildSetSessionPlaceTool({ trainingService }),
     buildDeleteLastSetsTool({ trainingService }),
     buildUpdateLastSetTool({ trainingService }),
+    buildEditLastWorkoutTool({ trainingService }),
     ...buildSharedTools({ userService, userFacts: deps.userFacts }),
   ];
 

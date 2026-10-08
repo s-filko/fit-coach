@@ -165,7 +165,6 @@ function makeSession(over: Partial<WorkoutSessionWithDetails> = {}): WorkoutSess
     },
     lastActivityAt: new Date('2026-10-01T10:55:00.000Z'),
     autoCloseReason: null,
-    reopenedAt: null,
     createdAt: started,
     updatedAt: started,
     exercises: [

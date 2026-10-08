@@ -23,8 +23,8 @@ import {
   SESSION_PLANNING_RECOVERY_TIMELINE_V1,
 } from '@infra/ai/prompts/blocks';
 import {
+  buildEditLastWorkoutTool,
   buildRequestTransitionTool,
-  buildReopenWorkoutTool,
   buildSearchExercisesTool,
   buildSharedTools,
   buildStartTrainingSessionTool,
@@ -74,9 +74,8 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
         userFactsService: deps.userFacts,
         transitionHandoffTargets: deps.transitionHandoffTargets,
       }),
-      // BUG-053 T2 (AC-SSA-2): planning can also reopen the last finished workout instead of
-      // starting a new one — it enters training with the reopened session.
-      buildReopenWorkoutTool({ trainingService }),
+      // BUG-053 T5 (AC-SSA-5): edits the last finished workout in place; the phase does not change.
+      buildEditLastWorkoutTool({ trainingService }),
       buildRequestTransitionTool('session_planning'),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],

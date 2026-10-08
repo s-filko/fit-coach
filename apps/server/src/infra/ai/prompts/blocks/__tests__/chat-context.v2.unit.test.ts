@@ -33,7 +33,6 @@ const sessionWith = (autoCloseReason: WorkoutSessionWithDetails['autoCloseReason
     sessionPlanJson: null,
     lastActivityAt: new Date('2026-10-08T11:31:00.000Z'),
     autoCloseReason,
-    reopenedAt: null,
     createdAt: new Date('2026-10-08T09:54:00.000Z'),
     updatedAt: new Date('2026-10-08T11:31:00.000Z'),
     exercises: [
@@ -98,7 +97,7 @@ describe('chat.context v2 — the auto-close fact (BUG-053 T3, AC-SSA-3)', () =>
     }
   });
 
-  it('a reopened-then-finished session (no auto_close_reason) shows no marker', () => {
+  it('a session finished by the user (no auto_close_reason) shows no marker', () => {
     const text = CHAT_CONTEXT_V2.render(dataOf([sessionWith(null)]), ctx, 5);
     expect(text).not.toContain('closed automatically');
   });

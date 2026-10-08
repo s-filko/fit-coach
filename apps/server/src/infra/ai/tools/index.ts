@@ -20,17 +20,13 @@ export {
   type CompleteRegistrationToolDeps,
 } from '@infra/ai/tools/complete-registration.tool';
 export { buildDeleteLastSetsTool, type DeleteLastSetsToolDeps } from '@infra/ai/tools/delete-last-sets.tool';
+export { buildEditLastWorkoutTool, type EditLastWorkoutToolDeps } from '@infra/ai/tools/edit-last-workout.tool';
 export { buildFinishTrainingTool, type FinishTrainingToolDeps } from '@infra/ai/tools/finish-training.tool';
 export {
   buildGetExerciseHistoryTool,
   type GetExerciseHistoryToolDeps,
 } from '@infra/ai/tools/get-exercise-history.tool';
 export { buildLogSetTool, type LogSetToolDeps } from '@infra/ai/tools/log-set.tool';
-export {
-  buildReopenWorkoutTool,
-  type ReopenWorkoutToolDeps,
-  reopenWorkoutSummary,
-} from '@infra/ai/tools/reopen-workout.tool';
 export { buildRequestTransitionTool, type RequestTransitionVariant } from '@infra/ai/tools/request-transition.tool';
 export { buildSaveProfileFieldsTool, type SaveProfileFieldsToolDeps } from '@infra/ai/tools/save-profile-fields.tool';
 export { buildSaveWorkoutPlanTool, type SaveWorkoutPlanToolDeps } from '@infra/ai/tools/save-workout-plan.tool';

@@ -62,7 +62,7 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
   chat: [
     'update_profile',
     'request_transition',
-    'reopen_workout',
+    'edit_last_workout',
     'save_timezone',
     'set_language',
     'manage_fact',
@@ -80,7 +80,7 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
   session_planning: [
     'search_exercises',
     'start_training_session',
-    'reopen_workout',
+    'edit_last_workout',
     'request_transition',
     'save_timezone',
     'set_language',
@@ -96,6 +96,7 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
     'set_session_place',
     'delete_last_sets',
     'update_last_set',
+    'edit_last_workout',
     'save_timezone',
     'set_language',
     'manage_fact',

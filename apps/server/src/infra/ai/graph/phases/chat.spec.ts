@@ -14,7 +14,7 @@ import type {
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
 import { CHAT_CONTEXT_V2 } from '@infra/ai/prompts/blocks';
 import {
-  buildReopenWorkoutTool,
+  buildEditLastWorkoutTool,
   buildRequestTransitionTool,
   buildSharedTools,
   buildUpdateProfileTool,
@@ -40,9 +40,8 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
     tools: [
       buildUpdateProfileTool({ userService }),
       buildRequestTransitionTool('chat', deps.transitionHandoffTargets),
-      // BUG-053 T2 (AC-SSA-2): the one chat → training edge — reopen_workout enters training
-      // with the reopened session; request_transition's schema keeps 'training' unreachable.
-      buildReopenWorkoutTool({ trainingService: deps.trainingService }),
+      // BUG-053 T5 (AC-SSA-5): edits the last finished workout in place; the phase does not change.
+      buildEditLastWorkoutTool({ trainingService: deps.trainingService }),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],
     toolPolicy: CHAT_TOOL_POLICY,
