@@ -181,3 +181,48 @@ describe('predictNextLoad — rule details', () => {
     expect(verdict.expectedKg).toBe(100);
   });
 });
+
+// --- the Gravitron (owner 2026-10-08): a counterweight — less weight = harder = progress ---
+
+describe('predictNextLoad — the assisted counterweight exercise', () => {
+  const gravitron = (over: Partial<Parameters<typeof predictNextLoad>[0]> = {}) =>
+    ({
+      performances: perfs(
+        perf(set(10, 25, 8), set(10, 25, 8), set(10, 25, 8)),
+        perf(set(10, 25, 8), set(10, 25, 8), set(10, 25, 8)),
+        perf(set(8, 30), set(8, 30), set(8, 30)),
+      ),
+      range: RANGE_8_10,
+      equipment: 'stack',
+      gapDays: 2,
+      exerciseName: 'Assisted Pull-ups (Gravitron)',
+      ...over,
+    }) as Parameters<typeof predictNextLoad>[0];
+
+  it('2-for-2 at the top of the range → difficulty UP = counterweight DOWN one stack step: 25 → 20', () => {
+    const verdict = predictNextLoad(gravitron());
+    expect(verdict.direction).toBe('up');
+    expect(verdict.expectedKg).toBe(20);
+    expect(verdict.acceptableKg).toEqual([20]);
+  });
+
+  it('a miss mirrors: difficulty DOWN = counterweight UP one step', () => {
+    const verdict = predictNextLoad(
+      gravitron({
+        performances: perfs(
+          perf(set(6, 25, 9), set(6, 25, 9), set(6, 25, 9)),
+          perf(set(9, 25), set(9, 25), set(9, 25)),
+          perf(set(8, 30), set(8, 30), set(8, 30)),
+        ),
+      }),
+    );
+    expect(verdict.direction).toBe('down');
+    expect(verdict.expectedKg).toBe(30); // harder failed → more assistance: 25 + the 5 kg stack step
+    expect(verdict.acceptableKg).toEqual([30]);
+  });
+
+  it('the flag comes from the NAME ("Assisted") — the product has no such flag (owner decision)', () => {
+    const unassisted = predictNextLoad(gravitron({ exerciseName: 'Leg Press' }));
+    expect(unassisted.expectedKg).toBe(30); // a normal stack exercise grows UP: 25 + 5
+  });
+});

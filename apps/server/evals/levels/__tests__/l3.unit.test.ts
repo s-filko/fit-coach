@@ -150,8 +150,9 @@ describe('loadScenarios', () => {
       'n-load-break',
       'n-load-uneven',
       'n-load-ask',
+      'n-load-gravitron',
     ]);
-    expect(loadScenarios('n-load-break').map(s => s.id)).toEqual(['n-load-break']);
+    expect(loadScenarios('n-load-gravitron').map(s => s.id)).toEqual(['n-load-gravitron']);
     const defaults = loadScenarios().map(s => s.id);
     expect(defaults.some(id => id.startsWith('n-load'))).toBe(false);
   });

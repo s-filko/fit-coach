@@ -22,6 +22,7 @@ import { predictNextLoad, type OracleVerdict } from '../lib/weight-oracle';
 /** Fixed test-catalog exercise IDs (src/app/test/setup.ts). */
 export const N_BENCH_PRESS_ID = 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95';
 export const N_SQUAT_ID = '3818f94a-0543-4241-83b4-6840d06a4e6a';
+export const N_GRAVITRON_ID = '6b1d2f39-8c47-4e5a-9d20-7f3a8b4c1e57';
 
 /** One seeded workout of a case's history (the scenario schema's strength sets). */
 export interface NLoadWorkout {
@@ -38,6 +39,8 @@ export interface NLoadCase {
   sessionKey: string;
   sessionTitle: string;
   range: { floor: number; top: number };
+  /** The equipment kind the oracle's step rule reads; default barbell (2.5). */
+  equipment?: 'barbell' | 'dumbbell' | 'stack' | 'bodyweight';
   /** The exercise's seeded performances, OLDEST FIRST (the past.workouts order). */
   workouts: NLoadWorkout[];
   /** Calendar days between the newest performance and the journey's T0. */
@@ -62,11 +65,13 @@ export interface NLoadCase {
 /** The oracle verdict of one case — computed from its seeded history at read time. */
 export function verdictOf(c: NLoadCase): OracleVerdict {
   return predictNextLoad({
-    // Newest first, the order findRecentPerformancesForExercise returns.
+    // Newest first, the order findRecentPerformancesForExercise returns. The exerciseName rides
+    // along so the oracle's assisted-counterweight rule ('Assisted …', the Gravitron) applies.
     performances: [...c.workouts].reverse().map(w => ({ sets: w.sets })),
     range: c.range,
-    equipment: 'barbell',
+    equipment: c.equipment ?? 'barbell',
     gapDays: c.gapDays,
+    exerciseName: c.exerciseName,
   });
 }
 
@@ -125,7 +130,9 @@ export function nLoadScenarioOf(c: NLoadCase): Scenario {
     throw new Error(`n-load case ${c.id}: no report weight (verdict ${verdict.direction} has no expectedKg)`);
   }
   const planText = `3×${c.range.floor}-${c.range.top}`;
-  const startFinalText = `Поехали! Начнём с ${c.exerciseName === 'Barbell Bench Press' ? 'жима лёжа' : 'приседа'}: ${planText}, вес подберём по ходу.`;
+  const startNameRu =
+    c.exerciseName === 'Barbell Bench Press' ? 'жима лёжа' : c.exerciseName === 'Barbell Back Squat' ? 'приседа' : 'гравитрона';
+  const startFinalText = `Поехали! Начнём с ${startNameRu}: ${planText}, вес подберём по ходу.`;
   const proposalText = c.proposal(expectedKg);
   const loggedText = 'Записал!';
   const afterReportText = 'Принято, пошли дальше.';
@@ -439,5 +446,39 @@ export const N_LOAD_CASES: NLoadCase[] = [
     historyRows: ['Barbell Back Squat (today 3×8-10)', '- no earlier record'],
     todayAfterReport: `- Barbell Back Squat [id ${N_SQUAT_ID}] — plan 3×8-10 — in progress: 10×50`,
     seenMustNot: ['Previous workout:', 'Loads used:'],
+  },
+  {
+    id: 'n-load-gravitron',
+    pattern:
+      'the Gravitron counterweight — all sets at the top of the range twice → difficulty up is counterweight DOWN one stack step (owner 2026-10-08)',
+    exerciseName: 'Assisted Pull-ups (Gravitron)',
+    exerciseId: N_GRAVITRON_ID,
+    sessionKey: 'pull_a',
+    sessionTitle: 'Pull A',
+    range: { floor: 8, top: 10 },
+    equipment: 'stack',
+    workouts: [
+      { at: '-8d', sets: [{ reps: 8, weight: 30 }, { reps: 8, weight: 30 }, { reps: 8, weight: 30 }] },
+      { at: '-5d', sets: [{ reps: 10, weight: 25, rpe: 8 }, { reps: 10, weight: 25, rpe: 8 }, { reps: 10, weight: 25, rpe: 8 }] },
+      { at: '-2d', sets: [{ reps: 10, weight: 25, rpe: 8 }, { reps: 10, weight: 25, rpe: 8 }, { reps: 10, weight: 25, rpe: 8 }] },
+    ],
+    gapDays: 2,
+    askText: 'какой вес ставить на гравитроне?',
+    proposal: kg => `Ставь ${kg} кг противовеса: минувшие две тренировки — все подходы по 10 с запасом, сними один уровень помощи.`,
+    reportText: 'поставил 20, сделал 10',
+    reportReps: 10,
+    todayRows: [
+      'Previous workout: 2 days ago, Friday Sep 18 — Assisted Pull-ups (Gravitron).',
+      `- Assisted Pull-ups (Gravitron) [id ${N_GRAVITRON_ID}] — plan 3×8-10 — nothing yet`,
+    ],
+    historyRows: [
+      'Assisted Pull-ups (Gravitron) (today 3×8-10)',
+      '- 2 days ago, Friday Sep 18: 10×25, 10×25, 10×25 (all RPE 8)',
+      '- 5 days ago, Tuesday Sep 15: 10×25, 10×25, 10×25 (all RPE 8)',
+      '- 8 days ago, Saturday Sep 12: 8×30, 8×30, 8×30 (no RPE recorded)',
+      'Trend Sep 12 → Sep 15 → Sep 18:',
+      '- Loads used: 25, 30 kg.',
+    ],
+    todayAfterReport: `- Assisted Pull-ups (Gravitron) [id ${N_GRAVITRON_ID}] — plan 3×8-10 — in progress: 10×20`,
   },
 ];

@@ -314,3 +314,27 @@ progression principle)**. The sentence replaced: 125 → 313 chars.
 - Left to the orchestrator: steps 3/5/6 — the baseline (v13) and candidate (v14) live measurements, the blind judge,
   accept-or-revert (the acceptance bar of the plan's T3 rubric applies; the planning-note confound above is worth a
   look in the candidate transcripts).
+
+### T2 addendum — n-load-gravitron, the counterweight progression (worker, 2026-10-08)
+
+- Owner order 2026-10-08: the Gravitron ('Assisted Pull-ups (Gravitron)') is a catalog exercise whose plate weight is
+  a COUNTERWEIGHT — less weight = harder = progress. New journey `n-load-gravitron`: history 30 kg (−8 d) → two
+  consecutive workouts with every set 10×25 RPE 8 (−5 d, −2 d), range 8–10, stack equipment; the ask
+  «какой вес ставить на гравитроне?». Oracle: direction up in DIFFICULTY = counterweight DOWN one stack step →
+  expected **20**, acceptable **[20]** (the stack rule = 5, as the oracle already applies; the brief's 2.5-alternative
+  does not apply). The miss branch mirrors (counterweight UP one step, pinned by a unit test); break/hold keep the
+  same counterweight. `weight-oracle.ts` grew an explicit TEST-ONLY `assisted` flag derived from the exercise NAME
+  containing 'Assisted' (`isAssistedExercise`) — the product itself has no such flag by owner decision; the meaning
+  comes from the name. `nLoadExpectations()` includes the case automatically (direction up, expected 20) so T3's
+  weight-hit computation covers it unchanged.
+- Fixture note (outside `evals/**`, one row, following the established fixed-id convention the b/n-load journeys
+  already rely on): `src/app/test/setup.ts` seeds 'Assisted Pull-ups (Gravitron)' (id `6b1d2f39-…`, compound, stack,
+  strength, lats primary / biceps secondary) — the scripted `start_training_session` needs a fixed id.
+- Red first, recorded: oracle — `weight-oracle.unit.test.ts:225:52 - error TS2353: 'exerciseName' does not exist in
+  type 'Partial<OracleInput>'` → the assisted flag → 14/14. Journey — first run `Tests: 61 passed, 61 total`: the
+  gravitron was in `N_LOAD_CASES` (its expectations entry ran) but NOT yet in the integration test's `JOURNEYS`
+  list — added → 70/70 with every pinned `# History` row (dates, `Loads used: 25, 30 kg.`,
+  `in progress: 10×20`) passing on the first scripted run.
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 190 passed, 190 total`,
+  `Tests: 1895 passed, 1895 total` (+3); the n-load suite → `Test Suites: 1 passed, 1 total`,
+  `Tests: 70 passed, 70 total`; flock `npm run test:scenarios` — quoted in the worker report.

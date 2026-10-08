@@ -29,6 +29,7 @@ import { scenario as journeyEarlyStop } from '../../../evals/scenarios/n-load-ea
 import { scenario as journeyBreak } from '../../../evals/scenarios/n-load-break.scenario';
 import { scenario as journeyUneven } from '../../../evals/scenarios/n-load-uneven.scenario';
 import { scenario as journeyAsk } from '../../../evals/scenarios/n-load-ask.scenario';
+import { scenario as journeyGravitron } from '../../../evals/scenarios/n-load-gravitron.scenario';
 import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
@@ -36,7 +37,7 @@ import { installScriptedModel, type ScriptedModelHandle } from './scripted-model
 /** The journeys' pinned date labels and weekday names resolve against this T0 (a Sunday in Europe/Berlin). */
 const T0 = new Date('2026-09-20T10:00:00.000Z');
 
-const JOURNEYS: Scenario[] = [journeyUp, journeyMiss, journeyEarlyStop, journeyBreak, journeyUneven, journeyAsk];
+const JOURNEYS: Scenario[] = [journeyUp, journeyMiss, journeyEarlyStop, journeyBreak, journeyUneven, journeyAsk, journeyGravitron];
 
 const textOf = (m: BaseMessage | undefined): string => {
   const content = m?.content;

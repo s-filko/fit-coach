@@ -54,6 +54,16 @@ export interface OraclePerformance {
 
 export type OracleEquipment = 'barbell' | 'dumbbell' | 'stack' | 'bodyweight';
 
+/**
+ * The assisted-counterweight flag (coach-quality-proof T2 gravitron, owner 2026-10-08): a machine
+ * exercise whose plate weight is ASSISTANCE — less counterweight = harder = progress. TEST-ONLY
+ * yardstick, and the flag is DERIVED FROM THE NAME here ('Assisted …') because the product carries
+ * no such flag by owner decision — the meaning comes from the exercise's name.
+ */
+export function isAssistedExercise(exerciseName: string): boolean {
+  return /assisted/i.test(exerciseName);
+}
+
 export interface OracleInput {
   /** Newest first — the order `findRecentPerformancesForExercise` returns. */
   performances: OraclePerformance[];
@@ -62,6 +72,12 @@ export interface OracleInput {
   equipment: OracleEquipment;
   /** Calendar days since the exercise's last performance; 0 when there is none. */
   gapDays: number;
+  /**
+   * The catalog name — an 'Assisted …' exercise flips the load direction (coach-quality-proof T2
+   * gravitron): difficulty UP is one step of counterweight DOWN. Optional so the earlier cases
+   * (plain barbell/stack names) read unchanged.
+   */
+  exerciseName?: string;
 }
 
 export interface OracleVerdict {
@@ -183,12 +199,19 @@ export function predictNextLoad(input: OracleInput): OracleVerdict {
   }
   const predict = (load: number): number => snapToRecorded(load, recordedLoads);
 
+  // The assisted mirror (T2 gravitron): difficulty UP is counterweight DOWN, difficulty DOWN is
+  // counterweight UP. Every step is expressed as its effect on the number the machine shows.
+  const assisted = input.exerciseName !== undefined && isAssistedExercise(input.exerciseName);
+  const harder = assisted ? weight - step : weight + step;
+  const easier = assisted ? weight + step : weight - step;
+  const easierBreak = assisted ? weight * 1.1 : weight * 0.9;
+
   // BR-TRAINING-038: a gap ≥ 14 d is the `return` tier — the first workout back
   // is one step down (the deleted engine's return ladder); the ~10 % lighter
   // alternative is the coordinator's plain rule, owner-unconfirmed.
   if (gapDays >= 14) {
-    const expected = predict(roundToStep(weight - step, step));
-    const lighter = predict(roundToStep(weight * 0.9, step));
+    const expected = predict(roundToStep(easier, step));
+    const lighter = predict(roundToStep(easierBreak, step));
     return {
       direction: 'down',
       expectedKg: expected,
@@ -222,7 +245,7 @@ export function predictNextLoad(input: OracleInput): OracleVerdict {
     twoMostRecent.every(p => loadOf(p) === weight) &&
     twoMostRecent.every(p => capacityOf(p.sets[p.sets.length - 1]!) >= range.top + 2)
   ) {
-    const expected = predict(roundToStep(weight + step, step));
+    const expected = predict(roundToStep(harder, step));
     return {
       direction: 'up',
       expectedKg: expected,
@@ -237,7 +260,7 @@ export function predictNextLoad(input: OracleInput): OracleVerdict {
     const belowByCapacity = capacityOf(last) < range.floor;
     if (belowByReps && belowByCapacity && last.rpe != null) {
       // BR-TRAINING-043: a miss — one step down.
-      const expected = predict(roundToStep(weight - step, step));
+      const expected = predict(roundToStep(easier, step));
       return {
         direction: 'down',
         expectedKg: expected,
@@ -263,7 +286,7 @@ export function predictNextLoad(input: OracleInput): OracleVerdict {
         (previous.sets[previous.sets.length - 1]!.reps ?? 0) < range.floor &&
         previous.sets[previous.sets.length - 1]!.rpe == null;
       if (repeated) {
-        const expected = predict(roundToStep(weight - step, step));
+        const expected = predict(roundToStep(easier, step));
         return {
           direction: 'down',
           expectedKg: expected,

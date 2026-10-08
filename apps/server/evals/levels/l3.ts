@@ -85,6 +85,7 @@ import { scenario as journeyFlD } from '../scenarios/fl-d-recurring-short-state.
 import { scenario as journeyFlE } from '../scenarios/fl-e-advisory-plan.scenario';
 import { scenario as journeyFlF } from '../scenarios/fl-f-remembered-corrected-deleted.scenario';
 import { scenario as journeyNLoadAsk } from '../scenarios/n-load-ask.scenario';
+import { scenario as journeyNLoadGravitron } from '../scenarios/n-load-gravitron.scenario';
 import { scenario as journeyNLoadBreak } from '../scenarios/n-load-break.scenario';
 import { scenario as journeyNLoadEarlyStop } from '../scenarios/n-load-early-stop.scenario';
 import { scenario as journeyNLoadMiss } from '../scenarios/n-load-miss.scenario';
@@ -132,6 +133,7 @@ const N_LOAD_SCENARIOS: Scenario[] = [
   journeyNLoadBreak,
   journeyNLoadUneven,
   journeyNLoadAsk,
+  journeyNLoadGravitron,
 ];
 
 /**
