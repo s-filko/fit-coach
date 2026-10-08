@@ -1,4 +1,4 @@
-import { ActiveSessionExistsError, ExerciseNotFoundError } from '@domain/training/errors';
+import { ActiveSessionExistsError, ExerciseNotFoundError, WeightRequiredError } from '@domain/training/errors';
 import { isValidExerciseId } from '@domain/training/plan-exercise-id';
 import type {
   AutoCompletedExercise,
@@ -330,6 +330,7 @@ export class TrainingService implements ITrainingService {
       skipActivityUpdate?: boolean;
       setKind?: SetKind;
       weightBasis?: 'total';
+      weightOmitted?: boolean;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }> {
     // BUG-043: the first live set of a session that never had one (plan accepted long ago) is when the
@@ -350,7 +351,10 @@ export class TrainingService implements ITrainingService {
     // set-kind plan Task 1 (D2, D3): the app layer, not the DB, defaults to 'working' — the DB
     // default stays absent so legacy (pre-plan) rows keep reading NULL.
     const setKind: SetKind = opts.setKind ?? 'working';
-    const setData = await this.applyPerHand(sessionExercise.exerciseId, opts.setData, opts.weightBasis);
+    const setData = await this.shapeSetData(sessionExercise.exerciseId, opts.setData, {
+      weightBasis: opts.weightBasis,
+      weightOmitted: opts.weightOmitted,
+    });
 
     const set = opts.skipActivityUpdate
       ? await this.sessionSetRepo.create(sessionExercise.id, {
@@ -372,23 +376,35 @@ export class TrainingService implements ITrainingService {
   }
 
   /**
-   * Shapes `setData` by the exercise's catalog row, resolved once. set-kind plan Task 1 (D5): a dumbbell exercise's
+   * Shapes `setData` by the exercise's catalog row, read once. set-kind plan Task 1 (D5): a dumbbell exercise's
    * strength set gets `perHand` — true by default, false when the caller said the weight is a total; every other
    * equipment leaves it untouched (no `perHand` key). plan-fixes item 2: `log_set` sends every duration as
    * `cardio_duration`, so a duration on an isometric exercise (Plank, Side Plank) is re-keyed to an `isometric` set.
+   * plan-and-tool-fixes AC-PTF-7: the row's `weight_mode` decides the weight — `required` + reps without a weight is
+   * a WeightRequiredError, `optional` without a weight is a bodyweight set, `none` never stores a weight.
    */
-  private async applyPerHand(exerciseId: string, setData: SetData, weightBasis?: 'total'): Promise<SetData> {
-    if (setData.type !== 'strength' && setData.type !== 'cardio_duration') {
+  private async shapeSetData(
+    exerciseId: string,
+    setData: SetData,
+    opts: { weightBasis?: 'total'; weightOmitted?: boolean } = {},
+  ): Promise<SetData> {
+    if (setData.type !== 'strength' && setData.type !== 'cardio_duration' && setData.type !== 'functional_reps') {
       return setData;
     }
     const exercise = await this.exerciseRepo.findById(exerciseId);
     if (setData.type === 'cardio_duration') {
       return exercise?.exerciseType === 'isometric' ? { type: 'isometric', duration: setData.duration } : setData;
     }
-    if (exercise?.equipment !== 'dumbbell') {
+    if (exercise?.weightMode === 'required' && opts.weightOmitted && setData.type === 'functional_reps') {
+      throw new WeightRequiredError(exercise.name);
+    }
+    if (exercise?.weightMode === 'none' && setData.type === 'strength') {
+      return { type: 'functional_reps', reps: setData.reps };
+    }
+    if (setData.type === 'functional_reps' || exercise?.equipment !== 'dumbbell') {
       return setData;
     }
-    return { ...setData, perHand: weightBasis !== 'total' };
+    return { ...setData, perHand: opts.weightBasis !== 'total' };
   }
 
   /**
@@ -481,10 +497,12 @@ export class TrainingService implements ITrainingService {
     // D15: a reps-only set given a weight is a weighted set (functional_reps cannot carry one), with the same
     // per-hand basis a freshly logged strength set gets. AC-PTF-4: an explicit weight of 0 is the opposite
     // direction — a strength set becomes a bodyweight functional_reps set with the same reps.
-    const weightless = updates.weight === 0;
+    // AC-PTF-7: on a `none` exercise (cardio, no equipment) a weight is not stored at all.
+    const weight = sessionExercise.exercise.weightMode === 'none' ? undefined : updates.weight;
+    const weightless = weight === 0;
     let baseSetData: SessionSet['setData'] = lastSet.setData;
-    if (updates.weight != null && !weightless && lastSet.setData.type === 'functional_reps') {
-      baseSetData = await this.applyPerHand(exerciseId, {
+    if (weight != null && !weightless && lastSet.setData.type === 'functional_reps') {
+      baseSetData = await this.shapeSetData(exerciseId, {
         type: 'strength',
         reps: lastSet.setData.reps,
         weightUnit: 'kg',
@@ -495,7 +513,7 @@ export class TrainingService implements ITrainingService {
 
     const updatedSetData: SessionSet['setData'] = {
       ...baseSetData,
-      ...(updates.weight != null && !weightless ? { weight: updates.weight } : {}),
+      ...(weight != null && !weightless ? { weight } : {}),
       ...(updates.reps != null ? { reps: updates.reps } : {}),
       ...(updates.durationSeconds != null ? { duration: updates.durationSeconds } : {}),
       ...(updates.distanceKm != null ? { distance: updates.distanceKm, distanceUnit: 'km' } : {}),

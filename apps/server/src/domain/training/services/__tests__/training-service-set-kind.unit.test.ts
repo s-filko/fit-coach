@@ -8,7 +8,12 @@ import type { EnsureExerciseResult } from '@domain/training/ports';
 import type { Exercise } from '@domain/training/types';
 import type { TrainingService } from '@domain/training/services/training.service';
 
-import { createMocks, makeSessionExercise, makeSessionSet } from './training-service-test-support';
+import {
+  createMocks,
+  makeExerciseWithDetails,
+  makeSessionExercise,
+  makeSessionSet,
+} from './training-service-test-support';
 
 const DUMBBELL_EXERCISE: Exercise = {
   id: 'ex-dumbbell',
@@ -146,7 +151,7 @@ describe('TrainingService.updateLastSet — setKind (set-kind plan D3, AC-SK-8)'
     const set = makeSessionSet({ id: 'set-1', sessionExerciseId: 'se-1', setNumber: 1, setKind: 'warmup' });
     mockSessionRepo.findByIdWithDetails.mockResolvedValue({
       id: 'session-1',
-      exercises: [{ ...makeSessionExercise({ id: 'se-1', exerciseId: 'ex-1' }), sets: [set] }],
+      exercises: [makeExerciseWithDetails({ id: 'se-1', exerciseId: 'ex-1', sets: [set] })],
     } as unknown as Awaited<ReturnType<TrainingService['getSessionDetails']>>);
     mockSessionSetRepo.update.mockResolvedValue({ ...set, setKind: 'working' });
 

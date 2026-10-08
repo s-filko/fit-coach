@@ -36,7 +36,7 @@ describe('log_set — integration (BUG-035, AC-SI-2)', () => {
       throw new Error('Seed exercise "Barbell Bench Press" not found — run with RUN_DB_TESTS=1');
     }
 
-    const tool = buildLogSetTool({ trainingService: service, exerciseRepository: exerciseRepo });
+    const tool = buildLogSetTool({ trainingService: service });
     const config: RunnableConfig = { configurable: { userId: 'u1', thread_id: 'u1', activeSessionId: sessionId } };
 
     const result = (await tool.invoke({ exerciseId: bench.id, reps: 8, weight: 80, rpe: 9.5 }, config)) as ToolReturn;
@@ -58,7 +58,7 @@ describe('log_set — integration (BUG-035, AC-SI-2)', () => {
       throw new Error('Seed exercise "Barbell Bench Press" not found — run with RUN_DB_TESTS=1');
     }
 
-    const tool = buildLogSetTool({ trainingService: service, exerciseRepository: exerciseRepo });
+    const tool = buildLogSetTool({ trainingService: service });
     const config: RunnableConfig = { configurable: { userId: 'u1', thread_id: 'u1', activeSessionId: sessionId } };
 
     await tool.invoke({ exerciseId: bench.id, reps: 8, weight: 80, rpe: 9.3 }, config);

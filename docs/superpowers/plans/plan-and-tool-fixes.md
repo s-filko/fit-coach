@@ -17,7 +17,9 @@
    line in § 3, then fix. A test that passes before the fix does not prove anything — rewrite it.
 3. Code only. Do **not** change: prompt files, tool descriptions shown to the model beyond what a task names,
    anything in user facts (extraction, verifier, `manage_fact`, rendering), durable specs except the one BR in
-   Task 1, `.env*`, CI, deploy scripts. No new dependencies, no migrations.
+   Task 1, `.env*`, CI, deploy scripts. No new dependencies, no migrations. Owner-approved exceptions (2026-10-08):
+   T7's migration `0024` (`exercises.weight_mode`), and the durable-spec edits BR-TRAINING-047 (new) and
+   BR-TRAINING-040 (last clause).
 4. Tool reply texts written by this plan state facts only — no instructions, no "always/never", no advice to the
    model. (Owner rule 2026-10-05: behaviour is not patched with prose; see `.claude/agents/prompt-doctor.md`.)
 5. One commit per task (`fix(<area>): … (plan-and-tool-fixes T<N>)`), no attribution lines. Push the plan branch
@@ -128,6 +130,9 @@ removed or inverted, not skipped. `npm run test:unit`, `npm run test:scenarios`.
 
 ### T6 — Weight is required with reps; bodyweight is named "bodyweight" everywhere (AC-PTF-6)
 
+> The blanket "weight is required with reps" rule below is **superseded by T7** (per-exercise `weight_mode`, decided by
+> `TrainingService`); the "bodyweight" naming and the weight-0 rule stand.
+
 Owner decisions (2026-10-05…08): the weight has no default — the coach passes it, 0 is the coach's decision "no
 external load", never "unknown"; the tool feedback and every history the model reads say "bodyweight", in full (not
 "BW": ambiguous with the user's body weight, needs a legend). BR-TRAINING-047 (owner-approved 2026-10-08).
@@ -204,6 +209,9 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
      claim an outage or failure (T2) — model behaviour, record what happened either way;
    - in a training session log a weighted set, then reps only (no weight) → stored as given, a bodyweight set, no "carried over" (T5; T3 superseded);
    - a bodyweight set with weight 0 → no "@ 0 kg" (T4).
+   - T7: reps without a weight on a `required` exercise (Barbell Bench Press) → rejected, nothing stored, the reply asks
+     for the weight; the same on a bodyweight exercise (Pull-ups, Plank) → stored as a bodyweight set; a duration on
+     a cardio exercise → no weight stored (`weight_mode` of each row via `fitcoach_local`).
    Keep it short (Z.AI quota is shared). Paste the evidence (DB query results, reply excerpts, run ids) into § 3.
    Point the stand back to `~/projects/fit-coach` and restart it.
 5. Set `- Status: done` only when 2–4 are green; push the plan branch. **Stop there** and report: merge into `dev`,
@@ -433,6 +441,31 @@ Pass-4 advisories → BACKLOG § plan-and-tool-fixes close-out review advisories
 `update`/`archive` around BR-046; `set-format.ts` is now a shared tool-reply module living under prompts/blocks; the
 bodyweight classification is repeated in `session-planning-recent-history.v1.ts:30`; that line mixes `8x80kg` with
 `8×bodyweight`; ADR-0011 Fix 6a still describes `update_last_set` as a plain merge; FEAT-0008 AC-0203 (pass 2, owner).
+
+**Pass 5** (2026-10-08, Opus, over T7). Blocking:
+
+10. `blocking | R2/R1 | apps/server/src/infra/ai/tools/log-set.tool.ts (resolveTargetExercise + findById) | duplicated catalog-row
+    step | the weight_mode rule lived in the tool and re-read the catalog row that TrainingService already resolves
+    (applyPerHand, ensureCurrentExercise)` — fixed in @@SHA@@: the decision moved into `TrainingService.shapeSetData`
+    (ex-`applyPerHand`) on the row it reads once — `required` + reps without a weight → `WeightRequiredError`
+    (`<exercise>: weight is required`, mapped by the tool's catch to `llmError`), `optional` without a weight →
+    `functional_reps`, `none` → no weight stored; `resolveTargetExercise`, the tool's `exerciseRepository` dependency
+    and its wiring are gone; one catalog read per `log_set`. The tool passes `weightOmitted` (reps without weight).
+    Tool texts unchanged.
+11. `fix | update_last_set ignored weight_mode` — fixed in @@SHA@@: on a `none` exercise no weight is stored (no `weight`
+    key in cardio setData either).
+12. `fix | Ab Coaster` — fixed in @@SHA@@: `optional` via `deriveWeightMode(category, equipment, exerciseType)` (a reps-only
+    machine movement) and a backfill UPDATE in the same `0024` migration.
+13. `fix | tests` — fixed in @@SHA@@: a required exercise reached by `exerciseName` is rejected on the resolved row
+    (one `findById`, by the resolved id); a reps call on an `optional` exercise stores a bodyweight set; the
+    weight-mode integration test derives expected values from `deriveWeightMode` (plus anchors).
+14. `fix | docs` — fixed in @@SHA@@: T6's blanket rule marked superseded by T7; § 0 rule 3 names T7's migration and
+    BR-047/BR-040 as owner-approved exceptions; § 2a step 4 has a T7 live-check line; BR-TRAINING-047 `none` wording
+    = "cardio or no equipment (e.g. jump rope): no weight" (the only edit in `docs/domain/training.spec.md`).
+
+Pass-5 log: red first — `training-service-weight-mode.unit.test.ts:57:7 TS2353: 'weightOmitted' does not exist in type …`
+and `weight-mode.unit.test.ts:9:55 TS2554: Expected 2 arguments, but got 3` on the unchanged service / `deriveWeightMode`
+(suites failed to run). (D) An ab machine is used without added load → Ab Coaster `optional`.
 
 Decisions:
 

@@ -7,11 +7,16 @@
  */
 import type { Exercise, WeightMode } from './types';
 
-export function deriveWeightMode(category: Exercise['category'], equipment: Exercise['equipment']): WeightMode {
+export function deriveWeightMode(
+  category: Exercise['category'],
+  equipment: Exercise['equipment'],
+  exerciseType: Exercise['exerciseType'],
+): WeightMode {
   if (category === 'cardio' || equipment === 'none') {
     return 'none';
   }
-  if (equipment === 'bodyweight') {
+  // A reps-only movement on a machine (an ab machine) is used without added load; the stack is optional.
+  if (equipment === 'bodyweight' || (equipment === 'machine' && exerciseType === 'functional_reps')) {
     return 'optional';
   }
   return 'required';

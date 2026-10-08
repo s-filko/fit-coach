@@ -9,16 +9,18 @@ import path from 'path';
 
 import { Pool, type PoolClient } from 'pg';
 
+import { deriveWeightMode } from '@domain/training/weight-mode';
+import type { Exercise } from '@domain/training/types';
+
 const MIGRATION_FILE = 'drizzle/0024_flawless_felicia_hardy.sql';
 
 /** The exercise rows a pre-migration catalog holds, one per shape the backfill must tell apart. */
 const PRE_MIGRATION_ROWS: Array<{
   key: string;
   name: string;
-  category: string;
-  equipment: string;
-  exerciseType: string;
-  expected: string;
+  category: Exercise['category'];
+  equipment: Exercise['equipment'];
+  exerciseType: Exercise['exerciseType'];
 }> = [
   // The Gravitron: machine equipment — `required`; "Assisted …" in the name says what the number means.
   {
@@ -27,7 +29,6 @@ const PRE_MIGRATION_ROWS: Array<{
     category: 'compound',
     equipment: 'machine',
     exerciseType: 'strength',
-    expected: 'required',
   },
   {
     key: 'bench',
@@ -35,7 +36,6 @@ const PRE_MIGRATION_ROWS: Array<{
     category: 'compound',
     equipment: 'barbell',
     exerciseType: 'strength',
-    expected: 'required',
   },
   {
     key: 'dumbbell',
@@ -43,7 +43,6 @@ const PRE_MIGRATION_ROWS: Array<{
     category: 'isolation',
     equipment: 'dumbbell',
     exerciseType: 'strength',
-    expected: 'required',
   },
   {
     key: 'pull-ups',
@@ -51,7 +50,6 @@ const PRE_MIGRATION_ROWS: Array<{
     category: 'compound',
     equipment: 'bodyweight',
     exerciseType: 'strength',
-    expected: 'optional',
   },
   {
     key: 'running',
@@ -59,7 +57,6 @@ const PRE_MIGRATION_ROWS: Array<{
     category: 'cardio',
     equipment: 'none',
     exerciseType: 'cardio_distance',
-    expected: 'none',
   },
   // Machine cardio (treadmill, rowing): category cardio wins over the machine equipment.
   {
@@ -68,7 +65,21 @@ const PRE_MIGRATION_ROWS: Array<{
     category: 'cardio',
     equipment: 'machine',
     exerciseType: 'cardio_distance',
-    expected: 'none',
+  },
+  // A reps-only machine movement (the ab machine): optional — used without added load.
+  {
+    key: 'ab-machine',
+    name: 'Ab Coaster',
+    category: 'functional',
+    equipment: 'machine',
+    exerciseType: 'functional_reps',
+  },
+  {
+    key: 'plank',
+    name: 'Plank',
+    category: 'functional',
+    equipment: 'bodyweight',
+    exerciseType: 'isometric',
   },
   {
     key: 'jump-rope',
@@ -76,7 +87,6 @@ const PRE_MIGRATION_ROWS: Array<{
     category: 'functional',
     equipment: 'none',
     exerciseType: 'interval',
-    expected: 'none',
   },
 ];
 
@@ -133,7 +143,7 @@ describe('migration 0024 — exercises.weight_mode (AC-PTF-7)', () => {
   });
 
   it('the backfill maps every catalog shape to its mode — the Gravitron required, Pull-ups optional, cardio/none none (AC-PTF-7)', async () => {
-    expect(backfillStatements).toHaveLength(2);
+    expect(backfillStatements).toHaveLength(3);
 
     for (const [i, row] of PRE_MIGRATION_ROWS.entries()) {
       // The state right after ADD COLUMN ... DEFAULT 'required': every existing row carries required.
@@ -160,8 +170,15 @@ describe('migration 0024 — exercises.weight_mode (AC-PTF-7)', () => {
     );
     const byName = new Map(rows.map(r => [r.name, r.weight_mode]));
     for (const row of PRE_MIGRATION_ROWS) {
-      expect(byName.get(row.name)).toBe(row.expected);
+      // One rule in code (deriveWeightMode, applied by the seed) and one in SQL (this migration).
+      expect(byName.get(row.name)).toBe(deriveWeightMode(row.category, row.equipment, row.exerciseType));
     }
+    // Anchors, so a derivation that drifted in both places still fails: the Gravitron is required,
+    // Pull-ups-like and the ab machine optional, cardio none.
+    expect(byName.get('Assisted Pull-ups (Gravitron)')).toBe('required');
+    expect(byName.get('Weighted Pull-up')).toBe('optional');
+    expect(byName.get('Ab Coaster')).toBe('optional');
+    expect(byName.get('Trail Running')).toBe('none');
   });
 
   it('the seeded test catalog carries the modes the suites rely on (AC-PTF-7)', async () => {

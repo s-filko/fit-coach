@@ -1,11 +1,9 @@
-// Shared plumbing for the log_set tool tests: a mocked ITrainingService, a mocked
-// IExerciseRepository (T7: the tool reads the target exercise's weight_mode), the
+// Shared plumbing for the log_set tool tests: a mocked ITrainingService, the
 // executor-shaped RunnableConfig and the invokable tool wrapper. Not a `.unit.test.ts`
 // file, so jest's testMatch never picks it up.
 import type { RunnableConfig } from '@langchain/core/runnables';
 
-import type { IExerciseRepository, ITrainingService } from '@domain/training/ports';
-import type { Exercise } from '@domain/training/types';
+import type { ITrainingService } from '@domain/training/ports';
 
 import { buildLogSetTool } from '../log-set.tool';
 
@@ -29,24 +27,13 @@ export const makeTrainingService = (): jest.Mocked<ITrainingService> =>
     resolveExerciseIdByName: jest.fn(),
   }) as unknown as jest.Mocked<ITrainingService>;
 
-/**
- * T7 (AC-PTF-7): `findById` answers whatever exercise the test wants the catalog to hold
- * (null by default — an unknown id, so no per-mode validation applies).
- */
-export const makeExerciseRepository = (exercise: Exercise | null = null): jest.Mocked<IExerciseRepository> =>
-  ({ findById: jest.fn().mockResolvedValue(exercise) }) as unknown as jest.Mocked<IExerciseRepository>;
-
 /** The executor puts activeSessionId into configurable alongside userId. */
 export const makeConfig = (userId = 'u1', sessionId: string | null = 'session-1'): RunnableConfig => ({
   configurable: { userId, thread_id: userId, activeSessionId: sessionId },
 });
 
-export const makeDeps = (
-  trainingService: jest.Mocked<ITrainingService>,
-  exerciseRepository: jest.Mocked<IExerciseRepository> = makeExerciseRepository(),
-  sessionId: string | null = 'session-1',
-) => {
-  const logSet = buildLogSetTool({ trainingService, exerciseRepository }) as unknown as InvokableTool;
+export const makeDeps = (trainingService: jest.Mocked<ITrainingService>, sessionId: string | null = 'session-1') => {
+  const logSet = buildLogSetTool({ trainingService }) as unknown as InvokableTool;
   const tools = [logSet];
   const byName = (_name: string) => logSet;
   const config = makeConfig('u1', sessionId);

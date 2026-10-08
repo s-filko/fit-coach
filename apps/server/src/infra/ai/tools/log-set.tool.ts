@@ -3,10 +3,9 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
-import type { IExerciseRepository, ITrainingService } from '@domain/training/ports';
+import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
-import type { Exercise } from '@domain/training/types';
 
 import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { EFFORT_MAPPING_TEXT } from '@infra/ai/prompts/effort';
@@ -22,40 +21,6 @@ const log = createLogger('training-tools');
 
 export interface LogSetToolDeps {
   trainingService: ITrainingService;
-  /** plan-and-tool-fixes T7 (AC-PTF-7): the target exercise's catalog row — its weight_mode. */
-  exerciseRepository: IExerciseRepository;
-}
-
-/**
- * plan-and-tool-fixes T7 (AC-PTF-7): resolve the exercise this call targets — an id verbatim,
- * a name through the same catalog resolver the service uses — to read its weight_mode before
- * setData is shaped. Returns nulls when the catalog cannot answer (an invented id, a name that
- * resolves to nothing): the call then goes to the service exactly as given and the service
- * reports the error, so no new rejection reason is invented here. A resolved name passes its
- * id along, so the service does not resolve the name a second time.
- */
-async function resolveTargetExercise(
-  deps: LogSetToolDeps,
-  input: { exerciseId?: string; exerciseName?: string },
-): Promise<{ exercise: Exercise | null; exerciseId?: string; exerciseName?: string }> {
-  const unresolved = { exercise: null, exerciseId: input.exerciseId, exerciseName: input.exerciseName };
-  let id = input.exerciseId;
-  if (id == null && input.exerciseName != null) {
-    try {
-      id = await deps.trainingService.resolveExerciseIdByName(input.exerciseName);
-    } catch {
-      // The service reports the unresolvable name on the unchanged path below.
-      return unresolved;
-    }
-  }
-  if (id == null) {
-    return unresolved;
-  }
-  const exercise = await deps.exerciseRepository.findById(id);
-  if (exercise == null) {
-    return unresolved;
-  }
-  return { exercise, exerciseId: exercise.id };
 }
 
 export function buildLogSetTool(deps: LogSetToolDeps) {
@@ -73,21 +38,6 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
 
       try {
-        // Inside the try: a DB failure while reading the catalog row keeps today's
-        // systemError classification (isDatabaseFailure below), not an unclassified throw.
-        const {
-          exercise,
-          exerciseId: resolvedId,
-          exerciseName: resolvedName,
-        } = await resolveTargetExercise(deps, input);
-
-        // T7 (AC-PTF-7): on an exercise that works with a weight, reps are not stored without
-        // one — the coach states it (0 = a bodyweight set, which never reaches here: an explicit
-        // 0 is a bodyweight set on any mode). A fact for the model, phrased as a fact.
-        if (exercise?.weightMode === 'required' && input.reps != null && input.weight == null) {
-          return llmError(`${exercise.name}: weight is required`);
-        }
-
         // Build setData from flat fields — avoids LLM confusion with nested object schemas
         const baseSetData = (() => {
           if (input.distanceKm != null) {
@@ -102,11 +52,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           if (input.durationSeconds != null) {
             return { type: 'cardio_duration' as const, duration: input.durationSeconds };
           }
-          // T7 (AC-PTF-7): an exercise whose mode is `none` never stores a weight — cardio logs
-          // duration/distance, and a weight passed with reps is simply not kept.
-          const weight = exercise?.weightMode === 'none' ? undefined : input.weight;
-          if (input.reps != null && weight != null && weight > 0) {
-            return { type: 'strength' as const, reps: input.reps, weight, weightUnit: 'kg' as const };
+          if (input.reps != null && input.weight != null && input.weight > 0) {
+            return { type: 'strength' as const, reps: input.reps, weight: input.weight, weightUnit: 'kg' as const };
           }
           if (input.reps != null) {
             return { type: 'functional_reps' as const, reps: input.reps };
@@ -130,9 +77,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         }
 
         const { set, setNumber, autoCompleted } = await trainingService.logSetWithContext(sessionId, {
-          // T7: the id resolved above rides along (a name was resolved once already).
-          exerciseId: resolvedId,
-          exerciseName: resolvedName,
+          exerciseId: input.exerciseId,
+          exerciseName: input.exerciseName,
           setData: parsed.data,
           rpe,
           feedback: input.feedback,
@@ -140,6 +86,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           skipActivityUpdate: isRetro,
           setKind: input.setKind,
           weightBasis: input.weightBasis,
+          // AC-PTF-7: the service judges reps-without-weight by the exercise's weight_mode.
+          weightOmitted: input.reps != null && input.weight == null,
         });
 
         // Named for the summariser (renderTranscript over this tool's own confirmation) as much
@@ -171,7 +119,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             userId,
             sessionId,
             setId: set.id,
-            exerciseId: resolvedId ?? input.exerciseId,
+            exerciseId: input.exerciseId,
             setNumber,
             setData: set.setData,
             rpe: set.rpe,
@@ -297,8 +245,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         .refine(d => d.reps !== undefined || d.durationSeconds !== undefined || d.distanceKm !== undefined, {
           message: 'Either reps, durationSeconds, or distanceKm must be provided',
         }),
-      // T6's blanket "weight required with reps" refine is gone — T7 (AC-PTF-7) moved the
-      // requirement into the handler, by the resolved exercise's weight_mode.
+      // The weight requirement is not a schema refine: TrainingService judges it by the
+      // exercise's weight_mode (AC-PTF-7) and a WeightRequiredError reaches the model as llm_error.
     },
   );
 }

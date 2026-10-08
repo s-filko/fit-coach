@@ -1198,7 +1198,7 @@ export async function seedExercises() {
         equipment: seed.equipment,
         // plan-and-tool-fixes T7 (AC-PTF-7): fresh databases get the weight contract with the
         // row — the same rule the T7 migration backfills into existing catalogs.
-        weightMode: deriveWeightMode(seed.category, seed.equipment),
+        weightMode: deriveWeightMode(seed.category, seed.equipment, seed.exerciseType),
         exerciseType: seed.exerciseType,
         description: seed.description,
         energyCost: seed.energyCost,

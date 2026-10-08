@@ -89,7 +89,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     buildSearchExercisesTool({ embeddingService, exerciseRepository }),
     buildGetExerciseHistoryTool({ trainingService, exerciseRepository, workoutSessionRepo }),
     // T7 (AC-PTF-7): log_set reads the target exercise's weight_mode from the catalog.
-    buildLogSetTool({ trainingService, exerciseRepository }),
+    buildLogSetTool({ trainingService }),
     buildCompleteCurrentExerciseTool({ trainingService }),
     buildFinishTrainingTool({ trainingService }),
     // set-kind plan Task 2 (D6): "я сегодня в другом зале" — after the start.

@@ -85,7 +85,7 @@ function phaseTools(phase: PhaseName): StructuredToolInterface[] {
           embeddingService: deps.embeddingService,
           exerciseRepository: deps.exerciseRepository,
         }),
-        buildLogSetTool({ trainingService: deps.trainingService, exerciseRepository: deps.exerciseRepository }),
+        buildLogSetTool({ trainingService: deps.trainingService }),
         buildCompleteCurrentExerciseTool({ trainingService: deps.trainingService }),
         buildFinishTrainingTool({ trainingService: deps.trainingService }),
         buildDeleteLastSetsTool({ trainingService: deps.trainingService }),

@@ -139,6 +139,9 @@ export interface ITrainingService {
       // set-kind plan Task 1 (D5): 'total' overrides the per-hand default on a dumbbell/kettlebell
       // exercise — the user explicitly stated a combined weight.
       weightBasis?: 'total';
+      // AC-PTF-7: the caller passed reps without any weight — the exercise's weight_mode decides
+      // whether that is a bodyweight set (optional) or a WeightRequiredError (required).
+      weightOmitted?: boolean;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }>;
 }
