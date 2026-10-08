@@ -2331,6 +2331,12 @@ plan_creation offers no `log_set` (its tools: search, save plan, transition, sha
 A plan_creation rule for reported sets (say they are not logged yet and offer to start the session), and/or a
 post-reply check of "записал/logged" claims against the run's tool calls; the owner decides.
 
+### Live evidence 2026-10-08 (plan coach-quality-proof)
+
+Counted from L3 transcripts (a reply claims «Записал / Поправил / Зафиксировал» while the step's tool list has no
+writing tool), 13 journeys × 3 samples, `glm-5.3-flash`: training prompt v13 7 / 138 replies, v14 8 / 138, v15 3 / 138.
+Not only plan_creation: most cases are in the training phase right after «сделал 55 на 8» — the set is not stored.
+
 ## BUG-053 — A plain «привет» three days after a workout is answered as a continuation of that workout
 
 **Status:** Open — cause found 2026-10-08, fix needs an owner decision
@@ -2421,3 +2427,36 @@ set numbering. Evidence and red test: `data/investigations/2026-10-08-stand-defe
 - Executor guard: in a batch with ≥ 2 `log_set` calls, reject the calls lacking `order` (the model re-sends ordered), or
 - sort fix: a missing `order` takes the call's emitted position (flips the pinned "default to end" test and ADR-0011 text).
 - Either way add a BR: sets of one exercise are numbered in the order the user performed them.
+
+## BUG-056 — The coach misreads the Gravitron counterweight: less assistance is progress, not "lighter"
+
+**Status:** Open — evidence from the coach-quality measurement 2026-10-08; fix needs an owner decision
+**Severity:** Medium — the coach can push the user backwards on the assisted pull-up path (counterweight up)
+**Found during:** plan `coach-quality-proof` live L3 on GLM (`glm-5.3-flash`), journey `n-load-gravitron`, prompts v13/v14/v15 × 3
+**Component:** catalog semantics of "Assisted Pull-ups (Gravitron)" (`weight_mode = required`, plan-and-tool-fixes T7)
+
+### Description
+
+History: 10×25 kg counterweight twice at RPE 8 (earlier 30 kg). Expected next step: 20 kg (less assistance). Hits:
+v13 0/3, v14 1/3, v15 1/3. One v13 reply called 20 kg «лёгкий вариант» and suggested going back to 25. The owner chose
+(2026-10-08) three weight modes without a counterweight value, on the condition that the measurement decides; it shows
+the meaning does not come reliably from the exercise name.
+
+### Fix options (owner)
+
+- A fourth `weight_mode` value `counterweight` (catalog), rendered as "counterweight N kg" in history and tool replies.
+- Or a fact line on assisted exercises in the history block ("counterweight: less = harder").
+
+## BUG-057 — With no history the coach names a working weight out of thin air instead of a light start + question
+
+**Status:** Open — evidence from the coach-quality measurement 2026-10-08
+**Severity:** Low–Medium — a first-time load suggestion is a guess presented as a plan
+**Found during:** plan `coach-quality-proof`, journey `n-load-ask` (no squat history), v13/v14/v15 × 3: 0/3 each
+**Component:** training prompt / context (`# History` says nothing for the exercise)
+
+### Description
+
+Asked «какой вес взять?» with no record for the exercise, the coach proposes 40–60 kg working weights stated as the plan
+(BR-TRAINING-036 in the spec: with no reference the coach names no number). Owner's general rule (2026-10-05): if
+unclear — ask, or propose the most likely option and say it is an assumption. Next step: `prompt-doctor` (cause in the
+exact request, baseline vs candidate).
