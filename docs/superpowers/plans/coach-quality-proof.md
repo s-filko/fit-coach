@@ -338,3 +338,37 @@ progression principle)**. The sentence replaced: 125 → 313 chars.
 - Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 190 passed, 190 total`,
   `Tests: 1895 passed, 1895 total` (+3); the n-load suite → `Test Suites: 1 passed, 1 total`,
   `Tests: 70 passed, 70 total`; flock `npm run test:scenarios` — quoted in the worker report.
+
+### T4 second candidate — v15, load vs reps (worker, 2026-10-08)
+
+- **v14 live result:** growth 2/3 (v13: 0/3). After a miss the coach held 100 kg and lowered the rep target 3/3 —
+  reasoning recovery. **Owner decision 2026-10-08:** this is legitimate, not a fault: «не всегда понижение веса, мы так не
+  будем расти; иногда нужно взять максимальный вес, новую планку поставить, сделать меньше повторов, потом повторы,
+  потом подходы 3→4→5». So the miss case is a CHOICE, and the prompt's progression text must allow it.
+- **Candidate (`coach.v15.ts`, BR-LLM-008 derivation from v14, `PROMPT_VERSION_TRAINING=v15`; default stays v13
+  byte-identical):** v14's progression sentence replaced in place by one short paragraph (positive terms, no bans, no
+  example replies, no emphasis). Verbatim:
+
+> The next load follows the history, the plan's range and the client's goal: every set at the top of the range in two workouts in a row — one equipment step up (2.5 kg barbell, 2 per hand dumbbell, 5 stack); a little short of the floor — the same load, aim for the floor again; with a strength goal, a heavier load for fewer reps is a fair way to set a new mark, and then the reps come back and the sets grow 3→4→5; the load drops only when reps fell far below the range and it was not a deliberate heavy try; after a long break — lighter than before it. Say in one phrase which choice this is and why.
+
+- **Size:** coach section v13 2 496 → v14 2 684 → **v15 2 971 chars** (pin 3 050; stated reason of the growth: the
+  owner-ordered load-vs-reps principle). The paragraph is 600 chars (v14's sentence 313).
+- (D) The assisted-counterweight sentence was NOT added: no measured fault shows the coach getting it wrong, and the
+  brief says state it only if needed. Reason: no evidence of need; revisit if the Gravitron case misses live.
+- **Oracle / judge:** after a miss the oracle verdict keeps the step down as `expectedKg` and adds `holdWithReason`
+  (the working weight, mirrored for the assisted exercise). The judge extraction gained `reasonStated: bool`;
+  `weightHit` accepts the hold only with `reasonStated: true`, rubric text updated.
+- **Judge bugs (coordinator addendum, T3 file):** (1) `buildJudgePrompt` ended at the heading «The client's message» —
+  the client text, the delivered reply and the tools were never appended (every live verdict said «reply empty»); now
+  appended with a closing instruction. (2) The request context was the last stored call's user message, which can be a
+  course-check/summariser call; `pickCoachContext` now takes the last call whose request carries a `<context>` block
+  (sidecar and DB fallback both).
+- Red first, recorded: `coach-quality-judge.unit.test.ts: error TS2305: Module '../coach-quality-judge' has no exported
+  member 'buildJudgePrompt'` (and `pickCoachContext` missing in `write-requests-sidecar`); the field was renamed
+  `reason_stated` → `reasonStated` to match the extraction's camelCase; a lint error (`no-nested-ternary`) in the version
+  switch was replaced by a lookup table.
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 191 passed, 191 total`,
+  `Tests: 1912 passed, 1912 total`; flock `npm run test:scenarios` (default v13) → `Test Suites: 27 passed, 27 total`,
+  `Tests: 1 todo, 511 passed, 512 total`; n-load suite under `PROMPT_VERSION_TRAINING=v15` → `Test Suites: 1 passed,
+  1 total`, `Tests: 70 passed, 70 total` (the whole scenarios folder under v15 also: 511 passed, 1 todo).
+- Left to the orchestrator: live v15 measurement (3 runs, blind judge with the fixed judge prompt), accept-or-revert.

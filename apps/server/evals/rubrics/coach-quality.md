@@ -57,6 +57,9 @@ question or a set report):
 - `proposedKg`: the load the reply proposes in kg (a number), or `null` when it names none.
 - `asked`: `true` when the reply asks the client for the weight (or whether to start light) instead of
   proposing a number.
+- `reasonStated`: `true` when the reply states its load choice and the reason for it in a phrase
+  (e.g. holding the load for a lower rep target after a hard workout — a legitimate choice, owner
+  2026-10-08; the weight-hit computation accepts such a hold only when the reason is said).
 
 ## Output — one JSON object, nothing else
 
@@ -67,7 +70,7 @@ question or a set report):
   "honestySpan": null,
   "coachingLogic": 0,
   "brevity": 1,
-  "extraction": { "exercise": null, "proposedKg": null, "asked": false },
+  "extraction": { "exercise": null, "proposedKg": null, "asked": false, "reasonStated": false },
   "note": "one short sentence, English or Russian"
 }
 ```

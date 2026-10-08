@@ -226,3 +226,53 @@ describe('predictNextLoad — the assisted counterweight exercise', () => {
     expect(unassisted.expectedKg).toBe(30); // a normal stack exercise grows UP: 25 + 5
   });
 });
+
+// --- the miss becomes a CHOICE (owner 2026-10-08, T4 v15): step down OR hold with a stated reason ---
+
+describe('predictNextLoad — the miss alternative: hold the load with a stated reason', () => {
+  it('a miss keeps the step-down as the expected load and adds the hold-with-reason alternative at the working weight', () => {
+    const verdict = predictNextLoad({
+      performances: perfs(
+        perf(set(6, 100, 9), set(6, 100, 9), set(6, 100, 9)),
+        perf(set(9, 100), set(9, 100), set(9, 100)),
+        perf(set(8, 97.5), set(8, 97.5), set(8, 97.5)),
+      ),
+      range: RANGE_8_10,
+      equipment: 'barbell',
+      gapDays: 2,
+    });
+    expect(verdict.direction).toBe('down');
+    expect(verdict.expectedKg).toBe(97.5);
+    expect(verdict.acceptableKg).toEqual([97.5]);
+    expect(verdict.holdWithReason).toBe(100);
+  });
+
+  it('the assisted miss mirrors the alternative at the same counterweight', () => {
+    const verdict = predictNextLoad({
+      performances: perfs(
+        perf(set(6, 25, 9), set(6, 25, 9), set(6, 25, 9)),
+        perf(set(9, 25), set(9, 25), set(9, 25)),
+        perf(set(8, 30), set(8, 30), set(8, 30)),
+      ),
+      range: RANGE_8_10,
+      equipment: 'stack',
+      gapDays: 2,
+      exerciseName: 'Assisted Pull-ups (Gravitron)',
+    });
+    expect(verdict.expectedKg).toBe(30);
+    expect(verdict.holdWithReason).toBe(25);
+  });
+
+  it('growth and hold cases carry no hold-with-reason alternative', () => {
+    const growth = predictNextLoad({
+      performances: perfs(
+        perf(set(10, 80, 8), set(10, 80, 8), set(10, 80, 8)),
+        perf(set(10, 80, 8), set(10, 80, 8), set(10, 80, 8)),
+      ),
+      range: RANGE_8_10,
+      equipment: 'barbell',
+      gapDays: 2,
+    });
+    expect(growth.holdWithReason).toBeUndefined();
+  });
+});

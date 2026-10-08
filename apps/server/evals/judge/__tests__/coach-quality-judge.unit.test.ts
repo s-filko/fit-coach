@@ -5,8 +5,11 @@
  * nLoadExpectations(). No model, no DB — the CLI and its JUDGE_CMD spawn are
  * exercised by the script's own --dry-run.
  */
+
+import { pickCoachContext } from '../../lib/write-requests-sidecar';
 import type { NLoadExpectation } from '../../scenarios/n-load-shared';
 import {
+  buildJudgePrompt,
   judgeReplyVia,
   parseJudgeVerdict,
   parseRequestsSidecar,
@@ -79,7 +82,7 @@ describe('parseJudgeVerdict', () => {
     honestySpan: 'Записал: жим 60 кг × 10',
     coachingLogic: 1,
     brevity: 1,
-    extraction: { exercise: 'Barbell Bench Press', proposedKg: 82.5, asked: false },
+    extraction: { exercise: 'Barbell Bench Press', proposedKg: 82.5, asked: false, reasonStated: false },
     note: 'claims a log with no tool call',
   };
   const VALID_JSON = JSON.stringify(VALID);
@@ -117,6 +120,7 @@ describe('weightHit — the T2 computation', () => {
     exercise: 'Barbell Bench Press',
     proposedKg: 82.5,
     asked: false,
+    reasonStated: false,
     ...over,
   });
 
@@ -171,7 +175,7 @@ describe('summarizeVerdicts', () => {
     honestySpan: null,
     coachingLogic: 2,
     brevity: 1,
-    extraction: { exercise: null, proposedKg: null, asked: false },
+    extraction: { exercise: null, proposedKg: null, asked: false, reasonStated: false },
     note: '',
     ...over,
   });
@@ -206,7 +210,7 @@ const VERDICT_JSON = JSON.stringify({
   honestySpan: null,
   coachingLogic: 2,
   brevity: 1,
-  extraction: { exercise: null, proposedKg: null, asked: false },
+  extraction: { exercise: null, proposedKg: null, asked: false, reasonStated: false },
   note: 'ok',
 } satisfies JudgeVerdict);
 
@@ -289,7 +293,7 @@ describe('summarizeRun — means exclude unjudged replies and say so', () => {
     honestySpan: null,
     coachingLogic: 2,
     brevity: 1,
-    extraction: { exercise: null, proposedKg: null, asked: false },
+    extraction: { exercise: null, proposedKg: null, asked: false, reasonStated: false },
     note: '',
     ...over,
   });
@@ -368,5 +372,102 @@ describe('parseRequestsSidecar', () => {
 
   it('a malformed file is an empty map (the judge falls back to the DB)', () => {
     expect(parseRequestsSidecar('{not json')).toEqual(new Map());
+  });
+});
+
+// --- the miss CHOICE (owner 2026-10-08): hold-with-reason needs reasonStated in the extraction ---
+
+describe('parseJudgeVerdict — the reasonStated extraction field', () => {
+  const base = {
+    friendly: 2,
+    honest: 1,
+    honestySpan: null,
+    coachingLogic: 2,
+    brevity: 1,
+    extraction: { exercise: null, proposedKg: null, asked: false, reasonStated: true },
+    note: '',
+  };
+
+  it('reads reasonStated true', () => {
+    expect(parseJudgeVerdict(JSON.stringify(base))!.extraction.reasonStated).toBe(true);
+  });
+
+  it('absent or non-boolean reads false (never blocks the verdict)', () => {
+    const absent = { ...base, extraction: { exercise: null, proposedKg: 97.5, asked: false } };
+    expect(parseJudgeVerdict(JSON.stringify(absent))!.extraction.reasonStated).toBe(false);
+    const wrongType = { ...base, extraction: { ...base.extraction, reasonStated: 'yes' } };
+    expect(parseJudgeVerdict(JSON.stringify(wrongType))!.extraction.reasonStated).toBe(false);
+  });
+});
+
+describe('weightHit — the miss choice: step down OR hold with a stated reason', () => {
+  const missExpectation: NLoadExpectation = {
+    scenarioId: 'n-load-miss',
+    exercise: 'Barbell Back Squat',
+    direction: 'down',
+    expectedKg: 97.5,
+    acceptableKg: [97.5],
+    holdWithReason: 100,
+    reason: 'miss below the floor even by capacity (BR-TRAINING-043)',
+  };
+  const ex = (proposedKg: number | null, reasonStated: boolean): WeightExtraction => ({
+    exercise: 'Barbell Back Squat',
+    proposedKg,
+    asked: false,
+    reasonStated,
+  });
+
+  it('the step down hits; the hold hits ONLY with a stated reason; anything else misses', () => {
+    expect(weightHit(ex(97.5, false), missExpectation).hit).toBe(true);
+    expect(weightHit(ex(100, true), missExpectation).hit).toBe(true);
+    const holdNoReason = weightHit(ex(100, false), missExpectation);
+    expect(holdNoReason.hit).toBe(false);
+    expect(holdNoReason.detail).toContain('reason');
+    expect(weightHit(ex(95, true), missExpectation).hit).toBe(false);
+  });
+
+  it('without the alternative (growth cases) the hold does not hit even with a reason', () => {
+    const upExpectation: NLoadExpectation = { ...missExpectation, direction: 'up', expectedKg: 82.5, acceptableKg: [82.5] };
+    delete (upExpectation as Partial<NLoadExpectation>).holdWithReason;
+    expect(weightHit(ex(80, true), upExpectation).hit).toBe(false);
+  });
+});
+
+// --- the judge prompt carries the reply (live verdicts said "reply empty": the client text, the delivered
+// reply and the tool names were never appended) and the request context comes from the COACH call ---
+
+describe('buildJudgePrompt — the evidence reaches the judge', () => {
+  const fixture = readFileSync(join(__dirname, 'fixtures', 'candidate-b-full-workout.md'), 'utf8');
+  const step = parseTranscriptMarkdown(fixture).steps.find(s => s.userText !== '' && s.delivered !== '')!;
+
+  it('contains the client message, the delivered reply and the tool names of a real fixture step', () => {
+    const prompt = buildJudgePrompt(
+      { scenarioId: 'b', stepIndex: step.stepIndex, userText: step.userText, delivered: step.delivered, tools: ['log_set'], requestContext: 'CTX', toolCallsWithArgs: '' },
+      'RUBRIC',
+    );
+    expect(step.userText).not.toBe('');
+    expect(prompt).toContain(step.userText);
+    expect(prompt).toContain(step.delivered);
+    expect(prompt).toContain('log_set');
+    expect(prompt.indexOf(step.userText)).toBeGreaterThan(prompt.indexOf("## The client's message"));
+    expect(prompt.trimEnd().endsWith('Output the JSON object only.')).toBe(true);
+  });
+});
+
+describe('pickCoachContext — the coach call, not the last stored call', () => {
+  const coachRequest = { messages: [{ role: 'system', content: 'sys' }, { role: 'user', content: 'hi\n<context>\n# LOAD PLAN\n</context>' }] };
+  const courseCheckRequest = { messages: [{ role: 'user', content: 'Course-check directive: is the client on course?' }] };
+  const rows = [
+    { callIndex: 0, request: coachRequest, response: { toolCalls: [{ name: 'log_set', args: { reps: 8 } }] } },
+    { callIndex: 1, request: courseCheckRequest, response: { toolCalls: null } },
+  ];
+
+  it('skips a trailing call whose request has no <context> block', () => {
+    expect(pickCoachContext(rows)).toContain('# LOAD PLAN');
+    expect(pickCoachContext(rows)).not.toContain('Course-check');
+  });
+
+  it('is empty when no call carries a <context> block', () => {
+    expect(pickCoachContext([rows[1]!])).toBe('');
   });
 });

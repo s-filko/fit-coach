@@ -31,6 +31,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
+import { pickCoachContext } from '../lib/write-requests-sidecar';
 import { nLoadExpectations, type NLoadExpectation } from '../scenarios/n-load-shared';
 
 // --- the pure core (unit-tested) ---------------------------------------------------------------
@@ -125,6 +126,8 @@ export interface WeightExtraction {
   exercise: string | null;
   proposedKg: number | null;
   asked: boolean;
+  /** The reply states its load choice and the reason in one phrase (the miss CHOICE, owner 2026-10-08). */
+  reasonStated: boolean;
 }
 
 export interface JudgeVerdict {
@@ -207,7 +210,7 @@ export function parseJudgeVerdict(raw: string): JudgeVerdict | null {
     honestySpan,
     coachingLogic: scores.coachingLogic!,
     brevity: scores.brevity!,
-    extraction: { exercise, proposedKg: kgOf(e['proposedKg']), asked: e['asked'] === true },
+    extraction: { exercise, proposedKg: kgOf(e['proposedKg']), asked: e['asked'] === true, reasonStated: e['reasonStated'] === true },
     note: typeof v['note'] === 'string' ? v['note'] : '',
   };
 }
@@ -247,6 +250,22 @@ export function weightHit(extraction: WeightExtraction, expectation: NLoadExpect
         };
   }
   const expected = `${expectation.direction} → any of [${expectation.acceptableKg.join(', ')}] kg (${expectation.reason})`;
+  // The miss CHOICE (owner 2026-10-08): holding the working weight with a stated lower rep
+  // target is as acceptable as the step down.
+  if (
+    expectation.holdWithReason !== undefined &&
+    extraction.proposedKg !== null &&
+    Math.abs(expectation.holdWithReason - extraction.proposedKg) < 1e-9
+  ) {
+    return extraction.reasonStated
+      ? { scenarioId: expectation.scenarioId, exercise: expectation.exercise, hit: true, detail: `held ${extraction.proposedKg} kg with a stated reason — an accepted choice; ${expected}` }
+      : {
+          scenarioId: expectation.scenarioId,
+          exercise: expectation.exercise,
+          hit: false,
+          detail: `held ${extraction.proposedKg} kg without stating a lower rep target and its reason — ${expected}, or hold with a reason`,
+        };
+  }
   if (extraction.proposedKg === null) {
     return {
       scenarioId: expectation.scenarioId,
@@ -350,7 +369,7 @@ const STUB_VERDICT: JudgeVerdict = {
   honestySpan: null,
   coachingLogic: 2,
   brevity: 1,
-  extraction: { exercise: 'Barbell Bench Press', proposedKg: 82.5, asked: false },
+  extraction: { exercise: 'Barbell Bench Press', proposedKg: 82.5, asked: false, reasonStated: false },
   note: 'stub verdict (dry run)',
 };
 
@@ -366,20 +385,20 @@ export interface Evidence {
   userText: string;
   delivered: string;
   tools: string[];
-  /** The <context>-carrying user message of the run's last model call, best effort. */
+  /** The <context>-carrying user message of the run's coach call, best effort. */
   requestContext: string;
   /** Every tool call of the run with arguments, as stored in llm_calls responses. */
   toolCallsWithArgs: string;
 }
 
-function buildJudgePrompt(evidence: Evidence, rubric: string): string {
+export function buildJudgePrompt(evidence: Evidence, rubric: string): string {
   return [
     rubric,
     '',
     '---',
     'Judge THIS coach reply. Evidence:',
     '',
-    '## The request the model was shown (the last call\'s user message)',
+    '## The request the model was shown (the coach call\'s user message)',
     '```',
     evidence.requestContext,
     '```',
@@ -390,6 +409,15 @@ function buildJudgePrompt(evidence: Evidence, rubric: string): string {
     '```',
     '',
     '## The client\'s message',
+    evidence.userText,
+    '',
+    '## The coach reply delivered to the client',
+    evidence.delivered === '' ? '(no delivered text)' : evidence.delivered,
+    '',
+    '## Tools the coach called in this step',
+    evidence.tools.length === 0 ? '(none)' : evidence.tools.join(', '),
+    '',
+    'Output the JSON object only.',
   ].join('\n');
 }
 
@@ -533,19 +561,14 @@ async function loadRunEvidence(runId: string): Promise<{ requestContext: string;
       .from(llmCalls)
       .where(eq(llmCalls.runId, runId))
       .orderBy(llmCalls.callIndex)) as LlmCallRow[];
-    let requestContext = '(stored request unavailable)';
     const toolCalls: string[] = [];
     for (const row of rows) {
-      const messages = (row.request as { messages?: Array<{ role: string; content?: unknown }> } | null)?.messages ?? [];
-      const lastUser = [...messages].reverse().find(m => m.role === 'user');
-      if (lastUser !== undefined && typeof lastUser.content === 'string' && lastUser.content.trim() !== '') {
-        requestContext = lastUser.content;
-      }
       const calls = (row.response as { toolCalls?: Array<{ name?: unknown; args?: unknown }> | null } | null)?.toolCalls ?? [];
       for (const call of calls) {
         toolCalls.push(`${String(call.name ?? '?')} ${JSON.stringify(call.args ?? {})}`);
       }
     }
+    const requestContext = pickCoachContext(rows) || '(stored request unavailable)';
     return { requestContext, toolCallsWithArgs: toolCalls.join('\n') };
   } catch {
     return { requestContext: '(stored request unavailable)', toolCallsWithArgs: '' };

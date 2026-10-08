@@ -13,9 +13,9 @@ export { COACH_TEMPLATE_V13 };
  * the durable spec already holds; everything else is v13 verbatim. Selected via env PROMPT_VERSION_TRAINING=v14
  * (v13 stays the default and the baseline) — see index.ts.
  */
-const V13_LOAD_RULE =
+export const V13_LOAD_RULE =
   'When last time topped the rep range with reps to spare, the try is the next load they have used; otherwise a rep or two more.';
-const V14_LOAD_RULE =
+export const V14_LOAD_RULE =
   'The next load follows the history: every set at the top of the range in two workouts in a row — one equipment step up (2.5 kg barbell, 2 per hand dumbbell, 5 stack); below the range’s floor — one step down; short of the floor only with reps in reserve — the same load; after a long break — lighter than before it.';
 
 /** The v14 template — the v13 text with the one load rule replaced (BR-LLM-008 derivation). */

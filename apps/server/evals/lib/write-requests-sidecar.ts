@@ -1,7 +1,7 @@
 /**
  * The requests sidecar (coach-quality-proof T3 / AC-CQ-3): right after an L3
  * scenario run, persist — next to the transcript md — the evidence the
- * coach-quality judge needs per run id: the last model call's user message
+ * coach-quality judge needs per run id: the coach call's user message
  * (with its <context> facts) and every tool call with arguments, read from
  * `llm_calls` in the SAME process. The DB rows are ephemeral on this host
  * (every jest DB suite resets the schema), so judging from the DB alone is
@@ -16,10 +16,34 @@ import { writeFileSync } from 'node:fs';
 
 /** What the rubric needs for one run — nothing more. */
 export interface SidecarRunEvidence {
-  /** The <context>-carrying user message of the run's LAST model call ('' when none was stored). */
+  /** The <context>-carrying user message of the run's coach call ('' when none was stored). */
   requestContext: string;
   /** Every tool call of the run with its arguments, in call order. */
   toolCalls: Array<{ name: string; args: unknown }>;
+}
+
+/** One stored model call of a run. */
+export interface StoredCall {
+  callIndex: number;
+  request: unknown;
+  response: unknown;
+}
+
+/**
+ * The user message of the COACH call: the last call whose request carries a `<context>` block. The last stored
+ * call of a run can be a course-check or summariser call (no `<context>`), which would hand the judge the wrong
+ * request. '' when no call carries one.
+ */
+export function pickCoachContext(rows: readonly StoredCall[]): string {
+  let context = '';
+  for (const row of rows) {
+    const messages = (row.request as { messages?: Array<{ role: string; content?: unknown }> } | null)?.messages ?? [];
+    const lastUser = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUser !== undefined && typeof lastUser.content === 'string' && lastUser.content.includes('<context>')) {
+      context = lastUser.content;
+    }
+  }
+  return context;
 }
 
 /**
@@ -38,19 +62,14 @@ export async function collectRunEvidence(runId: string): Promise<SidecarRunEvide
     .where(eq(llmCalls.runId, runId))
     .orderBy(llmCalls.callIndex)) as Array<{ callIndex: number; request: unknown; response: unknown }>;
 
-  let requestContext = '';
   const toolCalls: Array<{ name: string; args: unknown }> = [];
   for (const row of rows) {
-    const messages = (row.request as { messages?: Array<{ role: string; content?: unknown }> } | null)?.messages ?? [];
-    const lastUser = [...messages].reverse().find(m => m.role === 'user');
-    if (lastUser !== undefined && typeof lastUser.content === 'string' && lastUser.content.trim() !== '') {
-      requestContext = lastUser.content;
-    }
     const calls = (row.response as { toolCalls?: Array<{ name?: unknown; args?: unknown }> | null } | null)?.toolCalls ?? [];
     for (const call of calls) {
       toolCalls.push({ name: String(call.name ?? '?'), args: call.args ?? {} });
     }
   }
+  const requestContext = pickCoachContext(rows);
   return { requestContext, toolCalls };
 }
 

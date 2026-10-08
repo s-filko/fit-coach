@@ -86,6 +86,12 @@ export interface OracleVerdict {
   expectedKg: number | null;
   /** Loads a coach may legitimately propose for this history (expected first is NOT guaranteed — sorted ascending). */
   acceptableKg: number[];
+  /**
+   * The miss CHOICE (owner 2026-10-08, T4 v15): after a miss, holding the working weight is equally
+   * acceptable WHEN the reply states a lower rep target with its reason («set a new mark, then the reps
+   * come back»). The kg at which such a hold counts; undefined when the case allows no hold alternative.
+   */
+  holdWithReason?: number;
   /** Which rule decided, for the report and the § 3 log. */
   reason: string;
 }
@@ -259,13 +265,15 @@ export function predictNextLoad(input: OracleInput): OracleVerdict {
     const belowByReps = last.reps < range.floor;
     const belowByCapacity = capacityOf(last) < range.floor;
     if (belowByReps && belowByCapacity && last.rpe != null) {
-      // BR-TRAINING-043: a miss — one step down.
+      // BR-TRAINING-043: a miss — one step down, OR (owner 2026-10-08) hold the working weight
+      // for a lower rep target with the reason said — a legitimate way to set a new mark.
       const expected = predict(roundToStep(easier, step));
       return {
         direction: 'down',
         expectedKg: expected,
         acceptableKg: [expected],
-        reason: 'miss below the floor even by capacity (BR-TRAINING-043)',
+        holdWithReason: weight,
+        reason: 'miss below the floor even by capacity (BR-TRAINING-043) — step down or hold with a stated reason',
       };
     }
     if (belowByReps && last.rpe != null) {
@@ -291,7 +299,8 @@ export function predictNextLoad(input: OracleInput): OracleVerdict {
           direction: 'down',
           expectedKg: expected,
           acceptableKg: [expected],
-          reason: 'below the floor without RPE at the same load twice (BR-TRAINING-043)',
+          holdWithReason: weight,
+          reason: 'below the floor without RPE at the same load twice (BR-TRAINING-043) — step down or hold with a stated reason',
         };
       }
       return {

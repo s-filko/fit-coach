@@ -82,6 +82,8 @@ export interface NLoadExpectation {
   direction: OracleVerdict['direction'];
   expectedKg: number | null;
   acceptableKg: number[];
+  /** The miss CHOICE (owner 2026-10-08): the kg a hold WITH a stated reason may keep. */
+  holdWithReason?: number;
   reason: string;
 }
 
@@ -98,6 +100,7 @@ export function nLoadExpectations(): NLoadExpectation[] {
       direction: v.direction,
       expectedKg: v.expectedKg,
       acceptableKg: v.acceptableKg,
+      ...(v.holdWithReason !== undefined ? { holdWithReason: v.holdWithReason } : {}),
       reason: v.reason,
     };
   });
