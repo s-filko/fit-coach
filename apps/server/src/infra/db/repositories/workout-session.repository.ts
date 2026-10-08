@@ -286,6 +286,32 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     } as WorkoutSession;
   }
 
+  async findLastCompletedByUserId(userId: string): Promise<WorkoutSession | null> {
+    const [session] = await db
+      .select()
+      .from(workoutSessions)
+      // completed_at NULL would sort FIRST on DESC: a completed row without a date is not "the latest".
+      .where(
+        and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.status, 'completed'),
+          isNotNull(workoutSessions.completedAt),
+        ),
+      )
+      .orderBy(desc(workoutSessions.completedAt))
+      .limit(1);
+
+    if (!session) {
+      return null;
+    }
+
+    return {
+      ...session,
+      userContextJson: session.userContextJson as WorkoutSession['userContextJson'],
+      autoCloseReason: session.autoCloseReason as WorkoutSession['autoCloseReason'],
+    } as WorkoutSession;
+  }
+
   async update(sessionId: string, updates: Partial<WorkoutSession>): Promise<WorkoutSession> {
     // A concurrent begin/start that lost the race against the one-in_progress index gets the same
     // domain error the service's sequential check throws — never a driver-shaped failure.

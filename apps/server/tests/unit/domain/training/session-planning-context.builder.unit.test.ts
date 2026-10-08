@@ -21,6 +21,7 @@ describe('SessionPlanningContextBuilder', () => {
     findRecentByUserId: jest.fn(),
     findRecentByUserIdWithDetails: jest.fn(),
     findActiveByUserId: jest.fn(),
+    findLastCompletedByUserId: jest.fn(),
     update: jest.fn(),
     complete: jest.fn(),
     updateActivity: jest.fn(),

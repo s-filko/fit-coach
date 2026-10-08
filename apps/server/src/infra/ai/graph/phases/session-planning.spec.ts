@@ -23,6 +23,7 @@ import {
   SESSION_PLANNING_RECOVERY_TIMELINE_V1,
 } from '@infra/ai/prompts/blocks';
 import {
+  buildEditLastWorkoutTool,
   buildRequestTransitionTool,
   buildSearchExercisesTool,
   buildSharedTools,
@@ -73,6 +74,8 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
         userFactsService: deps.userFacts,
         transitionHandoffTargets: deps.transitionHandoffTargets,
       }),
+      // BUG-053 T5 (AC-SSA-5): edits the last finished workout in place; the phase does not change.
+      buildEditLastWorkoutTool({ trainingService }),
       buildRequestTransitionTool('session_planning'),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],

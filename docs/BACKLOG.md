@@ -962,6 +962,10 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] Clarifications become extra sets: «11 с комментарием» (a correction of the last Smith set) was logged as a fourth set; the lower calf exercise got 6 sets for the owner's 4; and the coach asked the effort question a second time («ты так и не ответил») although the hint is once per exercise. Unguarded, model-revealed (GLM). Source: local GLM replay after the load-plan-fixes merge (2026-10-01, `8c2a45dd`).
 - [ ] Coach misreads an RPE correction as reps («ну значит не 8 а 7» → reps 10→7 and RPE 7): an ambiguous correction should be asked, not applied to both fields. Unguarded, model-revealed. Source: local GLM replay of upper_b after load-plan-fixes items 1–3 (2026-10-01).
 
+## stale-session-autoclose close-out review advisories (2026-10-08, pass 2)
+
+- [ ] Docs behind the code: FEAT-0010 promises a 3 AM daily cron (S-0114, BR-TRAINING-024, AC-0207) that never existed; the `ITrainingService` port list in `training.spec.md:49` lacks `autoCloseTimedOutSessions`, `getLastFinishedSession` and `deleteSet`; ARCHITECTURE.md:128 prepare map (prepare now requests a `session_timeout` close that commit executes); API_SPEC.md:136 training flow lacks `edit_last_workout`; BACKLOG.md:391 planning item's facts. Source: review R4 — owner-gated where durable.
+
 ## plan-and-tool-fixes close-out review advisories (2026-10-04)
 
 - [ ] `CreateWorkoutPlanDto.status?` is dead after `create` was retired: `createActiveReplacingOthers` always inserts `active` and silently drops the field, so a caller passing `'archived'`/`'draft'` would get an active plan and archive the real one; and `IWorkoutPlanRepository.update(planId, Partial<WorkoutPlan>)` can still set `status: 'active'` around BR-TRAINING-046 (no production caller today). Remove the field / narrow `update`. Source: plan-and-tool-fixes review run 2 R1+R2+R3 (`domain/training/types.ts:249`, `workout-plan.ports.ts:21`).

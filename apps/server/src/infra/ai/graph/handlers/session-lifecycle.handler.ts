@@ -5,6 +5,7 @@
  * commit to merge.
  */
 import type { PhaseTransitionCommitted, TransitionHandler } from '@domain/conversation/events';
+import { SESSION_TIMEOUT_REASON } from '@domain/conversation/transitions';
 import type { ITrainingService, IWorkoutSessionRepository } from '@domain/training/ports';
 
 import { createLogger } from '@shared/logger';
@@ -27,6 +28,14 @@ export function buildSessionLifecycleHandler(deps: {
           .catch(() => null);
       }
       return { activeSessionId: event.activeSessionId };
+    }
+
+    if (event.activeSessionId && event.reason === SESSION_TIMEOUT_REASON) {
+      // INV-TRAINING-005: the stale session closes through the timeout path — completed_at = the
+      // last activity, auto_close_reason = 'timeout' — not the explicit-finish completion below.
+      await trainingService.autoCloseTimedOutSessions(event.userId);
+      log.info({ userId: event.userId, sessionId: event.activeSessionId }, 'Stale session auto-closed');
+      return { activeSessionId: null };
     }
 
     if (event.activeSessionId && event.to !== 'training') {

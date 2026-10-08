@@ -1,86 +1,78 @@
 /**
- * retro-timestamps plan, T2 (BUG-043) — AC-RT-3 and AC-RT-4 over the real test DB.
+ * retro-timestamps plan, T2 (BUG-043) — over the real test DB, in the BUG-053 shape
+ * (stale-session-autoclose plan T5, owner decision 2026-10-08).
  *
+ * The 2026-09-29 shape: the session is created and started at plan acceptance, the user reaches
+ * the gym 3 h later. Under INV-TRAINING-005 the empty session is 2 h 55 m idle at the first set
+ * message, so it is COMPLETED by the timeout auto-close (`auto_close_reason = 'timeout'`,
+ * `completed_at` = the last activity, INV-TRAINING-006) and the message is answered in CHAT. The
+ * set the user reports is added to that finished workout in place by `edit_last_workout`
+ * (BR-TRAINING-030): it carries the retro timestamp (last activity + `RETRO_SET_OFFSET_MS`), and
+ * the workout stays completed with its times unchanged. A finished workout is never reopened, so
+ * the live 16-set journey of the earlier shapes (late-start re-anchoring, `duration_minutes` = 75)
+ * has no path any more: the sets of a new workout belong to a new session.
  *
- * The 2026-09-29 shape: the session is created and started at plan acceptance, the user reaches the
- * gym 3 h later, logs 16 sets over 75 minutes, then finishes. Scripted clock (Date-only fake timers).
- * Harness note: `run-scenario.ts` stamps a new session's `last_activity_at` with the scenario clock at
- * the first `advance` step, and live sets get their `created_at` from the DB clock (real time), so set
- * `created_at` is asserted for distinctness only, not against the scripted clock.
+ * Harness note: `run-scenario.ts` stamps a new session's `last_activity_at` with the scenario
+ * clock at the first `advance` step.
  */
-import type { BaseMessage } from '@langchain/core/messages';
+import { RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 
-import { runScenario, type ScenarioRunResult, type ScenarioStepObservation } from '../../../evals/lib/run-scenario';
+import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
 import { BENCH_PRESS_ID, setupSteps, sharedPast } from '../../../evals/scenarios/b-full-workout.scenario';
-import type { Scenario } from '../../../evals/schema/scenario.schema';
+import { ScenarioSchema, type Scenario } from '../../../evals/schema/scenario.schema';
 import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
-import { installScriptedModel } from './scripted-model';
-
-import { textOnly } from '@infra/ai/message-text';
+import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
 const T0 = new Date('2026-09-25T09:00:00.000Z');
 const MIN = 60_000;
-const SETS = 16;
+/** The gym arrival: 3 h after T0 — the empty session is 2 h 55 m idle at that message. */
 const FIRST_SET_AT_MIN = 180;
-const SET_GAP_MIN = 5;
-const LAST_SET_AT_MIN = FIRST_SET_AT_MIN + (SETS - 1) * SET_GAP_MIN; // 255
-const FINISH_TEXT = 'всё, закончил';
-const FINISH_REPLY = 'Отличная работа!';
+const GYM_TEXT = 'жим 80 на 10, подход 1';
+/** The reply after the set was added to the finished workout. */
+const GYM_REPLY = 'Тренировка закрылась после перерыва; подход жима добавил к ней.';
 
 const steps: Scenario['steps'] = [...setupSteps, { action: 'advance', at: '+5m' }];
-const setStepIndexes: number[] = [];
-for (let i = 0; i < SETS; i++) {
-  steps.push({ action: 'advance', at: `+${FIRST_SET_AT_MIN + i * SET_GAP_MIN}m` });
-  setStepIndexes.push(steps.length);
-  steps.push({
-    action: 'user',
-    text: `жим 80 на 10, подход ${i + 1}`,
-    script: [
-      { toolCall: { name: 'log_set', args: { exerciseId: BENCH_PRESS_ID, reps: 10, weight: 80 } } },
-      { text: 'Записал!' },
-    ],
-  });
-}
-const FINISH_STEP_INDEX = steps.length;
+steps.push({ action: 'advance', at: `+${FIRST_SET_AT_MIN}m` });
 steps.push({
   action: 'user',
-  text: FINISH_TEXT,
-  script: [{ toolCall: { name: 'finish_training', args: {} } }, { text: FINISH_REPLY }],
+  text: GYM_TEXT,
+  script: [
+    {
+      toolCall: {
+        name: 'edit_last_workout',
+        args: { action: 'add', exerciseId: BENCH_PRESS_ID, reps: 10, weight: 80 },
+      },
+    },
+    { text: GYM_REPLY },
+  ],
 });
+const GYM_STEP_INDEX = steps.length - 1;
 
 const scenarioDef: Scenario = {
   id: 'retro-timestamps',
-  description: 'BUG-043: plan accepted, gym 3 h later, 16 live sets over 75 min, finish — timestamps must be live',
+  description:
+    'BUG-043/BUG-053: plan accepted, gym 3 h later — the empty idle session auto-closes at the ' +
+    'first set message; chat adds the set to that finished workout with edit_last_workout (T5)',
   past: sharedPast,
   steps,
 };
 
-function textOf(m: BaseMessage): string {
-  return textOnly(m.content) ?? JSON.stringify(m.content);
-}
-
-describe('retro-timestamps scenario (BUG-043, AC-RT-3, AC-RT-4)', () => {
+describe('retro-timestamps scenario (BUG-043/BUG-053, reworked for T5)', () => {
   let result: ScenarioRunResult;
-  const seenByStep = new Map<number, string>();
+  let model: ScriptedModelHandle;
 
   beforeAll(async () => {
+    expect(ScenarioSchema.parse(scenarioDef)).toBeTruthy();
     jest.useFakeTimers({ advanceTimers: true, doNotFake: REAL_TIMER_APIS });
     jest.setSystemTime(T0);
-    const model = installScriptedModel();
+    model = installScriptedModel();
     for (const step of scenarioDef.steps) {
       if (step.action === 'user') {
         model.enqueueChat(step.script ?? []);
       }
     }
-    result = await runScenario(scenarioDef, {
-      onAdvance: now => jest.setSystemTime(now),
-      onStep: (obs: ScenarioStepObservation) => {
-        if (obs.action === 'user') {
-          seenByStep.set(obs.stepIndex, model.drainChatInputs().flat().map(textOf).join('\n'));
-        }
-      },
-    });
+    result = await runScenario(scenarioDef, { onAdvance: now => jest.setSystemTime(now) });
   });
 
   afterAll(() => {
@@ -88,53 +80,43 @@ describe('retro-timestamps scenario (BUG-043, AC-RT-3, AC-RT-4)', () => {
   });
 
   /** The workout session of this journey (newest first in every snapshot). */
-  const finalSession = () => result.steps[FINISH_STEP_INDEX]!.sessions[0]!;
+  const finalSession = () => result.steps[GYM_STEP_INDEX]!.sessions[0]!;
+  const gymObservation = () => result.steps[GYM_STEP_INDEX]!;
 
-  it('the journey ran to the end (finish_training recorded)', () => {
-    expect(result.steps[FINISH_STEP_INDEX]!.runRow?.toolCalls?.map(c => c.name)).toContain('finish_training');
+  it('the gym turn adds the set with edit_last_workout (no log_set), reply delivered', () => {
+    const tools = gymObservation().runRow?.toolCalls?.map(c => c.name) ?? [];
+    expect(tools).toEqual(['edit_last_workout']);
+    expect(gymObservation().delivered).toBe(GYM_REPLY);
+  });
+
+  it('the idle empty session is completed with auto_close_reason = timeout at the gym message', () => {
+    expect(finalSession().status).toBe('completed');
+    expect(finalSession().autoCloseReason).toBe('timeout');
+  });
+
+  it('completed_at = the clamped last activity — never before started_at, never the +3 h gym clock', () => {
+    const { completedAt, lastActivityAt, startedAt } = finalSession();
+    // BUG-043 clamp: a never-started session's last activity can precede
+    // started_at by ~1 s of harness drift, so the close is dated to the later
+    // of the two — still the creation moment, not the return clock.
+    const expected = Math.max(lastActivityAt!.getTime(), startedAt!.getTime());
+    expect(completedAt!.getTime()).toBe(expected);
+    expect(Math.abs(expected - T0.getTime())).toBeLessThan(2 * MIN);
+  });
+
+  it('the set is in the finished workout, dated to the workout (last activity + the retro offset), times unchanged', () => {
+    const sets = finalSession().exercises.flatMap(ex => ex.sets);
+    expect(sets).toHaveLength(1);
+    expect(sets[0]!.setData).toMatchObject({ type: 'strength', reps: 10, weight: 80 });
+    expect(sets[0]!.createdAt.getTime()).toBe(finalSession().lastActivityAt!.getTime() + RETRO_SET_OFFSET_MS);
     expect(finalSession().status).toBe('completed');
   });
 
-  it('AC-RT-3: all 16 sets are saved with distinct, strictly increasing created_at (not one frozen retro stamp)', () => {
-    const sets = finalSession().exercises.flatMap(ex => ex.sets);
-    expect(sets).toHaveLength(SETS);
-    const stamps = sets.map(s => s.createdAt.getTime());
-    expect(new Set(stamps).size).toBe(SETS);
-    // Increasing in set order (live sets take the DB clock, so only order — not the scripted values — is provable).
-    for (let i = 1; i < stamps.length; i++) {
-      expect(stamps[i]!).toBeGreaterThan(stamps[i - 1]!);
-    }
+  it('the phase after the gym message is chat', () => {
+    expect(gymObservation().phase).toBe('chat');
   });
 
-  it('AC-RT-3: started_at is the first set (~T0+180m), not plan acceptance', () => {
-    const startedAt = finalSession().startedAt!.getTime();
-    expect(Math.abs(startedAt - (T0.getTime() + FIRST_SET_AT_MIN * MIN))).toBeLessThan(2 * MIN);
-  });
-
-  it('AC-RT-3: last_activity_at is the last set (~T0+255m)', () => {
-    const lastActivityAt = finalSession().lastActivityAt.getTime();
-    expect(Math.abs(lastActivityAt - (T0.getTime() + LAST_SET_AT_MIN * MIN))).toBeLessThan(2 * MIN);
-  });
-
-  it('AC-RT-3: completed_at is not before started_at and is at/after the last set', () => {
-    const { startedAt, completedAt } = finalSession();
-    expect(completedAt!.getTime()).toBeGreaterThanOrEqual(startedAt!.getTime());
-    expect(completedAt!.getTime()).toBeGreaterThanOrEqual(T0.getTime() + LAST_SET_AT_MIN * MIN - MIN);
-  });
-
-  it('AC-RT-3: duration_minutes is 75 ± 1', () => {
-    const duration = finalSession().durationMinutes;
-    expect(duration).toBeGreaterThanOrEqual(74);
-    expect(duration).toBeLessThanOrEqual(76);
-  });
-
-  it('AC-RT-4: no set confirmation the model saw says "retro-logged"', () => {
-    const retroSteps = setStepIndexes.filter(i => (seenByStep.get(i) ?? '').includes('retro-logged'));
-    expect(retroSteps).toEqual([]);
-  });
-
-  it('AC-RT-4: the STALE SESSION block is gone from the prompt of every run after the first live set', () => {
-    const staleSteps = setStepIndexes.slice(1).filter(i => (seenByStep.get(i) ?? '').includes('=== STALE SESSION ==='));
-    expect(staleSteps).toEqual([]);
+  it('consumed the whole script (no fallback answer leaked in)', () => {
+    expect(model.chatScriptExhausted).toBe(true);
   });
 });

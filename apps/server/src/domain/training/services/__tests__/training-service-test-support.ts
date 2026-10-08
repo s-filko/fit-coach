@@ -103,6 +103,7 @@ export function createMocks() {
     findById: jest.fn(),
     findByExerciseId: jest.fn(),
     update: jest.fn(),
+    deleteById: jest.fn(),
   } as unknown as jest.Mocked<ISessionSetRepository>;
 
   const mockSessionExerciseRepo = {
@@ -120,6 +121,7 @@ export function createMocks() {
     findRecentByUserId: jest.fn(),
     findRecentByUserIdWithDetails: jest.fn(),
     findActiveByUserId: jest.fn(),
+    findLastCompletedByUserId: jest.fn(),
     update: jest.fn(),
     complete: jest.fn(),
     findTimedOut: jest.fn(),

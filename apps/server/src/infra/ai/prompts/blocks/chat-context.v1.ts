@@ -17,10 +17,17 @@ export interface ChatContextData {
   recentSessions: WorkoutSessionWithDetails[];
 }
 
+/** Options for {@link buildRecentSessionsSection}; absent = v1's byte-identical render. */
+export interface RecentSessionsSectionOptions {
+  /** v2 (BUG-053 T3): mark `auto_close_reason = 'timeout'` lines with `closed automatically after inactivity`. */
+  markAutoClosed?: boolean;
+}
+
 export function buildRecentSessionsSection(
   recentSessions: WorkoutSessionWithDetails[],
   ctx: ContextBlockCtx,
   depth: number,
+  opts?: RecentSessionsSectionOptions,
 ): string {
   const sessions = recentSessions.slice(0, depth);
   return sessions.length > 0
@@ -28,14 +35,28 @@ export function buildRecentSessionsSection(
         .map(s => {
           const date = s.completedAt ?? s.startedAt ?? s.createdAt;
           const when = humanTimeAgo(new Date(date), ctx.now, ctx.user?.timezone);
+          const autoClosed =
+            opts?.markAutoClosed && s.autoCloseReason === 'timeout' ? 'closed automatically after inactivity, ' : '';
           const exercises = s.exercises.map(ex => `${ex.exercise.name} (${ex.sets.length} sets)`).join(', ');
-          return `- ${s.sessionKey ?? 'session'} — ${when}, ${s.durationMinutes ?? '?'} min: ${exercises || 'no exercises logged'}`;
+          return `- ${s.sessionKey ?? 'session'} — ${when}, ${autoClosed}${s.durationMinutes ?? '?'} min: ${
+            exercises || 'no exercises logged'
+          }`;
         })
         .join('\n')
     : 'No recent sessions.';
 }
 
-export function buildChatContextText(data: ChatContextData, ctx: ContextBlockCtx, depth: number): string {
+export function buildChatContextText(
+  data: ChatContextData,
+  ctx: ContextBlockCtx,
+  depth: number,
+  /** v2 (BUG-053 T3) injects its own recent-sessions section; absent = v1's, byte-identical. */
+  buildRecentSessions: (
+    recentSessions: WorkoutSessionWithDetails[],
+    ctx: ContextBlockCtx,
+    depth: number,
+  ) => string = buildRecentSessionsSection,
+): string {
   const { user } = ctx;
   const profile = [
     user?.age && `Age: ${user.age}`,
@@ -52,7 +73,7 @@ export function buildChatContextText(data: ChatContextData, ctx: ContextBlockCtx
     ? 'User HAS an active workout plan. They can start planning workout sessions.'
     : 'User DOES NOT have a workout plan yet. Suggest creating one when appropriate.';
 
-  const recentSessionsSection = buildRecentSessionsSection(data.recentSessions, ctx, depth);
+  const recentSessionsSection = buildRecentSessions(data.recentSessions, ctx, depth);
 
   const clientName = user?.firstName ?? null;
 

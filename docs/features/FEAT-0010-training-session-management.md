@@ -60,7 +60,7 @@ Training session management enables users to:
 
 - **S-0113**: Given a user has an active session (status='in_progress'), When last_activity_at is older than 2 hours, Then the session is auto-closed with status='completed' and auto_close_reason='timeout' [BR-TRAINING-023]
 
-- **S-0114**: Given multiple users with abandoned sessions, When the daily cron job runs at 3 AM, Then all sessions with status='in_progress' and last_activity_at > 2 hours are auto-closed [BR-TRAINING-024]
+- **S-0114**: Given a user with an abandoned session (status='in_progress', last_activity_at > 2 hours), When the user sends the next message, Then the session is auto-closed with completed_at = last_activity_at and the message is answered in chat [INV-TRAINING-005] (no scheduled job — owner 2026-10-08)
 
 ### Retrospective Logging
 
@@ -79,7 +79,7 @@ Training session management enables users to:
 - **AC-0204**: Session details (exercises, sets, targets) are loaded from DB on each message to provide accurate context to AI
 - **AC-0205**: Database is the single source of truth; AI never relies on memory for training state
 - **AC-0206**: Conversation phase switches to 'training' when session starts, back to 'chat' when session completes
-- **AC-0207**: Sessions auto-close after 2 hours of inactivity (lazy on user interaction + daily cron)
+- **AC-0207**: Sessions auto-close after 2 hours of inactivity, lazily at the user's next message (no scheduled job)
 - **AC-0208**: User context (mood, sleep, energy) is extracted from conversation and stored in session
 - **AC-0209**: Set data supports discriminated union by exercise type (strength, cardio, functional, isometric, interval)
 - **AC-0210**: Training history queries return sessions with full details (exercises, sets, muscle groups)
@@ -100,7 +100,7 @@ Training session management enables users to:
 - **BR-TRAINING-021**: Completing a session updates status to 'completed', sets completed_at timestamp, calculates duration_minutes, and clears active sessionId from context
 - **BR-TRAINING-022**: Training history queries use workout_sessions.completed_at DESC for chronological ordering
 - **BR-TRAINING-023**: Sessions with last_activity_at older than 2 hours are auto-closed on next user interaction (lazy check)
-- **BR-TRAINING-024**: Daily cron job (3 AM) globally closes all abandoned sessions (status='in_progress', last_activity_at > 2 hours)
+- **BR-TRAINING-024**: Superseded 2026-10-08 (owner): there is no scheduled job; abandoned sessions close lazily at the user's next message [INV-TRAINING-005]
 - **BR-TRAINING-025**: Retrospective logging creates sessions with past timestamps and status='completed' immediately
 - **BR-TRAINING-026**: Training history returns WorkoutSessionWithDetails including exercises, sets, muscle groups, and user context
 - **BR-TRAINING-030**: A set is retro-logged (stamped last activity + 5 min, activity not advanced) only if the in_progress session is idle > 2 h **and** already holds sets; otherwise it is live (owner 2026-09-30, BUG-043)

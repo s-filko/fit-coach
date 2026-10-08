@@ -240,6 +240,82 @@ describe('hand-off loop (transition-handoff plan Task 2, D-1/D-3, AC-TH-1/AC-TH-
     expect(result.pendingTransition).toBeNull();
   });
 
+  it("review R1: a session_timeout transition to chat hops with the flag off — the user's message is answered in the same run", async () => {
+    const { node, recordRun } = makeDeps([]);
+    const { config } = makeConfig();
+    (config.context as { staleSessionClose?: boolean }).staleSessionClose = true;
+
+    const result = await node(
+      stateOf({
+        phase: 'training',
+        activeSessionId: 's-stale',
+        pendingTransition: { toPhase: 'chat', reason: 'session_timeout' },
+      }),
+      config as never,
+    );
+
+    expect((config.context as { hopping?: boolean }).hopping).toBe(true);
+    expect(recordRun).not.toHaveBeenCalled();
+    expect(result.phase).toBe('chat');
+  });
+
+  it('review closure: the session_timeout hop keeps the previous lastUserMessageAt and the course expiry questions for chat', async () => {
+    const { node } = makeDeps([]);
+    const { config } = makeConfig();
+    (config.context as { staleSessionClose?: boolean }).staleSessionClose = true;
+
+    const result = await node(
+      stateOf({
+        phase: 'training',
+        activeSessionId: 's-stale',
+        lastUserMessageAt: '2026-10-07T10:00:00.000Z',
+        courseExpiryQuestions: ['Q'],
+        pendingTransition: { toPhase: 'chat', reason: 'session_timeout' },
+      }),
+      config as never,
+    );
+
+    expect((config.context as { hopping?: boolean }).hopping).toBe(true);
+    expect(result.lastUserMessageAt).toBe('2026-10-07T10:00:00.000Z');
+    expect(result.courseExpiryQuestions).toEqual(['Q']);
+  });
+
+  it("review closure (a): a model-supplied session_timeout reason does not hop — only prepare's run flag forces it", async () => {
+    const { node } = makeDeps([]);
+    const { config } = makeConfig();
+
+    await node(
+      stateOf({
+        phase: 'training',
+        activeSessionId: 's',
+        pendingTransition: { toPhase: 'chat', reason: 'session_timeout' },
+      }),
+      config as never,
+    );
+
+    expect((config.context as { hopping?: boolean }).hopping).toBe(false);
+  });
+
+  it('review closure (b): a failing stale-session close fails the run — no hop to chat with the session still set', async () => {
+    const failing: TransitionHandler = async () => {
+      throw new Error('database unavailable');
+    };
+    const { node } = makeDeps([failing]);
+    const { config } = makeConfig();
+    (config.context as { staleSessionClose?: boolean }).staleSessionClose = true;
+
+    await expect(
+      node(
+        stateOf({
+          phase: 'training',
+          activeSessionId: 's',
+          pendingTransition: { toPhase: 'chat', reason: 'session_timeout' },
+        }),
+        config as never,
+      ),
+    ).rejects.toThrow('database unavailable');
+  });
+
   it('flag off (no transitionHandoffTargets): never hops even for the same target', async () => {
     const { node, recordRun } = makeDeps([]);
     const { config } = makeConfig();

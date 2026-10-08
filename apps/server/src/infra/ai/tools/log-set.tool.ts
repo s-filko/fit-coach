@@ -10,6 +10,7 @@ import { SetDataSchema } from '@domain/training/set-data.types';
 import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { EFFORT_MAPPING_TEXT } from '@infra/ai/prompts/effort';
 import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
+import { flatSetData } from '@infra/ai/tools/set-input';
 
 import { createLogger } from '@shared/logger';
 import { isDatabaseFailure } from '@shared/pg-error-cause';
@@ -38,28 +39,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
 
       try {
-        // Build setData from flat fields — avoids LLM confusion with nested object schemas
-        const baseSetData = (() => {
-          if (input.distanceKm != null) {
-            return {
-              type: 'cardio_distance' as const,
-              distance: input.distanceKm,
-              distanceUnit: 'km' as const,
-              duration: input.durationSeconds ?? 0,
-              ...(input.inclinePct != null && { inclinePct: input.inclinePct }),
-            };
-          }
-          if (input.durationSeconds != null) {
-            return { type: 'cardio_duration' as const, duration: input.durationSeconds };
-          }
-          if (input.reps != null && input.weight != null && input.weight > 0) {
-            return { type: 'strength' as const, reps: input.reps, weight: input.weight, weightUnit: 'kg' as const };
-          }
-          if (input.reps != null) {
-            return { type: 'functional_reps' as const, reps: input.reps };
-          }
-          return { type: 'strength' as const, reps: 0, weight: 0, weightUnit: 'kg' as const };
-        })();
+        const baseSetData = flatSetData(input);
 
         const session = await trainingService.getSessionDetails(sessionId);
 

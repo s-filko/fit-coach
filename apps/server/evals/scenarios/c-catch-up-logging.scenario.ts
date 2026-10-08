@@ -4,57 +4,48 @@ import { BENCH_PRESS_ID, PULL_UPS_ID, setupSteps, sharedPast } from './b-full-wo
 
 /**
  * Journey C — catch-up logging after a pause (training-journey-scenarios plan,
- * Task 5b / AC-TJ-2, AC-TJ-3; owner ruling 2026-09-20).
+ * Task 5b / AC-TJ-2, AC-TJ-3; owner rulings 2026-09-20 and 2026-10-08).
  *
  * The same world as journey B (imported, not copied): two completed workouts,
  * an active Upper/Lower split, one fact. The journey reuses B's setup steps
  * (greeting → session_planning → `start_training_session`), logs two bench
  * sets, answers a mid-workout rest question with TEXT ONLY (no tool), then
- * the clock jumps +3.5 h — past `EPISODE_GAP_HOURS` (3 h), so the return run
- * compacts the episode away and the training phase re-reads the session from
- * the DB: the stale session + a workout block still listing the pre-pause
- * sets.
+ * the clock jumps +3.5 h — past `EPISODE_GAP_HOURS` (3 h) and past the
+ * 2 h session timeout, so the return run compacts the episode away.
  *
- * Per the owner ruling, a >2 h gap means the user is CATCHING UP an old
- * workout later ("ушёл в спешке и забыл дописать"), not continuing it — the
- * retro behaviour below is CORRECT, and what the old Task 5 scenario got
- * wrong was its user text ("вернулся, доделаю" depicts continuing). So after
- * the pause the user logs the missed pull-ups in one message — implicitly
- * ("забыл дописать…") or explicitly ("добавь к последней тренировке…"); the
- * two variants share every step except that one user text. The three sets
- * land as RETRO sets (`skipActivityUpdate`, timestamped at the last activity
- * + `RETRO_SET_OFFSET_MS`), so `finish_training` completes the session AT the
- * last pre-pause activity — `durationMinutes` measures the trained window
- * (≈11 min), not the wall clock.
+ * BUG-053 (stale-session-autoclose plan T5, owner decision 2026-10-08): at the
+ * catch-up message the stale session is COMPLETED by the timeout auto-close
+ * (`auto_close_reason = 'timeout'`, `completed_at` = the last pre-pause
+ * activity) and the message is answered in CHAT. The missed pull-ups are
+ * added to that finished workout in place by `edit_last_workout` (action
+ * `add`): the workout stays completed, its times unchanged, each set
+ * timestamped at the last activity + `RETRO_SET_OFFSET_MS` (BR-TRAINING-030).
+ * The catch-up wordings — implicit ("забыл дописать…") and explicit
+ * ("добавь к последней тренировке…") — share every step except that one user
+ * text.
  *
  * Former BUG-018 reproductions, now fixed (Tasks 1-2): the mid-workout
  * exchange stays verbatim after the pause (AC-CC-1) and the gap note sits
- * before the catch-up message (AC-CC-2). The `liveOnly`
- * delivered entries (Task 5b) carry the L3 expectation — a REAL reply must
- * say the sets went to the PREVIOUS workout and ask whether to close it or
- * add more; the deterministic layer skips them (its delivered text is just
- * the script below).
+ * before the catch-up message (AC-CC-2).
  *
- * The STALE label ("inactive for 3 hours"), the retro marker and the
- * 11-minute duration assume the deterministic layer's pinned T0 —
- * 2026-09-20T10:00:00.000Z (see journey B); the integration test must keep
- * that T0. Set 2 lands at +12m, not +11m: `startedAt` carries ~0.4 s of fake
- * clock drift, so the floor in `durationMinutes` is exactly 11 either way.
+ * The 11-minute duration assumes
+ * the deterministic layer's pinned T0 — 2026-09-20T10:00:00.000Z (see
+ * journey B); the integration test must keep that T0. Set 2 lands at +12m,
+ * not +11m: `startedAt` carries ~0.4 s of fake clock drift, so the floor in
+ * `durationMinutes` is exactly 11 either way.
  */
 
 /** The step texts — the AC-CC-1 assertions quote the question verbatim. */
 export const REST_QUESTION = 'сколько мне отдыхать между подходами жима?';
 export const IMPLICIT_CATCH_UP_TEXT = 'забыл дописать: последнее упражнение — подтягивания 3×8';
 export const EXPLICIT_CATCH_UP_TEXT = 'добавь к последней тренировке: подтягивания 3×8';
-export const FINISH_C_REQUEST = 'всё, закрой тренировку';
 
 /** The scripted AI replies. */
 export const AFTER_SET_1_TEXT = 'Один подход жима записан. Как будет второй — пиши.';
 export const AFTER_SET_2_TEXT = 'Два подхода есть, остался один.';
 export const REST_ANSWER = 'Между подходами жима отдыхай 2-3 минуты: для силы этого достаточно.';
 /** The catch-up reply the owner ruling asks of a real model (L3 shape). */
-export const CATCH_UP_REPLY_TEXT = 'Записал подтягивания 3×8 к предыдущей тренировке. Закрыть её или добавить ещё?';
-export const FINISH_C_FINAL_TEXT = 'Закрыл! Жим и подтягивания записаны — 11 минут работы.';
+export const CATCH_UP_REPLY_TEXT = 'Записал подтягивания 3×8 к предыдущей тренировке. Добавить что-то ещё?';
 
 /**
  * The gap note AC-CC-2 places before the catch-up message (fixed, Task 2) —
@@ -64,7 +55,7 @@ export const GAP_NOTE_MARKER = 'The user returns after 3.5 h';
 
 /** The catch-up reply markers the live L3 layer checks (delivered, liveOnly). */
 export const LIVE_ADDED_TO_PREVIOUS_MARKER = 'к предыдущей тренировке';
-export const LIVE_CLOSE_OR_ADD_MARKER = 'закрыть её или добавить';
+export const LIVE_ADD_MORE_MARKER = 'добавить что-то ещё';
 
 /** Both bench sets — what the session holds when the user catches up. */
 const BENCH_TWO_SETS = [
@@ -72,14 +63,15 @@ const BENCH_TWO_SETS = [
   { reps: 8, weight: 80 },
 ];
 
-/** The scripted catch-up turn: three retro pull-up sets, then the ruling's reply. */
+/**
+ * The scripted catch-up turn (BUG-053, T5 shape): the stale session auto-closes at this message,
+ * chat adds the three pull-up sets to the finished workout with `edit_last_workout` and replies.
+ */
 type UserStep = Extract<Scenario['steps'][number], { action: 'user' }>;
-const catchUpScript: NonNullable<UserStep['script']> = [
-  { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8, weight: 0 } } },
-  { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8, weight: 0 } } },
-  { toolCall: { name: 'log_set', args: { exerciseId: PULL_UPS_ID, reps: 8, weight: 0 } } },
-  { text: CATCH_UP_REPLY_TEXT },
-];
+const addPullUp = {
+  toolCall: { name: 'edit_last_workout', args: { action: 'add', exerciseId: PULL_UPS_ID, reps: 8 } },
+};
+const catchUpScript: NonNullable<UserStep['script']> = [addPullUp, addPullUp, addPullUp, { text: CATCH_UP_REPLY_TEXT }];
 
 /**
  * Builds the whole journey around one catch-up wording — the two variants
@@ -170,68 +162,28 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
         },
       },
       // --- step 8: the pause — 3.5 h of SILENCE since the rest exchange at
-      // +12m, past EPISODE_GAP_HOURS (3 h); the advance anchor is T0-relative,
-      // hence +3.7h (AC-CC-2 measures from the previous message, not T0). ---
+      // +12m, past EPISODE_GAP_HOURS (3 h) and past the 2 h session timeout;
+      // the advance anchor is T0-relative, hence +3.7h (AC-CC-2 measures from
+      // the previous message, not T0). ---
       { action: 'advance', at: '+3.7h' },
-      // --- step 9: the catch-up — the session re-read from the DB, stale;
-      // the three pull-up sets land RETRO in the PREVIOUS session window ---
+      // --- step 9: the catch-up message — BUG-053 (INV-TRAINING-005): the
+      // stale session is completed by the timeout auto-close (completed_at =
+      // the last pre-pause activity), CHAT answers the message and adds the
+      // missed pull-ups to that finished workout with `edit_last_workout`. ---
       {
         action: 'user',
         text: catchUpText,
         script: catchUpScript,
         expect: {
-          seen: {
-            mustMatch: [
-              // coach-simplification I1: the stale-session block became one fact line in `# Today`.
-              "No activity for 3 h; a set logged now is dated to the session's last activity.",
-              `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — in progress: 8×80, 8×80`,
-              '(retro-logged).',
-              // AC-CC-1 (fixed): the rest exchange stays verbatim after the gap.
-              REST_QUESTION,
-              REST_ANSWER,
-              // AC-CC-2 (fixed): the gap note before the catch-up message.
-              GAP_NOTE_MARKER,
-            ],
-          },
-          tools: { must: ['log_set'] },
-          // L3 only: a REAL reply must name the previous workout and ask
-          // whether to close it or add more (owner ruling). The deterministic
-          // layer skips these — its delivered text is the script's.
+          tools: { must: ['edit_last_workout'], mustNot: ['log_set'] },
+          // L3 only: a REAL reply must name the previous workout and offer more (owner ruling).
           delivered: {
             mustMatch: [
               CATCH_UP_REPLY_TEXT,
               { text: LIVE_ADDED_TO_PREVIOUS_MARKER, liveOnly: true },
-              { text: LIVE_CLOSE_OR_ADD_MARKER, liveOnly: true },
+              { text: LIVE_ADD_MORE_MARKER, liveOnly: true },
             ],
           },
-          persisted: {
-            session: {
-              key: 'upper_a',
-              status: 'in_progress',
-              exercises: [
-                { exercise: 'Barbell Bench Press', sets: BENCH_TWO_SETS },
-                { exercise: 'Pull-ups', sets: [{ reps: 8 }, { reps: 8 }, { reps: 8 }] },
-              ],
-            },
-            turnRecorded: true,
-          },
-          phaseAfter: { phase: 'training' },
-        },
-      },
-      { action: 'advance', at: '+3.75h' },
-      // --- step 11: finish — stale, so completedAt falls back to the last
-      // real activity (set 2, +12m) and durationMinutes floors to 11 ---
-      {
-        action: 'user',
-        text: FINISH_C_REQUEST,
-        script: [
-          { toolCall: { name: 'finish_training', args: { feedback: 'Дописал подтягивания позже' } } },
-          { text: FINISH_C_FINAL_TEXT },
-        ],
-        expect: {
-          tools: { must: ['finish_training'] },
-          delivered: { mustMatch: [FINISH_C_FINAL_TEXT] },
-          phaseAfter: { phase: 'chat' },
           persisted: {
             session: {
               key: 'upper_a',
@@ -245,6 +197,7 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
             },
             turnRecorded: true,
           },
+          phaseAfter: { phase: 'chat' },
         },
       },
     ],
@@ -255,7 +208,7 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
 export const scenario: Scenario = buildCatchUpScenario(
   'c-catch-up-logging',
   'catch-up logging after a +3.5 h pause: two sets, a text-only rest question, then the missed pull-ups ' +
-    'logged retro into the previous session; AC-CC-1 and AC-CC-2 fixed (Tasks 1-2)',
+    'added to the finished workout by edit_last_workout; AC-CC-1 and AC-CC-2 fixed (Tasks 1-2)',
   IMPLICIT_CATCH_UP_TEXT,
 );
 

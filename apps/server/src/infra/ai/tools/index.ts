@@ -20,6 +20,7 @@ export {
   type CompleteRegistrationToolDeps,
 } from '@infra/ai/tools/complete-registration.tool';
 export { buildDeleteLastSetsTool, type DeleteLastSetsToolDeps } from '@infra/ai/tools/delete-last-sets.tool';
+export { buildEditLastWorkoutTool, type EditLastWorkoutToolDeps } from '@infra/ai/tools/edit-last-workout.tool';
 export { buildFinishTrainingTool, type FinishTrainingToolDeps } from '@infra/ai/tools/finish-training.tool';
 export {
   buildGetExerciseHistoryTool,

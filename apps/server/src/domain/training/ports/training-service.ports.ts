@@ -87,6 +87,21 @@ export interface ITrainingService {
   getTrainingHistory(userId: string, limit?: number): Promise<WorkoutSessionWithDetails[]>;
   getSessionDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;
 
+  /**
+   * INV-TRAINING-005 (BUG-053): closes the user's in_progress sessions idle past the timeout —
+   * at most one exists (INV-TRAINING-002) — through the timeout auto-close path: status
+   * 'completed', `auto_close_reason = 'timeout'`, `completed_at` = the last activity
+   * (INV-TRAINING-006), after the same finish reconciliation `completeSession` runs. Exposed for
+   * `prepare`, which calls it at the user's next message before the phase runs.
+   */
+  autoCloseTimedOutSessions(userId: string): Promise<void>;
+
+  /**
+   * BUG-053 T5 (AC-SSA-5): the user's most recent `completed` session (any close reason) with its
+   * exercises and sets — the one `edit_last_workout` edits in place — or null when there is none.
+   */
+  getLastFinishedSession(userId: string): Promise<WorkoutSessionWithDetails | null>;
+
   // Exercise management during training
   completeCurrentExercise(sessionId: string): Promise<AutoCompletedExercise>;
 
@@ -113,7 +128,11 @@ export interface ITrainingService {
       // set-kind plan Task 1 (D3, AC-SK-8)
       setKind?: SetKind;
     },
+    // AC-SSA-5: names the set to update; absent = the exercise's last set.
+    opts?: { setNumber?: number },
   ): Promise<UpdateSetResult>;
+  // AC-SSA-5: deletes one numbered set of an exercise.
+  deleteSet(sessionId: string, exerciseId: string, setNumber: number): Promise<DeletedSetsResult>;
 
   /**
    * Resolves an exercise name to its catalog id (exact ilike match, then semantic search) — the
@@ -139,6 +158,9 @@ export interface ITrainingService {
       // set-kind plan Task 1 (D5): 'total' overrides the per-hand default on a dumbbell/kettlebell
       // exercise — the user explicitly stated a combined weight.
       weightBasis?: 'total';
+      // AC-SSA-5: the session is completed and edited in place — exercise statuses and the session's
+      // activity clock stay as they are (implies skipActivityUpdate); a new exercise row is `completed`.
+      finishedSession?: boolean;
       // AC-PTF-7: the caller passed reps without any weight — the exercise's weight_mode decides
       // whether that is a bodyweight set (optional) or a WeightRequiredError (required).
       weightOmitted?: boolean;
