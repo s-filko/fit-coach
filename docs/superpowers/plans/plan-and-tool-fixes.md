@@ -656,3 +656,8 @@ Decisions:
     Tests: 1 todo, 663 passed, 664 total.
   - `flock /tmp/fitcoach-testdb.lock … npm run test:scenarios` → Test Suites: 23 passed, 23 total /
     Tests: 1 todo, 392 passed, 393 total.
+
+**Merge note (orchestrator, 2026-10-08).** `plan/stale-session-autoclose` also adds a migration numbered 0024
+(`reopened_at`). Merge order: stale-session-autoclose first; then merge `dev` into this branch, drop this branch's
+`0024_flawless_felicia_hardy.sql` + its journal/snapshot entry and regenerate it (`npm run drizzle:generate`) so
+`weight_mode` lands as 0025 with the same SQL (including the backfill UPDATEs and the check constraint).
