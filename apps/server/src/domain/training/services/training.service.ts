@@ -602,11 +602,7 @@ export class TrainingService implements ITrainingService {
    * auto-close measures idleness from `max(last_activity_at, reopened_at)` (INV-TRAINING-005).
    */
   async reopenLastSession(userId: string): Promise<WorkoutSessionWithDetails> {
-    await this.autoCloseTimedOutSessions(userId);
-    const active = await this.sessionRepo.findActiveByUserId(userId);
-    if (active) {
-      throw new ActiveSessionExistsError();
-    }
+    await this.assertNoActiveSession(userId);
 
     const last = await this.sessionRepo.findLastCompletedByUserId(userId);
     if (!last) {

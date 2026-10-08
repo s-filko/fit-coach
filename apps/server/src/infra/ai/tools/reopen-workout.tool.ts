@@ -2,7 +2,7 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
-import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
+import { ok, userError } from '@domain/conversation/tool-outcome';
 import { ActiveSessionExistsError, NoCompletedSessionError } from '@domain/training/errors';
 import type { ITrainingService } from '@domain/training/ports';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
@@ -61,8 +61,10 @@ export function buildReopenWorkoutTool(deps: ReopenWorkoutToolDeps) {
           },
         };
       } catch (err) {
+        // Business refusals (ADR-0013 §6): a valid call the rule says no to — the model relays
+        // the domain message to the user; nothing about the arguments could fix it.
         if (err instanceof ActiveSessionExistsError || err instanceof NoCompletedSessionError) {
-          return llmError(err.message);
+          return userError(err.message);
         }
         return userError('Error reopening the workout. Please try again.');
       }

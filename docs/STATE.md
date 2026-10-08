@@ -9,11 +9,12 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-10-07 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 - `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
 - `plan-and-tool-fixes.md` — Plan and Tool Fixes — one active plan, empty search, weight input (no carry-over) (direct on integration branch)
+- `stale-session-autoclose.md` — Stale Session Auto-Close — a forgotten workout closes on return; the model can reopen it (BUG-053) (branch: `plan/stale-session-autoclose`, last commit 2026-10-07)
 
 **Planned**
 - `coach-quality-proof.md` — Coach Quality Proof — the coach is friendly, honest, logs right and proposes weights that follow the history
@@ -78,9 +79,6 @@ _Generated 2026-10-07 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **Close-out debt (merged but plan not done)**
 — none —
-
-**Warnings**
-- `stale-session-autoclose.md` — Status: in progress but branch ``plan/stale-session-autoclose`, cut from `dev`.` no longer exists
 <!-- AUTO:status END -->
 
 ## Scope now

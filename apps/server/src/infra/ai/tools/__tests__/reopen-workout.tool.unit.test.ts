@@ -2,8 +2,8 @@
  * `reopen_workout` (BUG-053, stale-session-autoclose plan T2 / AC-SSA-2): returns the user's
  * most recent finished workout to training — the tool calls `reopenLastSession`, requests the
  * transition to training with the session as activeSessionId, and its result states facts only
- * (which workout, when it ran, how much of it is logged). Typed refusals relay the domain
- * message for the model to pass on.
+ * (which workout, when it ran, how much of it is logged). Typed refusals are user errors the
+ * model relays (ADR-0013 §6: a valid call the business rule says no to).
  */
 import type { RunnableConfig } from '@langchain/core/runnables';
 
@@ -92,27 +92,31 @@ describe('reopen-workout.tool — reopen_workout (BUG-053 T2, AC-SSA-2)', () => 
     expect(text).not.toMatch(/\b(always|never|must|write a message|ask the user)\b/i);
   });
 
-  it('an active session refusal relays the domain message (user-facing fact, no state change)', async () => {
+  it('an active session refusal is a user error the model relays (ADR-0013 §6), no state change', async () => {
     const trainingService = makeTrainingService();
     trainingService.reopenLastSession.mockRejectedValue(new ActiveSessionExistsError());
     const reopenWorkout = buildReopenWorkoutTool({ trainingService }) as unknown as InvokableTool;
 
     const result = (await reopenWorkout.invoke({}, makeConfig())) as ToolReturn;
 
-    expect(renderedContent(result)).toContain(LLM_ERROR_PREFIX);
+    const outcome = isToolReturnWithUpdate(result) ? result.outcome : result;
+    expect(outcome).toMatchObject({ ok: false, kind: 'user_error' });
     expect(renderedContent(result)).toContain('active session');
+    expect(renderedContent(result)).not.toContain(LLM_ERROR_PREFIX);
     expect(isToolReturnWithUpdate(result) ? result.update : undefined).toBeUndefined();
   });
 
-  it('no finished workout relays the domain message', async () => {
+  it('no finished workout is a user error the model relays', async () => {
     const trainingService = makeTrainingService();
     trainingService.reopenLastSession.mockRejectedValue(new NoCompletedSessionError());
     const reopenWorkout = buildReopenWorkoutTool({ trainingService }) as unknown as InvokableTool;
 
     const result = (await reopenWorkout.invoke({}, makeConfig())) as ToolReturn;
 
-    expect(renderedContent(result)).toContain(LLM_ERROR_PREFIX);
+    const outcome = isToolReturnWithUpdate(result) ? result.outcome : result;
+    expect(outcome).toMatchObject({ ok: false, kind: 'user_error' });
     expect(renderedContent(result)).toContain('No finished workout');
+    expect(renderedContent(result)).not.toContain(LLM_ERROR_PREFIX);
     expect(isToolReturnWithUpdate(result) ? result.update : undefined).toBeUndefined();
   });
 
