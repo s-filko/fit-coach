@@ -70,7 +70,8 @@ export interface ScenarioTranscript {
   observations: ReadonlyArray<{
     action: 'advance' | 'user';
     delivered: string;
-    runRow: { toolCalls: ReadonlyArray<{ name: string }> | null } | null;
+    /** `runId` rides the transcript (coach-quality T3): the judge joins the stored request from llm_calls by it. */
+    runRow: { runId?: string; toolCalls: ReadonlyArray<{ name: string }> | null } | null;
     phase: string;
   }>;
   checks: CheckResult[];
@@ -142,6 +143,10 @@ export function formatScenarioTranscript(transcript: ScenarioTranscript): string
         lines.push(withContinuation('coach: ', obs.delivered !== '' ? obs.delivered : '(no delivered text)'));
         const tools = obs.runRow?.toolCalls?.map(c => c.name) ?? [];
         lines.push(`tools: ${tools.length > 0 ? tools.join(', ') : '(none)'}`);
+        // The judge's join key into llm_calls (coach-quality T3); advance steps have no run.
+        if (obs.runRow?.runId !== undefined) {
+          lines.push(`run: ${obs.runRow.runId}`);
+        }
       }
     }
     if (obs !== undefined) {

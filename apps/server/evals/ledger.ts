@@ -9,14 +9,10 @@
  */
 import { join } from 'node:path';
 
+import { argValue } from './lib/cli-args';
 import { completeLastRow } from './lib/cost-ledger';
 
-function argValue(flag: string): string {
-  const index = process.argv.indexOf(flag);
-  return index >= 0 ? (process.argv[index + 1] ?? '') : '';
-}
-
-const after = Number(argValue('--after'));
+const after = Number(argValue('--after', ''));
 if (!Number.isFinite(after) || after <= 0) {
   console.error('Usage: npm run evals:ledger -- --after <n>  (n = quota remaining, dashboard units)');
   process.exit(2);

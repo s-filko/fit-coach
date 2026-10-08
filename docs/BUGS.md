@@ -2460,3 +2460,17 @@ Asked «какой вес взять?» with no record for the exercise, the coa
 (BR-TRAINING-036 in the spec: with no reference the coach names no number). Owner's general rule (2026-10-05): if
 unclear — ask, or propose the most likely option and say it is an assumption. Next step: `prompt-doctor` (cause in the
 exact request, baseline vs candidate).
+
+## BUG-058 — After a 3-week break the coach often proposes the old working weight instead of a lighter re-entry
+
+**Status:** Open — evidence from the coach-quality measurement 2026-10-08
+**Severity:** Low–Medium — injury/failure risk on the first workout back
+**Found during:** plan `coach-quality-proof`, journey `n-load-break` (21 days since the last squat at 100 kg): v13 1/3,
+v14 1/3 exact; v15 lighter in 3/3 by direction (92.5 / 85 / 90) but one v13/v14 sample kept 100. Also one v15 sample
+dropped to 75 on an uneven-hold case (expected hold 80).
+**Component:** training prompt v15 progression paragraph ("after a long break — lighter than before it"); history block
+
+### Next step
+
+`prompt-doctor`: check whether the history block states the break length plainly (the coach sometimes counted it), then
+measure with more samples before any wording change.

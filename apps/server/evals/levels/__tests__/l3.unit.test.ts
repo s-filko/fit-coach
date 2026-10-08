@@ -141,6 +141,38 @@ describe('loadScenarios', () => {
     expect(defaults.some(id => id.startsWith('fl-'))).toBe(false);
   });
 
+  it('the n-load group is selectable by name and by id, and NOT part of the default run (call ceiling)', () => {
+    const group = loadScenarios('n-load');
+    expect(group.map(s => s.id)).toEqual([
+      'n-load-up',
+      'n-load-miss',
+      'n-load-early-stop',
+      'n-load-break',
+      'n-load-uneven',
+      'n-load-ask',
+      'n-load-gravitron',
+    ]);
+    expect(loadScenarios('n-load-gravitron').map(s => s.id)).toEqual(['n-load-gravitron']);
+    const defaults = loadScenarios().map(s => s.id);
+    expect(defaults.some(id => id.startsWith('n-load'))).toBe(false);
+  });
+
+  it('the new-journeys group is selectable by name and by id, and NOT part of the default run (call ceiling)', () => {
+    const group = loadScenarios('new-journeys');
+    expect(group.map(s => s.id)).toEqual([
+      'g-greeting-after-open-session',
+      'h-forgot-plank-edit',
+      'i-weight-shorthand',
+      'j-bodyweight',
+      'k-weight-unknown',
+      'l-correction',
+      'm-no-false-log',
+    ]);
+    expect(loadScenarios('l-correction').map(s => s.id)).toEqual(['l-correction']);
+    const defaults = loadScenarios().map(s => s.id);
+    expect(defaults.some(id => id.startsWith('i-') || id.startsWith('j-') || id.startsWith('k-') || id.startsWith('l-') || id.startsWith('m-') || id.startsWith('g-') || id.startsWith('h-'))).toBe(false);
+  });
+
   it('evaluates the database plane: a wrong fact row fails, the right one passes', () => {
     const scenario = loadScenarios('fl-b-closed-not-resurrected')[0]!;
     const t0 = new Date();

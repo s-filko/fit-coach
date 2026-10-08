@@ -261,7 +261,7 @@ Numbers are initial defaults to be tuned with the eval harness; the invariant is
 > layout; every other phase keeps the 2026-09-30 one. `PhaseSpec.memory: 'workout'` (training only; default
 > `'episodes'`) selects it:
 >
-> 1. **system** = the phase prompt (`TRAINING_COACH`, `phase.training` v13, ≤ 2 500 chars) + `# Profile`: the user
+> 1. **system** = the phase prompt (`TRAINING_COACH`, `phase.training` v15, ≤ 3 050 chars — raised from 2 500 for the weight-progression principle, owner-approved 2026-10-08, plan coach-quality-proof T4) + `# Profile`: the user
 >    line and the user facts rendered compact — one per category and muscle group, physical constraints first,
 >    `break` hidden, no dates or confirmation counts. Facts created during this workout are left out, so the system
 >    message stays cache-stable. The profile is part of block 1 and is never cut.

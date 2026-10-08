@@ -84,7 +84,21 @@ import { scenario as journeyFlC } from '../scenarios/fl-c-short-states.scenario'
 import { scenario as journeyFlD } from '../scenarios/fl-d-recurring-short-state.scenario';
 import { scenario as journeyFlE } from '../scenarios/fl-e-advisory-plan.scenario';
 import { scenario as journeyFlF } from '../scenarios/fl-f-remembered-corrected-deleted.scenario';
+import { scenario as journeyNLoadAsk } from '../scenarios/n-load-ask.scenario';
+import { scenario as journeyNLoadGravitron } from '../scenarios/n-load-gravitron.scenario';
+import { scenario as journeyNLoadBreak } from '../scenarios/n-load-break.scenario';
+import { scenario as journeyNLoadEarlyStop } from '../scenarios/n-load-early-stop.scenario';
+import { scenario as journeyNLoadMiss } from '../scenarios/n-load-miss.scenario';
+import { scenario as journeyNLoadUneven } from '../scenarios/n-load-uneven.scenario';
+import { scenario as journeyNLoadUp } from '../scenarios/n-load-up.scenario';
 import { scenario as smokeScenario } from '../scenarios/smoke.scenario';
+import { scenario as journeyIWeightShorthand } from '../scenarios/i-weight-shorthand.scenario';
+import { scenario as journeyJBodyweight } from '../scenarios/j-bodyweight.scenario';
+import { scenario as journeyKWeightUnknown } from '../scenarios/k-weight-unknown.scenario';
+import { scenario as journeyLCorrection } from '../scenarios/l-correction.scenario';
+import { scenario as journeyMNoFalseLog } from '../scenarios/m-no-false-log.scenario';
+import { scenario as journeyGGreeting } from '../scenarios/g-greeting-after-open-session.scenario';
+import { scenario as journeyHPlank } from '../scenarios/h-forgot-plank-edit.scenario';
 
 /** Every authored training journey, in run order — what a plain L3 run executes. */
 const ALL_SCENARIOS: Scenario[] = [journeyA, journeyB, journeyC, journeyCExplicit];
@@ -104,6 +118,42 @@ export const FACT_LIFECYCLE_GROUP = 'fact-lifecycle';
 const FACT_LIFECYCLE_SCENARIOS: Scenario[] = [journeyFlA, journeyFlB, journeyFlC, journeyFlD, journeyFlE, journeyFlF];
 
 /**
+ * The weight-recommendation journeys (coach-quality-proof T2, AC-CQ-2). Selectable by id or as a
+ * group (`n-load`), NOT part of the default run — 24 user steps would cross the shared call
+ * ceiling of a plain L3 run; the T3 live measurement selects the group explicitly (EVALS_FULL_RUN
+ * allowed). What the live judge compares the replies against is `nLoadExpectations()`
+ * (evals/scenarios/n-load-shared.ts) — the loads the weight oracle computes from the seeded
+ * histories.
+ */
+export const N_LOAD_GROUP = 'n-load';
+const N_LOAD_SCENARIOS: Scenario[] = [
+  journeyNLoadUp,
+  journeyNLoadMiss,
+  journeyNLoadEarlyStop,
+  journeyNLoadBreak,
+  journeyNLoadUneven,
+  journeyNLoadAsk,
+  journeyNLoadGravitron,
+];
+
+/**
+ * The 2026-10 findings journeys (coach-quality-proof T1, AC-CQ-1) — g…m in run order. Selectable
+ * by id or as a group (`new-journeys`), NOT part of the default run (the shared call ceiling, like
+ * the two groups above). m-no-false-log carries a BUG-052 knownBug assertion — the live reporter
+ * counts it as a reproduction, never a regression.
+ */
+export const NEW_JOURNEYS_GROUP = 'new-journeys';
+const NEW_JOURNEYS_SCENARIOS: Scenario[] = [
+  journeyGGreeting,
+  journeyHPlank,
+  journeyIWeightShorthand,
+  journeyJBodyweight,
+  journeyKWeightUnknown,
+  journeyLCorrection,
+  journeyMNoFalseLog,
+];
+
+/**
  * The smoke scenario (smoke-test plan, AC-SM-3) — selectable ONLY by id
  * (`--scenario smoke`, what `npm run smoke` passes), never part of
  * `ALL_SCENARIOS`'s default run: it has no deterministic twin and is meant
@@ -119,7 +169,19 @@ export function loadScenarios(scenarioId?: string): Scenario[] {
   if (scenarioId === FACT_LIFECYCLE_GROUP) {
     return FACT_LIFECYCLE_SCENARIOS;
   }
-  const everyScenario = [...ALL_SCENARIOS, ...FACT_LIFECYCLE_SCENARIOS, ...SMOKE_SCENARIOS];
+  if (scenarioId === N_LOAD_GROUP) {
+    return N_LOAD_SCENARIOS;
+  }
+  if (scenarioId === NEW_JOURNEYS_GROUP) {
+    return NEW_JOURNEYS_SCENARIOS;
+  }
+  const everyScenario = [
+    ...ALL_SCENARIOS,
+    ...FACT_LIFECYCLE_SCENARIOS,
+    ...N_LOAD_SCENARIOS,
+    ...NEW_JOURNEYS_SCENARIOS,
+    ...SMOKE_SCENARIOS,
+  ];
   const found = everyScenario.filter(s => s.id === scenarioId);
   if (found.length === 0) {
     const available = everyScenario.map(s => s.id).join(', ');
@@ -147,6 +209,7 @@ function sessionProjection(session: WorkoutSessionWithDetails): {
   status: string;
   hasStartedAt: boolean;
   hasCompletedAt: boolean;
+  autoCloseReason: string | null;
   durationMinutes: number | null;
   exercises: Array<{ exercise: string; sets: Array<Record<string, number>> }>;
 } {
@@ -154,6 +217,7 @@ function sessionProjection(session: WorkoutSessionWithDetails): {
     status: session.status,
     hasStartedAt: session.startedAt != null,
     hasCompletedAt: session.completedAt != null,
+    autoCloseReason: session.autoCloseReason ?? null,
     durationMinutes: session.durationMinutes ?? null,
     exercises: session.exercises.map(ex => ({
       exercise: ex.exercise.name,
@@ -165,6 +229,10 @@ function sessionProjection(session: WorkoutSessionWithDetails): {
               number
             >)
           : {}),
+        // Isometric/cardio holds: the schema's `durationSeconds` is the set's `duration`.
+        ...('duration' in s.setData && s.setData.duration > 0
+          ? (JSON.parse(JSON.stringify({ durationSeconds: s.setData.duration })) as Record<string, number>)
+          : {}),
       })),
     })),
   };
@@ -172,12 +240,18 @@ function sessionProjection(session: WorkoutSessionWithDetails): {
 
 /** Drops undefined keys so expected and observed lists stringify comparably. */
 function normalizeExpectedExercises(
-  exercises: Array<{ exercise: string; sets: Array<{ reps?: number; weight?: number; rpe?: number }> }>,
+  exercises: Array<{
+    exercise: string;
+    sets: Array<{ reps?: number; weight?: number; rpe?: number; durationSeconds?: number }>;
+  }>,
 ): Array<{ exercise: string; sets: Array<Record<string, number>> }> {
   return exercises.map(ex => ({
     exercise: ex.exercise,
     sets: ex.sets.map(
-      s => JSON.parse(JSON.stringify({ reps: s.reps, weight: s.weight, rpe: s.rpe })) as Record<string, number>,
+      s =>
+        JSON.parse(
+          JSON.stringify({ reps: s.reps, weight: s.weight, rpe: s.rpe, durationSeconds: s.durationSeconds }),
+        ) as Record<string, number>,
     ),
   }));
 }
@@ -308,6 +382,14 @@ function evaluateStep(
             projection.hasCompletedAt === expected.hasCompletedAt,
             expect.persisted.knownBug,
             `completedAt ${projection.hasCompletedAt ? 'present' : 'absent'}`,
+          );
+        }
+        if (expected.autoCloseReason !== undefined) {
+          add(
+            'persisted.session.autoCloseReason',
+            projection.autoCloseReason === expected.autoCloseReason,
+            expect.persisted.knownBug,
+            `expected ${String(expected.autoCloseReason)}, got ${String(projection.autoCloseReason)}`,
           );
         }
         if (expected.durationMinutes !== undefined) {

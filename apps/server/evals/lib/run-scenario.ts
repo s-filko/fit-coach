@@ -172,7 +172,12 @@ export async function runScenario(scenario: Scenario, opts: RunScenarioOptions =
 
   const t0 = new Date();
   const world = await seedScenarioRows(scenario.past, t0, opts.embeddingService);
-  await seedCheckpointState(graph, { userId: world.userId, past: scenario.past, t0 });
+  await seedCheckpointState(graph, {
+    userId: world.userId,
+    past: scenario.past,
+    t0,
+    openSessionId: world.openSessionId,
+  });
   opts.onSeeded?.({ userId: world.userId, planId: world.planId, t0 });
 
   // Sessions created mid-journey (start_training_session) get their creation

@@ -198,7 +198,10 @@ const WorkoutExerciseSchema = z.object({
  * history by `createdAt`, so a seed without an explicit timestamp lands at
  * "now" and every age-based assertion goes wrong.
  *
- * `status` defaults to `completed`; `skipped` seeds no `completedAt`.
+ * `status` defaults to `completed`; `skipped` seeds no `completedAt`;
+ * `in_progress` (coach-quality g/h, BUG-053) seeds the never-finished workout:
+ * no `completedAt`, its activity stamped at the seeded moment, and (with
+ * `conversation.phase: 'training'`) it becomes the checkpoint's active session.
  * `exercises: []` with the default `completed` status is the
  * completed-but-empty case (BUG-031).
  */
@@ -213,7 +216,7 @@ const WorkoutSchema = z.object({
    * they mean today's implicit "completed" — `scenario-world.ts` applies the
    * default (`workout.status ?? 'completed'`).
    */
-  status: z.enum(['completed', 'skipped']).optional(),
+  status: z.enum(['completed', 'skipped', 'in_progress']).optional(),
   exercises: z.array(WorkoutExerciseSchema).default([]),
 });
 
@@ -259,6 +262,12 @@ const ConversationPastSchema = z.object({
   summaries: z.array(EpisodeSummarySeedSchema).default([]),
   /** Drives the inactivity/gap logic — when the user last wrote (ISO in state). */
   lastUserMessageAt: RelativeTimeSchema.optional(),
+  /**
+   * The checkpoint's starting phase (coach-quality g/h, BUG-053): default `chat`;
+   * `training` pairs with an `in_progress` seeded workout — scenario-world makes
+   * it the checkpoint's active session, exactly where the owner's bot sat.
+   */
+  phase: EvalPhaseSchema.optional(),
 });
 
 /**
@@ -403,6 +412,8 @@ const PersistedExpectSchema = z.object({
       status: z.enum(['planning', 'in_progress', 'completed', 'skipped']).optional(),
       hasStartedAt: z.boolean().optional(),
       hasCompletedAt: z.boolean().optional(),
+      /** The auto-close path that finished the session (coach-quality g, BUG-053). */
+      autoCloseReason: z.enum(['timeout', 'new_session_started', 'manual']).nullable().optional(),
       durationMinutes: z.number().nullable().optional(),
       exercises: z
         .array(

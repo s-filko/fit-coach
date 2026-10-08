@@ -8,13 +8,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { argValue } from './lib/cli-args';
 import { buildDraftCase } from './lib/draft-case';
 import { fetchRunsSince } from './lib/export-query';
-
-function argValue(flag: string, fallback: string): string {
-  const index = process.argv.indexOf(flag);
-  return index >= 0 ? (process.argv[index + 1] ?? fallback) : fallback;
-}
 
 async function main(): Promise<void> {
   const sinceArg = argValue('--since', '');

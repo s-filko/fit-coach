@@ -86,7 +86,10 @@ export async function setupTestDI(): Promise<void> {
           ('8c88ebce-f5df-4d33-afdb-0b096a0dd7a8', 'Pull-ups', 'compound', 'bodyweight', 'strength',
            'Back compound movement', 'high', 'intermediate', 10, false, 'optional'),
           ('da89020e-f54a-4573-b70b-764833ae761a', 'Running', 'cardio', 'none', 'cardio_distance',
-           'Cardio exercise', 'medium', 'beginner', 30, false, 'none')
+           'Cardio exercise', 'medium', 'beginner', 30, false, 'none'),
+          ('6b1d2f39-8c47-4e5a-9d20-7f3a8b4c1e57', 'Assisted Pull-ups (Gravitron)', 'compound', 'stack', 'strength',
+           'Assisted pull-ups on a counterweight machine (coach-quality-proof T2: the plate weight is assistance)',
+           'high', 'intermediate', 12, false, 'required')
         ON CONFLICT (id) DO NOTHING;
       `);
 
@@ -94,7 +97,8 @@ export async function setupTestDI(): Promise<void> {
       const result = await resetClient.query(`
         SELECT id, name FROM exercises 
         WHERE name IN (
-          'Barbell Bench Press', 'Barbell Back Squat', 'Pull-ups', 'Running'
+          'Barbell Bench Press', 'Barbell Back Squat', 'Pull-ups', 'Running',
+          'Assisted Pull-ups (Gravitron)'
         )
       `);
 

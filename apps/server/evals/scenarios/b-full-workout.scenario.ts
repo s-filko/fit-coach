@@ -1,4 +1,5 @@
 import type { Scenario } from '../schema/scenario.schema';
+import { FL_USER } from './fl-shared';
 
 /**
  * Journey B — a full workout, greeting to finish (training-journey-scenarios
@@ -24,6 +25,7 @@ import type { Scenario } from '../schema/scenario.schema';
 /** Fixed test-catalog exercise IDs (src/app/test/setup.ts). */
 export const BENCH_PRESS_ID = 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95';
 export const PULL_UPS_ID = '8c88ebce-f5df-4d33-afdb-0b096a0dd7a8';
+export const SQUAT_ID = '3818f94a-0543-4241-83b4-6840d06a4e6a';
 
 /** The step texts — the AC-CC-1 assertions quote the previous one verbatim. */
 export const GREETING_REQUEST = 'привет, хочу потренироваться';
@@ -48,18 +50,7 @@ export const THANKS_REPLY_TEXT = 'Всегда пожалуйста! До сле
  * `scenario` so journey C imports it instead of copying — DRY at review).
  */
 export const sharedPast: Scenario['past'] = {
-  user: {
-    languageCode: 'ru',
-    timezone: 'Europe/Berlin',
-    firstName: 'Alex',
-    age: 30,
-    gender: 'male',
-    height: 180,
-    weight: 80,
-    fitnessLevel: 'intermediate',
-    fitnessGoal: 'strength',
-    registrationCompleted: true,
-  },
+  user: FL_USER,
   plan: {
     name: 'Upper/Lower Split',
     sessions: [

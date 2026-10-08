@@ -37,25 +37,19 @@ import {
   type CostRecord,
 } from './lib/cost-ledger';
 import { readQuota } from './lib/quota';
+import { argValue, closePool } from './lib/cli-args';
 import { runWithCleanup, type CleanupDeps } from './lib/run-cleanup';
 import { guardDecision, planCallCount } from './lib/run-guard';
 import { buildReport, type CheckResult, exitCodeFor, formatScenarioTranscript, printReport } from './lib/reporter';
+import { writeRequestsSidecar } from './lib/write-requests-sidecar';
 
 const LEDGER_PATH = join(process.cwd(), 'evals', 'COST_LEDGER.md');
 /** AC-SM-2: every L3 run's per-step transcripts land here as <scenario>-<ISO>.md (gitignored). */
 const REPORTS_DIR = join(process.cwd(), 'evals', 'reports');
 
-function argValue(flag: string, fallback: string): string {
-  const index = process.argv.indexOf(flag);
-  return index >= 0 ? (process.argv[index + 1] ?? fallback) : fallback;
-}
-
 const realCleanupDeps: CleanupDeps = {
   disposeEmbeddings: disposeAllEmbeddingServices,
-  closePool: async () => {
-    const { pool } = await import('@infra/db/drizzle');
-    await pool.end();
-  },
+  closePool,
 };
 
 function ledgerText(): string {
@@ -213,6 +207,12 @@ async function main(markPoolMayBeOpen: () => void): Promise<number> {
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
         const reportPath = join(REPORTS_DIR, `${transcript.scenarioId}-${stamp}.md`);
         writeFileSync(reportPath, `# L3 transcript: ${transcript.scenarioId} (${stamp})\n\n${body}\n`);
+        // coach-quality T3: the requests sidecar — the judge's evidence per run
+        // id, read from llm_calls NOW (the rows die at the next jest DB reset).
+        const runIds = transcript.observations
+          .map(obs => (obs.action === 'user' ? obs.runRow?.runId : undefined))
+          .filter((id): id is string => id !== undefined);
+        await writeRequestsSidecar(reportPath, runIds);
         console.log(`transcript written to ${reportPath}`);
       }
     } else {

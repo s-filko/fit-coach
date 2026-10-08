@@ -113,6 +113,44 @@ read the detail before calling it a regression. The deterministic layer
 (`tests/integration/scenarios/fact-lifecycle.integration.test.ts`) already runs
 every journey with the check on AND off against a scripted model.
 
+### The coach-quality journeys, the judge and the prompt version (coach-quality-proof)
+
+Two more groups, selected like the fact-lifecycle one and NOT in the default run (the call ceiling):
+
+- `n-load` — seven weight-recommendation journeys (`n-load-up`, `-miss`, `-early-stop`, `-break`, `-uneven`, `-ask`,
+  `-gravitron`). The expected next load is computed by the weight oracle (`evals/lib/weight-oracle.ts`) from the seeded
+  history, never hand-typed; `nLoadExpectations()` is what the judge's extracted load is compared against. After a miss
+  both one step down and the same load with a stated lower rep target and its reason are accepted.
+- `new-journeys` — `g`…`m`, the 2026-10 findings (greeting after an open session, reopening a forgotten set, weight
+  shorthand, bodyweight, unknown weight, correction, no false log).
+
+Multi-sample runs of a group cross the call ceiling, so they need the red button:
+
+    EVALS_FULL_RUN=1 DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3 --scenario n-load --samples 3
+
+Every L3 run also writes, next to each transcript, a **requests sidecar** `<transcript>.md.requests.json`
+(`evals/lib/write-requests-sidecar.ts`): per run id, the coach call's resolved SYSTEM message (profile and rules —
+`llm_calls` keeps it as a hash only), its USER message with the `<context>` block (today, history, NOW) and every tool
+call with arguments. The coach call is the last call whose request carries a `<context>` block, not simply the last
+stored call. The sidecar is the durable copy: `llm_calls` rows die at the next DB reset of the test database.
+`npm run backfill:sidecars -- <reports-dir>… [--force]` regenerates sidecars for existing transcripts where the rows
+still exist (it merges into an existing sidecar, never dropping entries) and prints how many runs it resolved.
+
+The **judge** scores each coach reply on `evals/rubrics/coach-quality.md`:
+
+    npm run judge:coach-quality -- --transcript evals/reports/<scenario>-<ISO>.md [--transcript …] [--out-dir <dir>]
+    npm run judge:coach-quality -- --dry-run          # two canned replies through a stub CLI — no DB, no model
+
+- `JUDGE_CMD` — the judge CLI (default `claude-glm -p --model glm-5.3`); the prompt goes on stdin, one JSON verdict on
+  stdout. `JUDGE_FALLBACK_CMD` — judges once a reply the primary refused or mangled; without it that reply is recorded
+  unjudged (and an unjudged n-load ask is counted in the hit-rate line: `x/y judged, z unjudged`).
+- Output (default `evals/reports/judge/`): `coach-quality-<stamp>.verdicts.jsonl` (appended per reply), `.json` and the
+  summary `.md`.
+- The judge is shown what the coach knew (the system message), the `<context>` request, the tool calls and the
+  delivered reply, and is told that the clock is the request's fake clock, not the real date.
+
+The training prompt under test is the default one (v15 since 2026-10-08); there is no version switch — one run is always the code's default prompt.
+
 ## Smoke — one live workout over the test DB
 
 `npm run smoke` is the one-command L3 run of the `smoke` scenario (spec:

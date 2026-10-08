@@ -976,3 +976,14 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] `scripts/state.mjs` reports `plan-and-tool-fixes.md` as "(direct on integration branch)" although it lives on `plan/plan-and-tool-fixes` (`state.mjs:130` did not detect the plan branch). Source: plan-and-tool-fixes review run 1 R4.
 - [ ] Pass 4 (2026-10-08): `IWorkoutPlanRepository` still offers `update(planId, Partial)` / `archive` that can set a second plan active or archive the only one (BR-TRAINING-046); `set-format.ts` is now the shared tool-reply set text but lives under `prompts/blocks`; the bodyweight classification is repeated in `session-planning-recent-history.v1.ts:30`; that history line mixes `8x80kg` and `8×bodyweight`; ADR-0011 Fix 6a still describes `update_last_set` as a plain merge (owner-gated, ADR). Source: plan-and-tool-fixes review pass 4.
 - [ ] Pass 5 / closure (2026-10-08): weight-mode tests prove the startedAt re-anchor order and the single catalog read only by reading, not by a test; an invented exerciseId can re-anchor startedAt before "Unknown exerciseId"; `ensureCurrentExercise` exposes a `catalogVerified` bypass option; the set-shaping rules (per-hand, isometric, weight mode) and the 686-line TrainingService keep growing. Source: plan-and-tool-fixes review pass 5 + closure check.
+
+## coach-quality-proof close-out advisories (2026-10-08)
+
+- [ ] Weight oracle gaps: BR-042 one-session growth, BR-036 ≤ 0 kg guard, BR-038 rebuild/restart tiers, the assisted
+  working-weight choice with two recurring loads, and a too-narrow acceptable set after a break (92.5 between 90 and 97.5
+  counted as a miss). Source: coach-quality-proof review R3 + report.
+- [ ] Re-judge the stored v13/v14/v15 transcripts with the fixed judge (`614e8162`) and add an Opus agreement spot-check
+  before the next prompt measurement; measure `h-forgot-plank-edit` live. Source: coach-quality-proof closure check.
+- [ ] The 799-line judge file mixes parsing, scoring, reporting and CLI spawning; split along those lines. Source:
+  coach-quality-proof review R1.
+

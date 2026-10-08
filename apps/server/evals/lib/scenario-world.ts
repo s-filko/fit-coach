@@ -39,6 +39,8 @@ import { toBaseMessages } from './seed-messages';
 export interface SeededScenarioWorld {
   userId: string;
   planId: string | null;
+  /** The `in_progress` seeded workout, when there is one — the checkpoint's active session (g/h, BUG-053). */
+  openSessionId: string | null;
 }
 
 /** Fixed duration for a seeded workout (the format has no per-workout field). */
@@ -213,12 +215,15 @@ async function seedWorkout(
   planId: string | null,
   exerciseIds: Map<string, ResolvedExercise>,
   t0: Date,
-): Promise<void> {
+): Promise<string> {
   const startedAt = resolveRelativeTime(workout.at, t0);
   const status = workout.status ?? 'completed';
   const finishedAt = new Date(startedAt.getTime() + SEEDED_WORKOUT_MINUTES * 60_000);
-  const completedAt = status === 'skipped' ? null : finishedAt;
-  const childTimestamp = completedAt ?? startedAt;
+  // `in_progress` (coach-quality g/h): never finished — no completion stamp, the
+  // activity moment is the seeded hour's end (the last set's plausible time),
+  // and the idle/auto-close arithmetic hangs off that moment.
+  const completedAt = status === 'completed' ? finishedAt : null;
+  const childTimestamp = status === 'skipped' ? startedAt : finishedAt;
 
   const [session] = await db
     .insert(workoutSessions)
@@ -229,7 +234,7 @@ async function seedWorkout(
       status,
       startedAt,
       completedAt,
-      durationMinutes: status === 'skipped' ? null : SEEDED_WORKOUT_MINUTES,
+      durationMinutes: status === 'completed' ? SEEDED_WORKOUT_MINUTES : null,
       createdAt: startedAt,
       updatedAt: childTimestamp,
       lastActivityAt: childTimestamp,
@@ -260,6 +265,7 @@ async function seedWorkout(
       });
     }
   }
+  return session.id;
 }
 
 /**
@@ -311,8 +317,12 @@ export async function seedScenarioRows(
     planId = plan.id;
   }
 
+  let openSessionId: string | null = null;
   for (const workout of past.workouts) {
-    await seedWorkout(userId, workout, planId, exerciseIds, t0);
+    const sessionId = await seedWorkout(userId, workout, planId, exerciseIds, t0);
+    if ((workout.status ?? 'completed') === 'in_progress') {
+      openSessionId = sessionId;
+    }
   }
 
   // Facts through the real repository (the write path is rememberFact). A fact
@@ -345,7 +355,7 @@ export async function seedScenarioRows(
     );
   }
 
-  return { userId, planId };
+  return { userId, planId, openSessionId };
 }
 
 /**
@@ -354,16 +364,25 @@ export async function seedScenarioRows(
  * episode summaries (oldest first, last 3 — BR-LLM-001..003's window) go to
  * `episodeSummaries`, `lastUserMessageAt` drives the inactivity/gap logic.
  *
- * The starting phase is `chat`: the format has no phase field in `past`, and
- * every journey of this plan begins from a completed-registration user in
- * chat.
+ * The starting phase is `chat` unless `past.conversation.phase` says otherwise
+ * (coach-quality g/h: `training` pairs with the seeded open workout as the
+ * active session); every earlier journey begins from a completed-registration
+ * user in chat, and the default keeps exactly that.
  */
 export async function seedCheckpointState(
   graph: CompiledConversationGraph,
-  opts: { userId: string; past: Scenario['past']; t0: Date },
+  opts: { userId: string; past: Scenario['past']; t0: Date; openSessionId?: string | null },
 ): Promise<void> {
-  const { userId, past, t0 } = opts;
+  const { userId, past, t0, openSessionId = null } = opts;
   const conversation = past.conversation;
+  // coach-quality g/h (BUG-053): a scenario may start the checkpoint in
+  // `training` with the seeded open workout as the active session — where the
+  // owner's bot actually sat when the bug was found.
+  const phase = conversation?.phase ?? 'chat';
+  const activeSessionId = phase === 'training' ? openSessionId ?? null : null;
+  if (phase === 'training' && activeSessionId === null) {
+    throw new Error("conversation.phase 'training' needs an in_progress seeded workout to make active");
+  }
 
   const episodeSummaries: StoredEpisodeSummary[] = [...(conversation?.summaries ?? [])]
     .map(seed => ({ at: resolveRelativeTime(seed.at, t0), seed }))
@@ -386,8 +405,8 @@ export async function seedCheckpointState(
   await graph.updateState(
     { configurable: { thread_id: userId } },
     {
-      phase: 'chat',
-      activeSessionId: null,
+      phase,
+      activeSessionId,
       ...(conversation?.messages.length ? { messages: toBaseMessages(bindSeedMessages(conversation.messages)) } : {}),
       ...(episodeSummaries.length > 0 ? { episodeSummaries } : {}),
       ...(conversation?.lastUserMessageAt !== undefined

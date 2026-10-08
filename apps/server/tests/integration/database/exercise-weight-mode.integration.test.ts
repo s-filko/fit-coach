@@ -145,6 +145,10 @@ describe('migration 0024 — exercises.weight_mode (AC-PTF-7)', () => {
   it('the backfill maps every catalog shape to its mode — the Gravitron required, Pull-ups optional, cardio/none none (AC-PTF-7)', async () => {
     expect(backfillStatements).toHaveLength(3);
 
+    // The scenario suites seed a catalog row with the Gravitron's name (shared test DB); the probe rows below
+    // reuse the names, so clear them inside this rolled-back transaction first.
+    await client.query('DELETE FROM exercises WHERE name = ANY($1)', [PRE_MIGRATION_ROWS.map(r => r.name)]);
+
     for (const [i, row] of PRE_MIGRATION_ROWS.entries()) {
       // The state right after ADD COLUMN ... DEFAULT 'required': every existing row carries required.
       await client.query(
