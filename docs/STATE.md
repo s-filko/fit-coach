@@ -9,11 +9,11 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-10-07 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-10-08 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 - `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
-- `stale-session-autoclose.md` — Stale Session Auto-Close — a forgotten workout closes on return; the model can reopen it (BUG-053) (branch: `plan/stale-session-autoclose`, last commit 2026-10-07)
+- `stale-session-autoclose.md` — Stale Session Auto-Close — a forgotten workout closes on return; the model edits a finished workout in place (BUG-053) (branch: `plan/stale-session-autoclose`, last commit 2026-10-08)
 
 **Planned**
 - `coach-tone.md` — Coach Tone — the coach knows the trend and encourages progress Implementation Plan

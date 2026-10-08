@@ -14,7 +14,7 @@ Invariants
 	• INV-TRAINING-002: A user can have at most one WorkoutSession with status='in_progress'
 	• INV-TRAINING-003: session_sets.set_data JSONB must have 'type' field (discriminated union)
 	• INV-TRAINING-004: workout_sessions.last_activity_at is updated on every training action, except a retro-logged catch-up set [BR-TRAINING-030]
-	• INV-TRAINING-005: Sessions with last_activity_at > 2 hours and status='in_progress' are auto-closed
+	• INV-TRAINING-005: An in_progress session idle more than 2 hours (from last_activity_at) is completed at the user's next message, before the phase answers it; completed_at = last_activity_at; there is no scheduled job (owner-approved 2026-10-08, plan stale-session-autoclose)
 	• INV-TRAINING-006: On every completion path (finish, completeSession, auto-close) completed_at >= started_at and duration_minutes >= 0
 
 Business Rules
@@ -28,10 +28,11 @@ Business Rules
 	• BR-TRAINING-008: Starting training transitions session to status='in_progress', stores sessionId in context
 	• BR-TRAINING-009: Only one active session per user; starting new session auto-closes previous [INV-TRAINING-002]
 	• BR-TRAINING-010: Set logging updates workout_sessions.last_activity_at to prevent timeout, except a retro-logged catch-up set [INV-TRAINING-004][BR-TRAINING-030]
-	• BR-TRAINING-011: Sessions auto-close after 2 hours inactivity (lazy on interaction + daily cron) [INV-TRAINING-005]
+	• BR-TRAINING-011: Sessions auto-close after 2 hours inactivity, lazily at the user's next message (no scheduled job); the message is answered in chat in the same turn [INV-TRAINING-005]
 	• BR-TRAINING-012: Completing session updates status='completed', sets completed_at, clears context
 	• BR-TRAINING-013: Retrospective logging creates sessions with past timestamps, status='completed'
-	• BR-TRAINING-030: A set is retro-logged (stamped last activity + 5 min, activity not advanced) only if the in_progress session is idle > 2 h AND already holds sets (owner 2026-09-30, BUG-043)
+	• BR-TRAINING-030: Sets added to the user's last finished workout through edit_last_workout are dated last_activity_at + 5 min and change neither the workout's status, completed_at, last_activity_at nor duration; a row gaining its first set becomes completed, a row losing its last set becomes skipped (owner-approved 2026-10-08, plan stale-session-autoclose T5)
+	• BR-TRAINING-048: edit_last_workout adds, updates or deletes sets in the user's most recent completed workout only (without a change it shows that exercise's sets there); the workout stays completed and the conversation stays in its phase — a finished workout is never reopened (owner-approved 2026-10-08, plan stale-session-autoclose T5)
 	• BR-TRAINING-031: The first set of a set-less in_progress session idle > 2 h is live: stamped now, and it re-anchors started_at to that set (late start, BUG-043)
 	• BR-TRAINING-036: With LOAD_PLAN_SUGGESTION on, LOAD PLAN names a load per strength exercise — `recommend:` and a `conservative:` one step lighter, each with its reason; when one step down would reach ≤ 0 kg the load holds and the block says "no lighter option"; with insufficient data but a last performance that carried a load, `recommend:` is the newest performance's working-weight value (BR-TRAINING-041; never a failed opener), lowered per the break ladder (a restart never starts lighter than a rebuild), at low confidence; with no such reference the block names no number and no conservative option, and the coach does not invent them (amended by plan load-plan-fixes, owner-approved 2026-10-01) — produced in a fixed order (Stage A safety rows → Stage B tactic → Stage C progression scheme) with the deciding stage and row printed; the load is a suggestion, the coach decides by judgement and states its reason when it departs (design Principle 6 as amended by O1; plan load-plan, recorded 2026-10-01; amended by plan load-plan-fixes, owner-approved 2026-10-01)
 	• BR-TRAINING-037: With LOAD_PLAN_SUGGESTION on, the first working set of an exercise in a session writes one load_recommendations row (the entry as rendered, the decision, the coach's advised load); completing the exercise fills its outcome; the table is calibration data and never read back into a prompt (plan load-plan D7)
