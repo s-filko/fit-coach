@@ -270,3 +270,47 @@ Suites, close-out review (four zones, GLM — owner accent), report committed, `
   (the DB fallback — no llm_calls rows for them in the test DB), `Replies judged: 9 of 9 steps; 0 unjudged.`, exit 0.
 - Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 189 passed, 189 total`,
   `Tests: 1885 passed, 1885 total` (+8).
+
+### T4 (AC-CQ-4) — weight progression through the training prompt (worker, 2026-10-08; steps 1-2 + 4 by the
+### prompt-doctor procedure; 3/5/6 are the orchestrator's)
+
+**Cause (steps 1–2, from the exact requests of the live ask-step runs — `print-transcript --run … --payloads`).**
+n-load-up run `fcce70ad…` (ask step): the `<context>` carries every deciding fact — `- 2 days ago, Tuesday Oct 6:
+10×80, 10×80, 10×80 (all RPE 8)`, `- 5 days ago …: 10×80 ×3 (all RPE 8)`, `- Loads used: 77.5, 80 kg.` — and the coach
+answered «<b>80 кг</b> — как в прошлые два раза». n-load-miss run `0da3b5b6…`: the facts carry the miss (`6×100 ×3 (all
+RPE 9)` after `9×100 ×3`), and the coach answered «С теми же <b>100 кг</b>… во вторник мешала только свежесть ног, не
+вес». Hypothesis: **missing span Y causes behaviour Z** — the training prompt's ONLY load rule (v13) reads «When last
+time topped the rep range with reps to spare, the try is the next load they have used; otherwise a rep or two more.» —
+it anchors every try to a load ALREADY USED (above the top recorded load there is nothing "used" to pick, and "a rep or
+two more" prescribes more reps at the same weight), and nothing in the request defines what a below-floor performance
+means for the next load. With the growth step (BR-TRAINING-042) and the miss step (BR-TRAINING-043) absent from the
+rules, holding is the reading the prompt invites. A contributing context span (secondary, same runs): the planning note
+the model itself wrote at start («Цель — держать 3×10 на 80 кг…» / «Цель: 9+ повторов на 100 кг…») pins the old weight;
+fixing the rule may not fully fix cases where the note dominates — that is what the candidate measurement decides.
+Classification: prompt text (a rule gap, not wrong data) — prose class 4, the owner-chosen route.
+
+**Candidate (step 4).** ONE sentence replaced in place (the existing rule changed, not a second added), as a BR-LLM-008
+derivation `coach.v14.ts` (`deriveV14Template` fails loudly when the v13 needle is missing; the unit test asserts the
+full line diff — exactly one bullet line, everything else v13 verbatim). The new sentence (positive terms, no bans, no
+examples, no emphasis; the only numbers not in the context are the equipment-step rule, explicitly allowed):
+
+> The next load follows the history: every set at the top of the range in two workouts in a row — one equipment step
+> up (2.5 kg barbell, 2 per hand dumbbell, 5 stack); below the range’s floor — one step down; short of the floor only
+> with reps in reserve — the same load; after a long break — lighter than before it.
+
+**The switch.** Env `PROMPT_VERSION_TRAINING=v14` selects the candidate; anything else (or unset) keeps v13 — the
+default and the baseline, byte-identical (read once at composition; one L3 run is always one version). The coach
+section: **v13 2 496 chars (pin 2 500) → v14 2 684 chars (pin 2 700; the growth's stated reason: the owner-ordered
+progression principle)**. The sentence replaced: 125 → 313 chars.
+
+- Red first, recorded: `coach.v14.unit.test.ts:12:10 - error TS2307: Cannot find module '../coach.v14'` → implemented →
+  then one honest red: the line-diff test first assumed the sentence was a whole line (it sits mid-bullet) — recomputed
+  the expected line as v13's line with the sentence replaced.
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 190 passed, 190 total`,
+  `Tests: 1892 passed, 1892 total` (+7: the v14 module, its line diff, the size pin, the loud-needle guard and the
+  three env-selection cases); flock `npm run test:scenarios` (default v13) → `Test Suites: 27 passed, 27 total`,
+  `Tests: 1 todo, 501 passed, 502 total`; the n-load suite under `PROMPT_VERSION_TRAINING=v14` → `Test Suites: 1
+  passed, 1 total`, `Tests: 60 passed, 60 total` (the scripted layer proves the candidate composes end to end).
+- Left to the orchestrator: steps 3/5/6 — the baseline (v13) and candidate (v14) live measurements, the blind judge,
+  accept-or-revert (the acceptance bar of the plan's T3 rubric applies; the planning-note confound above is worth a
+  look in the candidate transcripts).

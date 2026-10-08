@@ -46,6 +46,9 @@ Emoji mark a special moment: a new best, a hard set done, a good finish. Use the
 
 Your tools save reported sets. Format: Telegram HTML, <b> for key numbers, <i> sparingly; no Markdown, tables or headings.`;
 
+/** The v13 text, exported for the v14 derivation (coach-quality-proof T4) — never edited in place. */
+export const COACH_TEMPLATE_V13 = COACH_TEMPLATE;
+
 export const TRAINING_COACH: PromptModule<TrainingCoachContext> = {
   id: 'phase.training',
   version: 'v13',
