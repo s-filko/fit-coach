@@ -83,7 +83,7 @@ into a prompt patch inside this plan.
 
 The T3 measurement showed the coach holding a load the history says to raise or lower (v13's only load rule anchors every
 try to a load already used). Per owner decision 2026-10-08 the fix is tried through the prompt, as `prompt-doctor`
-candidates selected by `PROMPT_VERSION_TRAINING` (v13 stays the default and the baseline, byte-identical):
+candidates *(superseded: v15 accepted as the default, the switch removed — 364179d9)* selected by `PROMPT_VERSION_TRAINING` (v13 stays the default and the baseline, byte-identical):
 v14 (the progression principle replaces the load rule) and v15 (load vs reps: after a miss holding the load with a lower
 rep target and a stated reason is a legitimate choice). The weight oracle and the judge treat the miss as that choice.
 
@@ -487,7 +487,7 @@ Blocking:
 5. `blocking | R4 | coach-quality-proof.md:3 | SUPERPOWERS_INTEGRATION § Status layer | Status: planned while tasks ran`
    — closed in `41cdf468`/`cb1319bf` (status in progress; bare Branch header; state.mjs --check OK).
 6. `blocking | R3 | coach-quality-proof.md:62 | SUPERPOWERS_INTEGRATION rule 2 | T3 acceptance has no recorded live
-   evidence` — **open**: the first live measurements lost their stored requests (jest DB resets between L3 runs) and
+   evidence` — **closed 2026-10-08** by the measurement and the T3 result below (was: the first live measurements lost their stored requests (jest DB resets between L3 runs) and
    the judge prompt was truncated / lacked the system message (fixed in `e2c98f32`, `dc7a2114`, `0d58e933`); the
    measurement is re-run on GLM v13 / v14 / v15 with whole-batch DB locking and run-time sidecars.
 
@@ -498,3 +498,27 @@ oracle omits BR-042 one-session growth, BR-036 ≤ 0 kg guard and BR-038 rebuild
 selection with two recurring loads; the prompt-version switch reads `process.env` directly (move to typed config if
 v14/v15 is accepted, or delete); the 799-line judge file. Owner-gated: `docs/PROMPT_EVAL_FRAMEWORK.md` § 5 (judge
 input/mechanism) and ADR-0013's ≤ 2 500-char pin for `phase.training` if v15 becomes the default.
+
+### T3 result — AC-CQ-3 (orchestrator, 2026-10-08)
+
+Evidence: `docs/superpowers/reports/2026-10-08-coach-quality.md`. Against the T3 acceptance:
+- scripted layer green — **met** (scenarios 484 + 1 todo after the final merge);
+- friendliness mean ≥ 1.5 — **met** (v13 1.71, v14 1.80, v15 1.85);
+- no honesty failure on the new journeys — **not met**: false "logged" claims remain (v15: 3 of 138 replies, quoted in
+  the report → BUG-052); other judge honesty flags were partly judge artefacts (fixed in `614e8162`, not re-judged);
+- weight hit rate ≥ 90 % — **not met**: v15 13/21 ≈ 62 % exact (break 3/3 by direction); the misses are three classes the
+  progression paragraph does not address — no history (BUG-057), Gravitron counterweight (BUG-056), and re-entry after a
+  break / one uneven-hold miss (BUG-058);
+- no regression vs the baseline — **met** against v13 on the same journeys (see the report's baseline note).
+**AC-CQ-3: not met.** The owner reviewed the numbers in chat (2026-10-08) and accepted v15 as the default ("давай"),
+to be checked in real use on dev; the unmet parts are tracked as BUG-052/056/057/058, next work through `prompt-doctor`.
+
+Decisions recorded for this measurement:
+- (D) Judge `claude -p --model sonnet` instead of GLM: GLM hit its 5-hour limit (owner rule "GLM out → Anthropic"), and
+  one judge model for all three versions keeps the comparison fair.
+- (D) No separate Opus 10 % spot-check: the judge itself ran on an Anthropic model; its known artefacts were found by
+  reading verdicts against transcripts and fixed (`614e8162`); a calibrated agreement rate is left for the next round.
+- (D) Scope 13 journeys (the 7 weight-recommendation journeys + g, h, i, j, k, l) instead of every L3 journey: the
+  measurement question was the progression prompt and the new behaviours; a–c, smoke, fl-a…fl-f and m were left out to
+  stay within the shared GLM quota during the window.
+

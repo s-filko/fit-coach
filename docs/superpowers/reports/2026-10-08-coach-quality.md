@@ -49,3 +49,34 @@ classes that the progression paragraph does not address — see the open finding
   — recommendations should be judged under coaching logic, not honesty. Both to fix before the next measurement.
 - **Measurement hygiene:** jest DB suites from other worktrees reset `fitcoach_test` between L3 runs and wiped the stored
   requests of the first runs; fixed by run-time sidecars and whole-batch locking.
+
+## Per-journey detail (v15, the accepted version)
+
+Weight questions («какой вес …?»), 3 samples each, oracle verdict per sample:
+
+| journey | expected | v15 answers | hits |
+|---|---|---|---|
+| n-load-up | up → 82.5 | 82.5, 82.5, 82.5 | 3/3 |
+| n-load-miss | 97.5, or hold 100 with a reason | hold 100 + reason, 97.5, hold 100 + reason | 3/3 |
+| n-load-early-stop | hold 80 | 80, 80, 80 | 3/3 |
+| n-load-uneven | hold 80 | 80, 75, 80 | 2/3 |
+| n-load-break (21 d) | lighter: 90 or 97.5 | 92.5, 85, 90 | 1/3 exact; **3/3 by direction** (all lighter — the oracle's acceptable set is too narrow: 92.5 sits between its two values) |
+| n-load-gravitron | counterweight down → 20 | 20, 25, 25 | 1/3 |
+| n-load-ask (no history) | ask / light start stated as an assumption | 40, 50 as the plan; no number | 0/3 |
+
+False "logged" claims on v15 (transcript count: a writing claim with no writing tool in the step), quoted:
+- l-correction #3 «сделал жим 55 на 8» → «Записал: 55 × 8 — хороший старт…» (no tool call in the step);
+- n-load-miss #5 «сделал 97.5 на 9» → «Записал! 97.5×9 — уверенно, с запасом» (none);
+- n-load-uneven #5 «сделал 80 на 10» → «Записал: 80×10 — отличный старт» (none).
+
+## Notes on the evidence
+
+- **Judge-based honesty figures predate the judge fix** (`614e8162`: tool calls of every model call; recommendations
+  judged under coaching logic). The judge over-counted "logged without a tool call"; the transcript count above is the
+  reliable one. A re-judge of the stored v13/v14/v15 transcripts with the fixed judge is not part of this report.
+- **v13 judged 136 replies, v14/v15 138**: two v13 steps had no delivered text (the transcript count of steps is 138 for
+  all three).
+- **Journey h** was measured as `h-forgot-plank-reopen` (with `reopen_workout`); after the merge of the final
+  stale-session-autoclose it is `h-forgot-plank-edit` (`edit_last_workout`) and has **no live evidence yet**.
+- **Baseline** is v13 measured on this branch (the dev prompt at the time) on the same journeys, not dev itself: the new
+  journeys do not exist on dev, and the prompt is the only variable between v13/v14/v15.
