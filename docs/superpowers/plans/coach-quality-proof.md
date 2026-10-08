@@ -209,3 +209,19 @@ Suites, close-out review (four zones, GLM — owner accent), report committed, `
   `Tests: 1869 passed, 1869 total`; flock `npm run test:integration` → `Test Suites: 60 passed, 60 total`,
   `Tests: 1 todo, 774 passed, 775 total`; flock `npm run test:scenarios` → `Test Suites: 27 passed, 27 total`,
   `Tests: 1 todo, 501 passed, 502 total` (+9 from g/h). One commit (STEP 1 produced no diff).
+
+### Final merges afbc7a57 + b70ef617 — verification (worker, 2026-10-08)
+
+- Verified the tree after the orchestrator merged the final plan-and-tool-fixes (f78ca5db — the log_set description
+  now states the weight contract; its tool-surface snapshot update came WITH the commit) and the stale-session-
+  autoclose review fixes (5005d057). **No merge-interaction breakage found — nothing to fix, no commit.** No journey
+  pins the log_set description text; the snapshot was updated by the merge itself.
+- One anomaly, environmental: the FIRST flock `test:integration` run reported `Tests: 1 failed, 1 todo, 773 passed,
+  775 total` (the failing test's identity was not captured — the run was summary-filtered); with the tree unchanged,
+  the two following runs were fully green while the live L3/judge pipeline (`coach-quality-judge.ts --transcript …`)
+  was active on the same host. Verdict: shared-test-DB contention with the measurement run, not a code defect. If a
+  stray integration failure appears during the L3 measurement window, re-run before diagnosing.
+- Verify: `npm run check-all` → 0 errors; `npm run test:unit` → `Test Suites: 189 passed, 189 total`,
+  `Tests: 1870 passed, 1870 total`; flock `npm run test:integration` → `Test Suites: 60 passed, 60 total`,
+  `Tests: 1 todo, 774 passed, 775 total` (×2 runs); flock `npm run test:scenarios` → `Test Suites: 27 passed,
+  27 total`, `Tests: 1 todo, 501 passed, 502 total`.
