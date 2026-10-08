@@ -25,8 +25,7 @@ const RETURN_REPLY = 'Привет! Давно не виделись.';
 
 const scenario: Scenario = {
   id: 'stale-session-autoclose',
-  description:
-    'BUG-053: a workout idle past 2 h closes at the user’s next message; chat answers it (AC-SSA-1)',
+  description: 'BUG-053: a workout idle past 2 h closes at the user’s next message; chat answers it (AC-SSA-1)',
   past: sharedPast,
   steps: [
     ...setupSteps,
@@ -127,6 +126,10 @@ describe('stale session auto-close (BUG-053, AC-SSA-1) — one message over the 
   it('AC-SSA-3: the chat prompt marks the workout as closed automatically (the fact, in the recent-sessions list)', () => {
     expect(seenAtReturn).toContain('RECENT TRAINING HISTORY');
     expect(seenAtReturn).toMatch(/- upper_a — [^,\n]+, closed automatically after inactivity, \d+ min:/);
+  });
+
+  it('review closure: the same run shows chat the real gap — the time-gap note is in the request', () => {
+    expect(seenAtReturn).toContain('The user returns after');
   });
 
   it('the delivered text is the scripted chat reply, not the session_ended catalog text', () => {

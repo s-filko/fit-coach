@@ -85,6 +85,26 @@ describe('prepare — stale session auto-close (BUG-053, AC-SSA-1)', () => {
     expect(aiText).toBe('');
   });
 
+  it('review closure: the course check runs for the chat phase on the timeout path and its updates ride along', async () => {
+    const courseCheck = jest.fn().mockResolvedValue({ courseDirective: 'D', courseExpiryQuestions: ['Q'] });
+    const node = buildPrepareNode({
+      userService: { isRegistrationComplete: jest.fn().mockReturnValue(true) } as unknown as IUserService,
+      trainingService: {
+        getSessionDetails: jest.fn().mockResolvedValue(sessionIdle(THREE_DAYS_MS)),
+        autoCloseTimedOutSessions: jest.fn(),
+      } as unknown as ITrainingService,
+      compact: jest.fn().mockResolvedValue({}),
+      courseCheck,
+    });
+
+    const { goto, update } = outcomeOf(await node(trainingState, configOf()));
+
+    expect(goto).toBe('commit');
+    expect(courseCheck).toHaveBeenCalledWith(expect.objectContaining({ phase: 'chat' }), expect.anything());
+    expect(update.courseDirective).toBe('D');
+    expect(update.courseExpiryQuestions).toEqual(['Q']);
+  });
+
   it('in_progress idle 30 min → stays in training, nothing closed', async () => {
     const autoClose = jest.fn().mockResolvedValue(undefined);
     const { goto, update } = outcomeOf(

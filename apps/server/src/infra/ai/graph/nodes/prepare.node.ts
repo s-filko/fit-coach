@@ -107,11 +107,15 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
           { userId, sessionId: state.activeSessionId, lastActivityAt: session.lastActivityAt },
           'Stale session — closing at commit, answering in chat',
         );
+        ctx.staleSessionClose = true;
+        // The course check (AC-FL-5) still runs, for the chat phase the run is about to answer in.
+        const staleCourseUpdates = await courseCheck({ ...state, phase: 'chat' }, config);
         return new Command({
           goto: 'commit',
           update: {
             ...updates,
             ...compactUpdates,
+            ...staleCourseUpdates,
             pendingTransition: { toPhase: 'chat', reason: SESSION_TIMEOUT_REASON },
           },
         });
