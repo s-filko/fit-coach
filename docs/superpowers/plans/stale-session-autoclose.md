@@ -42,7 +42,7 @@ scenario/integration test that an idle session is `completed` with `auto_close_r
 `completed_at = last_activity_at` after one message. `npm run test:unit`, `npm run test:integration`,
 `npm run test:scenarios`.
 
-### T2 — `reopen_workout`: the model can return the last closed workout to training (AC-SSA-2)
+### T2 — `reopen_workout` — **superseded by T5** (owner 2026-10-08): the model can return the last closed workout to training (AC-SSA-2)
 
 Do:
 - Migration (via `npm run drizzle:generate`, never push): `workout_sessions.reopened_at timestamptz null`.
@@ -73,6 +73,31 @@ cases below) before acceptance; new block version per BR-LLM-008 if the block is
 Guard cases for the eval: (1) «привет» the day after an auto-closed workout → a greeting, no continuation; (2) «я
 вчера не дописал планку, 2 по 45 сек» → `reopen_workout` then `log_set`; (3) «продолжаем» within the same day after an
 auto-close → reopen; (4) a normal new-workout request → `session_planning`, no reopen.
+
+### T5 — `edit_last_workout` replaces `reopen_workout` (AC-SSA-5)
+
+Owner decision (2026-10-08, after reviewing T2): do not reopen a finished workout to add a forgotten set — reopening
+leaves it open (back in training, idle clock restarted) and a new workout then conflicts with it. Instead one tool edits
+the most recent FINISHED workout in place; the workout stays closed and the conversation stays where it is. Shape like
+`manage_fact` (one tool, an action field).
+
+Do:
+- Tool `edit_last_workout` (chat, session_planning and training phases) with `action`: `add` (exercise + sets:
+  reps / weight / durationSeconds / distanceKm, same validation and weight rules as `log_set`), `update` (exercise +
+  optional setNumber, default the last set of that exercise + new values; same conversions as `update_last_set`),
+  `delete` (exercise + setNumber); calling it with an exercise and no change returns that exercise's sets in the last
+  finished workout. Target = the user's most recent `completed` session only.
+- Sets added get the retro timestamp of that workout (last activity + offset, BR-TRAINING-030 logic); the session's
+  `completed_at`, `duration_minutes`, `last_activity_at` and `status` do not change. An exercise not in that workout is
+  added to it.
+- Reply — facts only: what changed and the exercise's sets in that workout after the change, e.g.
+  `Bench Press, Sun Oct 4: 8×55, 10×55 (set 2 updated: 8 → 10)`. Description — what it does, no advice.
+- Remove T2's `reopen_workout`, `reopenLastSession`, the `reopened_at` column and its migration, the idle base
+  `max(last_activity_at, reopened_at)` (back to `last_activity_at`) and the chat → training matrix edge; T3's chat-context
+  marker stays. Journeys c-catch-up-logging and retro-timestamps use `edit_last_workout` add instead of reopen.
+
+Verify: unit (each action, the weight rules, the factual reply, the view call, refusal when there is no finished
+workout); integration (the session stays completed, times unchanged, retro timestamps on added sets); scenarios green.
 
 ### T4 — Spec (orchestrator, after the owner approves the wording)
 
