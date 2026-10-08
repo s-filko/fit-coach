@@ -68,7 +68,7 @@ describe('log-set.tool — log_set', () => {
   it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
     const trainingService = makeTrainingService();
 
-    const { byName, config } = makeDeps(trainingService, null);
+    const { byName, config } = makeDeps(trainingService, undefined, null);
     const result = (await byName('log_set').invoke(
       {
         exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',

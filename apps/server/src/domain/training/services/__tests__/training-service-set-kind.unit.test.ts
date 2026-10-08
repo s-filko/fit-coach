@@ -15,6 +15,7 @@ const DUMBBELL_EXERCISE: Exercise = {
   name: 'Dumbbell Curl',
   category: 'isolation',
   equipment: 'dumbbell',
+  weightMode: 'required',
   exerciseType: 'strength',
   description: null,
   energyCost: 'low',

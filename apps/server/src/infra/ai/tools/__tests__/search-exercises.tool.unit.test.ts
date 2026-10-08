@@ -23,6 +23,7 @@ const makeExerciseWithMuscles = (overrides: Partial<ExerciseWithMuscles> = {}): 
   name: 'Barbell Bench Press',
   category: 'compound',
   equipment: 'barbell',
+  weightMode: 'required',
   exerciseType: 'strength',
   description: 'Classic chest press',
   energyCost: 'high',

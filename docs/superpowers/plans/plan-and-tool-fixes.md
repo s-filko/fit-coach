@@ -575,3 +575,84 @@ Decisions:
     Tests: 1 todo, 392 passed, 393 total.
 - (D) T6 texts step 1 — description contradiction fixed (class 3); the training-prompt rule is decided
   after the live measurement.
+
+### T7 — Weight requirement per exercise: required / optional / not used (AC-PTF-7)
+
+- Red first, recorded before any fix:
+  - `src/domain/training/__tests__/weight-mode.unit.test.ts:1:34` — `TS2307: Cannot find module '../weight-mode'`
+    — suite failed to run (the module did not exist).
+  - `src/infra/ai/tools/__tests__/log-set.weight-input.unit.test.ts:5:37` — `TS2305: Module
+    '"@domain/training/types"' has no exported member 'WeightMode'`; `log-set-test-support.ts:49:53` —
+    `TS2353: 'exerciseRepository' does not exist in type 'LogSetToolDeps'` — suites failed to run.
+  - `src/infra/ai/prompts/blocks/__tests__/training-facts.unit.test.ts:295:32` — `Expected substring:
+    "- Seated Leg Curl [id …] — plan 3×15 (bodyweight; weight optional) — nothing yet"`, rendered line had
+    no mode note. Red-run summary over the touched suites: Test Suites: 4 failed, 177 passed, 181 total;
+    Tests: 1 failed, 1762 passed.
+  - integration, first DB run: `exercise-weight-mode.integration.test.ts:86:32` — `Expected length: 2,
+    Received length: 1` — the backfill extraction read only the second UPDATE (the first shared its
+    statement chunk with the migration's comment header), so the bodyweight rows stayed `required`.
+- Implementation:
+  - Migration `drizzle/0024_flawless_felicia_hardy.sql` (`npm run drizzle:generate` + hand-written
+    backfill): `exercises.weight_mode text NOT NULL DEFAULT 'required'` with the check
+    (`required|optional|none`); backfill in the same migration — equipment `bodyweight` → `optional`,
+    category `cardio` or equipment `none` → `none` (cardio wins over bodyweight), everything else keeps
+    the default `required` (the Gravitron included — machine). Journal + meta snapshot updated by
+    drizzle-kit.
+  - Domain: `WeightMode` on `Exercise` (`types.ts`); `deriveWeightMode(category, equipment)` in
+    `domain/training/weight-mode.ts` — one rule in code, applied by `exercises.seed.ts` on insert for
+    fresh databases.
+  - `log_set` (`log-set.tool.ts`): T6's blanket refine removed. The tool resolves the target exercise
+    first — an id verbatim, a name through `resolveExerciseIdByName` (resolved once; the resolved id
+    rides along so the service does not resolve the name twice; a resolution failure keeps the pre-T7
+    pass-through path and the service reports the error). Then, by the row's `weight_mode`: `required` +
+    reps without a weight → `llmError("<exercise>: weight is required")`; `optional` + reps without a
+    weight → `functional_reps`, with a number → `strength`; `none` → the weight never enters setData;
+    `weight: 0` still means a bodyweight set on any mode (T4). The resolution runs inside the handler's
+    try, so a DB failure keeps the `systemError` classification.
+  - Tool texts (facts only, weight describe verbatim from this plan): weight describe → "Weight in
+    kilograms (kg). Required for exercises that use a weight; optional for bodyweight exercises
+    (omitted = bodyweight, a number = added load); not used for cardio."; the description bodyweight
+    line → "For bodyweight exercises: provide reps and optionally a weight — omitted = a bodyweight set,
+    a number = added load."
+  - Training context: `ExerciseHistory.weightMode` (null = catalog row unknown), filled by the phase
+    loader in `graph/phases/training.spec.ts` (started exercise's catalog row, or the
+    `findByIdsWithMuscles` lookup it already made for not-started plan exercises); the Today plan line
+    names the mode only when it is not `required`: `— plan 3×6-8 (bodyweight; weight optional) — …` /
+    `— plan 2×45 s (weight not used) — …`.
+  - Test DB (`src/app/test/setup.ts`): the four seeded exercises carry their derived modes
+    (Barbell Bench Press / Barbell Back Squat `required`, Pull-ups `optional`, Running `none`).
+  - Scenario fixture: `b-full-workout.scenario.ts`'s two Pull-ups plan lines gain
+    `(bodyweight; weight optional)` — the deliberate T7 rendering; no other scripted line or log_set
+    call changed (all scripted calls already pass a weight or a duration).
+  - Files beyond the plan's ownership list, touched to compile/wire the feature: the phase loader
+    `graph/phases/training.spec.ts` (also passes `exerciseRepository` into the tool), `weightMode`
+    fixture fields in ten unit-test files, `log-set-test-support.ts` (repo mock), the tool-surface test
+    and two integration call sites (the new tool dependency).
+- Migration on the test DB (inside the flock): `NODE_ENV=test npx drizzle-kit migrate` printed
+  "migrations applied successfully!" but applied nothing — `fitcoach_test` has no drizzle journal
+  (jest rebuilds `public` per file from the .sql files; no `drizzle.__drizzle_migrations` exists) and
+  the command left no trace anywhere. 0024 was therefore applied by executing its four statements on
+  the standing 0023 schema inside the same lock: `0024 applied: 4 statements`; standing rows after the
+  backfill — Barbell Bench Press `required`, Barbell Back Squat `required`, Running `none`,
+  Pull-ups `optional`. Every jest DB file re-applies 0024 from the file anyway (setup.ts), and the new
+  `exercise-weight-mode.integration.test.ts` replays the migration's own UPDATE statements against
+  inserted pre-migration rows (Gravitron/machine → `required` included) inside a rolled-back
+  transaction.
+- One wasted DB run (worker mistake, recorded for honesty): I edited the migration SQL and the new
+  integration test while a diagnostic integration run was executing; the migration file held a broken
+  quote for ~1 minute and every suite whose per-file schema reset fell in that window failed
+  (`syntax error at or near "none"`, 113 failures in c-catch-up). Both files were fixed before the
+  final run; the final runs quoted below are from the fixed tree.
+- Snapshots updated deliberately (listed per plan): `evals/snapshots/__tests__/__snapshots__/
+  tool-surface.unit.test.ts.snap` via `jest -u` — exactly the two strings in the training phase's
+  log_set entry (tool description + weight property description), verified by reading the snapshot
+  diff; nothing else moved.
+- Verification (from `apps/server`):
+  - `npm run check-all` → `✖ 1264 problems (0 errors, 1264 warnings)`; `tsc --noEmit` clean.
+  - `npm run test:unit` → Test Suites: 183 passed, 183 total / Tests: 1828 passed, 1828 total /
+    Snapshots: 62 passed, 62 total.
+  - `DB_PORT=5999 npm run test:unit` (CI parity, no DB) → 183/183 suites, 1828/1828 tests.
+  - `flock /tmp/fitcoach-testdb.lock … npm run test:integration` → Test Suites: 56 passed, 56 total /
+    Tests: 1 todo, 663 passed, 664 total.
+  - `flock /tmp/fitcoach-testdb.lock … npm run test:scenarios` → Test Suites: 23 passed, 23 total /
+    Tests: 1 todo, 392 passed, 393 total.

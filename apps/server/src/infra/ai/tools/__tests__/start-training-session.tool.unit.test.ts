@@ -94,6 +94,7 @@ const makeExerciseWithMuscles = (
   category: 'compound',
   equipment: 'barbell',
   exerciseType: 'strength',
+  weightMode: 'required',
   description: null,
   energyCost: 'high',
   complexity: 'intermediate',

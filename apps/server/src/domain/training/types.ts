@@ -56,6 +56,15 @@ export type EnergyCost = 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
 export type Complexity = 'beginner' | 'intermediate' | 'advanced';
 export type Involvement = 'primary' | 'secondary';
 
+/**
+ * The exercise's weight contract (plan-and-tool-fixes T7, AC-PTF-7): `required` — the exercise
+ * works with a weight, reps without one are rejected; `optional` — bodyweight equipment, an
+ * omitted weight means a bodyweight set and a number an added load; `none` — cardio and the
+ * like, a weight is never stored. An explicit weight of 0 means a bodyweight set on any mode.
+ * Derived from category/equipment (`weight-mode.ts`, the T7 migration backfill, the seed).
+ */
+export type WeightMode = 'required' | 'optional' | 'none';
+
 // --- Exercise Catalog ---
 
 export interface Exercise {
@@ -63,6 +72,7 @@ export interface Exercise {
   name: string;
   category: 'compound' | 'isolation' | 'cardio' | 'functional' | 'mobility';
   equipment: 'barbell' | 'dumbbell' | 'bodyweight' | 'machine' | 'cable' | 'none';
+  weightMode: WeightMode;
   exerciseType: ExerciseType;
   description: string | null;
   energyCost: EnergyCost;

@@ -86,6 +86,7 @@ describe('SessionPlanningContextBuilder', () => {
           name: 'Bench Press',
           category: 'compound',
           equipment: 'barbell',
+          weightMode: 'required',
           exerciseType: 'strength',
           description: null,
           energyCost: 'high',

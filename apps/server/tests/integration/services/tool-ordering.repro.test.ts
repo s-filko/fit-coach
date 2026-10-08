@@ -56,7 +56,7 @@ describe('correction batch: delete_last_sets + corrected log_set calls (BUG-027)
     benchPressId = bench.id;
 
     const tools = [
-      buildLogSetTool({ trainingService: service }),
+      buildLogSetTool({ trainingService: service, exerciseRepository: wiring.exerciseRepo }),
       buildDeleteLastSetsTool({ trainingService: service }),
     ];
     const executor = buildToolExecutor(
