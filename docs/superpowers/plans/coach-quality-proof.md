@@ -1,6 +1,7 @@
 # Coach Quality Proof — the coach is friendly, honest, logs right and proposes weights that follow the history
 
-- Status: in progress
+- Status: done
+- Review: 2026-10-08 | clean | R1,R2,R3,R4
 - After: plan-and-tool-fixes, stale-session-autoclose (measured on an integration branch that contains both)
 - Branch: plan/coach-quality-proof
 - Owner order (2026-10-08): finish everything, add tests so existing problems are not missed, test known scenarios on
@@ -521,4 +522,8 @@ Decisions recorded for this measurement:
 - (D) Scope 13 journeys (the 7 weight-recommendation journeys + g, h, i, j, k, l) instead of every L3 journey: the
   measurement question was the progression prompt and the new behaviours; a–c, smoke, fl-a…fl-f and m were left out to
   stay within the shared GLM quota during the window.
+
+**Final closure check (Opus, 2026-10-08):** code clean (v15 default, no env switch, ADR pin matches the size test, merge
+kept the evals work, judge fix correct, journeys use existing tools). Its documentation blockers (T3 result not
+recorded, report detail, missing (D)s, stale STATE) are closed in `7f5c152b`. Advisories → BACKLOG.
 
