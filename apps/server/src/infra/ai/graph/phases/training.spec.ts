@@ -88,7 +88,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
   const tools = [
     buildSearchExercisesTool({ embeddingService, exerciseRepository }),
     buildGetExerciseHistoryTool({ trainingService, exerciseRepository, workoutSessionRepo }),
-    // T7 (AC-PTF-7): log_set reads the target exercise's weight_mode from the catalog.
+    // T7 (AC-PTF-7): TrainingService decides the weight requirement from the exercise's weight_mode.
     buildLogSetTool({ trainingService }),
     buildCompleteCurrentExerciseTool({ trainingService }),
     buildFinishTrainingTool({ trainingService }),

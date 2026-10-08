@@ -62,16 +62,16 @@ describe('TrainingService.logSetWithContext — the weight requirement per exerc
     expect(logSet).not.toHaveBeenCalled();
   });
 
-  // The rejection is reached by NAME: ensureCurrentExercise resolves the name, and the weight
+  // The rejection is reached by NAME: logSetWithContext resolves the name first, and the weight
   // rule judges the row of the RESOLVED exercise — one catalog read, by the resolved id.
   it('a required exercise reached by exerciseName is rejected on the resolved row (AC-PTF-7)', async () => {
-    const { trainingService, mockExerciseRepo, logSet } = setup(
-      catalogRow(BY_NAME_RESOLVED_ID, 'Barbell Back Squat', 'required'),
-    );
+    const row = catalogRow(BY_NAME_RESOLVED_ID, 'Barbell Back Squat', 'required');
+    const { trainingService, mockExerciseRepo, logSet } = setup(row);
+    (mockExerciseRepo as unknown as { search: jest.Mock }).search = jest.fn().mockResolvedValue([row]);
 
     await expect(
       trainingService.logSetWithContext('session-1', {
-        exerciseName: 'back squat',
+        exerciseName: 'Barbell Back Squat',
         setData: { type: 'functional_reps', reps: 5 },
         weightOmitted: true,
       }),
@@ -97,8 +97,13 @@ describe('TrainingService.logSetWithContext — the weight requirement per exerc
     );
   });
 
-  it('optional (Plank-like) + reps without a weight → a bodyweight set is stored', async () => {
-    const { trainingService, logSet } = setup(catalogRow(BY_ID, 'Plank', 'optional'));
+  it('an isometric exercise (optional) logged with reps and no weight → a bodyweight set is stored', async () => {
+    const plank: Exercise = {
+      ...catalogRow(BY_ID, 'Plank', 'optional'),
+      category: 'functional',
+      exerciseType: 'isometric',
+    };
+    const { trainingService, logSet } = setup(plank);
 
     await trainingService.logSetWithContext('session-1', {
       exerciseId: BY_ID,
@@ -164,6 +169,37 @@ describe('TrainingService.logSetWithContext — the weight requirement per exerc
     });
 
     expect(logSet).toHaveBeenCalled();
+  });
+});
+
+// R3 (pass 5, closure): the rejection happens BEFORE any state changes — a real service over fake repos,
+// ensureCurrentExercise not stubbed. A required exercise B reached by name while A is in progress must not
+// complete A, create B's row or bump activity.
+describe('TrainingService.logSetWithContext — a rejected weight leaves the session untouched (AC-PTF-7)', () => {
+  it('required B by exerciseName, reps without weight, A in progress → rejected, no switch, no activity bump', async () => {
+    const mocks = createMocks();
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockExerciseRepo } = mocks;
+    const exA = makeExerciseWithDetails({ id: 'se-a', exerciseId: 'ex-a', status: 'in_progress', sets: [] });
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([exA]));
+    const rowB = catalogRow(BY_NAME_RESOLVED_ID, 'Barbell Back Squat', 'required');
+    (mockExerciseRepo as unknown as { search: jest.Mock }).search = jest.fn().mockResolvedValue([rowB]);
+    mockExerciseRepo.findById.mockResolvedValue(rowB);
+    mockSessionExerciseRepo.create.mockResolvedValue(
+      makeSessionExercise({ id: 'se-b', exerciseId: BY_NAME_RESOLVED_ID }),
+    );
+
+    await expect(
+      trainingService.logSetWithContext('session-1', {
+        exerciseName: 'Barbell Back Squat',
+        setData: { type: 'functional_reps', reps: 5 },
+        weightOmitted: true,
+      }),
+    ).rejects.toBeInstanceOf(WeightRequiredError);
+
+    expect(mockSessionExerciseRepo.update).not.toHaveBeenCalled();
+    expect(mockSessionExerciseRepo.create).not.toHaveBeenCalled();
+    expect(mockSessionRepo.updateActivity).not.toHaveBeenCalled();
+    expect(mockSessionRepo.update).not.toHaveBeenCalled();
   });
 });
 

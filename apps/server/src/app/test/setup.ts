@@ -71,7 +71,7 @@ export async function setupTestDI(): Promise<void> {
 
       // Seed minimal test exercises data
       // Insert test exercises with fixed UUIDs (matching seed file). plan-and-tool-fixes T7:
-      // weight_mode matches deriveWeightMode(category, equipment) — bench/squat work with a
+      // weight_mode matches deriveWeightMode(category, equipment, exerciseType) — bench/squat work with a
       // weight (required), pull-ups are bodyweight (optional), running never stores one (none).
       await resetClient.query(`
         INSERT INTO exercises (

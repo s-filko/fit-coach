@@ -95,10 +95,12 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         // The set is already saved at this point: a failure resolving the name degrades the
         // confirmation text, it must never turn a successful write into a reported error.
         let exerciseName = input.exerciseName ?? '';
+        let resolvedExerciseId = input.exerciseId;
         try {
           const finalSession = await trainingService.getSessionDetails(sessionId);
           const row = finalSession?.exercises.find(se => se.id === set.sessionExerciseId);
           exerciseName = row?.exercise.name ?? exerciseName;
+          resolvedExerciseId = row?.exerciseId ?? resolvedExerciseId;
         } catch (nameErr) {
           log.warn({ err: nameErr, sessionId }, 'log_set: could not resolve exercise name for confirmation');
         }
@@ -119,7 +121,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             userId,
             sessionId,
             setId: set.id,
-            exerciseId: input.exerciseId,
+            exerciseId: resolvedExerciseId,
             setNumber,
             setData: set.setData,
             rpe: set.rpe,

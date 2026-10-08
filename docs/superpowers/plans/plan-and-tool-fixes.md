@@ -467,6 +467,22 @@ Pass-5 log: red first — `training-service-weight-mode.unit.test.ts:57:7 TS2353
 and `weight-mode.unit.test.ts:9:55 TS2554: Expected 2 arguments, but got 3` on the unchanged service / `deriveWeightMode`
 (suites failed to run). (D) An ab machine is used without added load → Ab Coaster `optional`.
 
+**Pass 5 — closure** (2026-10-08, Opus). Blocking:
+
+15. `blocking | R3 | WeightRequiredError thrown after ensureCurrentExercise mutated state` — fixed (this commit):
+    `TrainingService.logSetWithContext` now resolves the target id (name → catalog id) and reads the catalog row
+    first, runs `assertWeightGiven` on it, and only then re-anchors `startedAt` and calls `ensureCurrentExercise`
+    (new `catalogVerified` opt skips its second catalog read); the same row goes on to `shapeSetData` (now sync).
+    A rejected call leaves the previous exercise in progress, creates no `session_exercise`, bumps no activity.
+    Also: the 'Plank-like' test uses a real isometric `optional` row; stale comments in `training.spec.ts` and
+    `app/test/setup.ts` fixed; the `log_set` AUDIT line logs the resolved `exerciseId`.
+
+Closure log: red first — `training-service-weight-mode.unit.test.ts` "required B by exerciseName … A in progress":
+`expect(mockSessionExerciseRepo.update).not.toHaveBeenCalled()` received 2 calls (`se-a {status: skipped}`,
+`se-b {status: in_progress}`) on unchanged code (real service, `ensureCurrentExercise` not stubbed).
+(D) Ab Coaster `optional` (a reps-only machine movement, no added load) — **owner-review item**: confirm or flip to
+`required`.
+
 Decisions:
 
 - (D) Fix 1 retires `IWorkoutPlanRepository.create` (its only callers were the tool and one integration test) instead of
