@@ -153,6 +153,32 @@ Verify: unit — `log_set` reps without weight → schema rejection, no write; w
 `… 8 reps @ bodyweight.`; renderers print `8×bodyweight` / `@ bodyweight` for functional_reps and null-weight strength;
 snapshots updated deliberately (list them in § 3). `npm run test:unit`; DB suites run by the orchestrator.
 
+### T7 — Weight requirement per exercise: required / optional / not used (AC-PTF-7)
+
+Owner decision (2026-10-08, refines T6): the weight is mandatory only where the exercise works with a weight. The
+catalog carries it explicitly — three values, no counterweight value (the Gravitron is "required"; its meaning comes
+from its name "Assisted …"; checked live in plan `coach-quality-proof`).
+
+Do:
+- Migration (`npm run drizzle:generate`): `exercises.weight_mode text not null default 'required'` with a check
+  (`required` | `optional` | `none`); backfill in the same migration: equipment `bodyweight` → `optional`; category
+  `cardio` or equipment `none` → `none`; everything else (barbell, dumbbell, cable, machine incl. the Gravitron) →
+  `required`. The exercise seed sets it for fresh databases. Domain type + repository mapping.
+- `log_set` validation by the resolved exercise's `weight_mode` (in the service/tool after the exercise is known,
+  replacing T6's blanket refine): `required` + reps without weight → `llmError` stating the fact
+  ("<exercise>: weight is required"); `optional` + reps without weight → a bodyweight set (`functional_reps`), with a
+  number → added load (`strength`, weight ≥ 0); `none` → any weight is not stored (cardio stays duration/distance).
+  `weight: 0` keeps meaning bodyweight on any mode.
+- Tool texts — facts only: `weight` describe: "Weight in kilograms (kg). Required for exercises that use a weight;
+  optional for bodyweight exercises (omitted = bodyweight, a number = added load); not used for cardio."; the
+  bodyweight line of the description accordingly. Today's plan line in the training context names the mode for each
+  planned exercise only when it is not `required` (e.g. "bodyweight; weight optional").
+- BR-TRAINING-047 is re-worded after owner approval (orchestrator).
+
+Verify: migration applies on the test DB; unit — required/optional/none paths, weight 0, the rejection text;
+integration — backfill values for Pull-ups (optional), Running (none), Barbell Bench Press and the Gravitron
+(required); scenarios green.
+
 ## 2. Close (suites)
 
 All tasks committed and pushed, then from `apps/server`:
