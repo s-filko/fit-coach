@@ -9,10 +9,7 @@ describe('TRANSITION_MATRIX (BR-CONV-015)', () => {
   it("BR-CONV-015: matches today's guard matrix verbatim", () => {
     expect(TRANSITION_MATRIX).toEqual({
       registration: ['chat', 'plan_creation'],
-      // BUG-053 T2 (owner decision 2026-10-08): reopen_workout enters training straight from
-      // chat; the chat request_transition schema keeps excluding 'training', so only the tool
-      // can take this edge.
-      chat: ['plan_creation', 'session_planning', 'training'],
+      chat: ['plan_creation', 'session_planning'],
       plan_creation: ['chat', 'session_planning'],
       session_planning: ['training', 'chat'],
       training: ['chat'],
@@ -63,20 +60,6 @@ describe('evaluateTransition', () => {
     expect(evaluateTransition({ phase: 'training', activeSessionId: null, request: { toPhase: 'chat' } })).toEqual({
       ok: true,
       toPhase: 'chat',
-    });
-  });
-
-  it('BUG-053 T2: allows chat → training with an active session (reopen_workout enters training)', () => {
-    expect(evaluateTransition({ phase: 'chat', activeSessionId: 's', request: { toPhase: 'training' } })).toEqual({
-      ok: true,
-      toPhase: 'training',
-    });
-  });
-
-  it('BUG-053 T2: chat → training without a session is still blocked (BR-CONV-016 guard)', () => {
-    expect(evaluateTransition({ phase: 'chat', activeSessionId: null, request: { toPhase: 'training' } })).toEqual({
-      ok: false,
-      reason: 'no_active_session',
     });
   });
 });

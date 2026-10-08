@@ -1,1 +1,0 @@
-ALTER TABLE "workout_sessions" ADD COLUMN "reopened_at" timestamp with time zone;

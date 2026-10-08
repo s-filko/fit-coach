@@ -1,8 +1,8 @@
 /**
  * `chat.context` v2 (BUG-053, stale-session-autoclose plan T3 / AC-SSA-3): the recent-sessions
  * list states the fact that a workout was closed automatically — `closed automatically after
- * inactivity` on a `auto_close_reason = 'timeout'` line, nothing on any other (a reopened
- * session that finished again carries no auto-close reason, so it shows no marker). Facts only;
+ * inactivity` on a `auto_close_reason = 'timeout'` line, nothing on any other (a
+ * session finished by the user carries no auto-close reason, so it shows no marker). Facts only;
  * without a timeout-closed session the render is v1 byte for byte.
  */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
@@ -33,7 +33,6 @@ const sessionWith = (autoCloseReason: WorkoutSessionWithDetails['autoCloseReason
     sessionPlanJson: null,
     lastActivityAt: new Date('2026-10-08T11:31:00.000Z'),
     autoCloseReason,
-    reopenedAt: null,
     createdAt: new Date('2026-10-08T09:54:00.000Z'),
     updatedAt: new Date('2026-10-08T11:31:00.000Z'),
     exercises: [
@@ -59,6 +58,7 @@ const sessionWith = (autoCloseReason: WorkoutSessionWithDetails['autoCloseReason
           energyCost: 'high',
           complexity: 'intermediate',
           typicalDurationMinutes: 15,
+          weightMode: 'required',
           requiresSpotter: false,
           imageUrl: null,
           videoUrl: null,
@@ -98,7 +98,7 @@ describe('chat.context v2 — the auto-close fact (BUG-053 T3, AC-SSA-3)', () =>
     }
   });
 
-  it('a reopened-then-finished session (no auto_close_reason) shows no marker', () => {
+  it('a session finished by the user (no auto_close_reason) shows no marker', () => {
     const text = CHAT_CONTEXT_V2.render(dataOf([sessionWith(null)]), ctx, 5);
     expect(text).not.toContain('closed automatically');
   });

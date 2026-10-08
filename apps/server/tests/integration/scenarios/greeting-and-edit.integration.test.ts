@@ -1,12 +1,12 @@
 /**
  * Journeys g and h, deterministic layer (coach-quality-proof T1 / AC-CQ-1):
  * g-greeting-after-open-session (BUG-053: a seeded three-day-old in_progress
- * workout closes at «привет») and h-forgot-plank-reopen (reopen_workout +
- * two isometric sets in the old session, retro-dated to its last activity).
+ * workout closes at «привет») and h-forgot-plank-edit (edit_last_workout adds
+ * two isometric sets to the closed session, retro-dated to its last activity).
  * The generic plane evaluates every step's scenario expectations; the
  * journey-specific blocks pin what the schema cannot say: the close's dating
  * (completed_at = last activity), the retro offsets of the plank sets, and
- * the reopen keeping the old session's identity.
+ * the edit leaving the old session closed and the phase in chat.
  */
 import type { BaseMessage } from '@langchain/core/messages';
 
@@ -20,7 +20,7 @@ import {
   type ScenarioStep,
 } from '../../../evals/schema/scenario.schema';
 import { scenario as journeyG } from '../../../evals/scenarios/g-greeting-after-open-session.scenario';
-import { scenario as journeyH } from '../../../evals/scenarios/h-forgot-plank-reopen.scenario';
+import { scenario as journeyH } from '../../../evals/scenarios/h-forgot-plank-edit.scenario';
 import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
@@ -196,13 +196,13 @@ function result0t0(): Date {
   return runOf(journeyG).result.t0;
 }
 
-describe('h — the reopened old session keeps its identity and the retro dating', () => {
-  it('the plank sets land in the SAME session (no new one), retro-dated to its last activity', () => {
+describe('h — the closed session stays closed and the added sets are retro-dated', () => {
+  it('the plank sets land in the SAME session (no new one, still completed), retro-dated to its last activity', () => {
     const sessions = runOf(journeyH).result.steps[1]!.sessions;
-    expect(sessions).toHaveLength(1); // the reopened upper_a — nothing else was ever started
+    expect(sessions).toHaveLength(1); // the closed upper_a — nothing else was ever started
     const session = sessions[0]!;
     expect(session.sessionKey).toBe('upper_a');
-    expect(session.status).toBe('in_progress');
+    expect(session.status).toBe('completed');
     const plank = session.exercises.find(ex => ex.exercise.name === 'Plank')!;
     expect(plank.sets).toHaveLength(2);
     // BR-TRAINING-030, journey c's precedent: EVERY retro set is dated to the last
@@ -212,7 +212,7 @@ describe('h — the reopened old session keeps its identity and the retro dating
     expect(plank.sets[1]!.createdAt.getTime()).toBe(base + 5 * 60_000);
   });
 
-  it('the reopen turn used the old session id as the active session again', () => {
+  it('the edit turn touched the old session id, no new session', () => {
     const greeting = runOf(journeyH).result.steps[0]!.sessions.find(s => s.sessionKey === 'upper_a')!;
     const after = runOf(journeyH).result.steps[1]!.sessions.find(s => s.sessionKey === 'upper_a')!;
     expect(after.id).toBe(greeting.id);

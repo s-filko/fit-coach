@@ -37,6 +37,7 @@ const makeExercise = (overrides: Partial<ExerciseWithMuscles> = {}): ExerciseWit
   name: 'Squat',
   category: 'compound',
   equipment: 'barbell',
+  weightMode: 'required',
   exerciseType: 'strength',
   description: null,
   energyCost: 'high',

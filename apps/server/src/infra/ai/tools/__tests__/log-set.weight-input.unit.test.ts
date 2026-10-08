@@ -1,20 +1,23 @@
 import { toJsonSchema } from '@langchain/core/utils/json_schema';
 
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
+import { WeightRequiredError } from '@domain/training/errors';
 import type { SessionSet } from '@domain/training/types';
 
-import { toToolMessage } from '@infra/ai/tools/outcome';
+import { LLM_ERROR_PREFIX, toToolMessage } from '@infra/ai/tools/outcome';
 
 import { buildLogSetTool } from '../log-set.tool';
 import { makeDeps, makeTrainingService } from './log-set-test-support';
 
-// T5/T6 (plan-and-tool-fixes): the model sets the weight — the tool stores what it is given.
-// With reps the weight is required (0 = a bodyweight set, stored as functional_reps); a call
-// with reps and no weight is rejected by the schema, so nothing is ever stored with a weight
-// the model did not pass (BR-TRAINING-047). No algorithmic carry-over from earlier sets; an
-// exerciseName is resolved by the service, not the tool.
+// T5/T6/T7 (plan-and-tool-fixes): the model sets the weight; the code never derives one.
+// The weight requirement per exercise (AC-PTF-7) is judged by TrainingService on the catalog row
+// it already resolves (training-service-weight-mode.unit.test.ts, review pass 5) — this tool
+// builds setData from what the model passed, tells the service whether a weight was omitted,
+// and relays the service's WeightRequiredError as llm_error. No algorithmic carry-over (T5).
 
 const EX_ID = 'd8794819-ffc6-4d08-8336-d9bedc4e554a';
+const PULL_UPS_ID = '8c88ebce-f5df-4d33-afdb-0b096a0dd7a8';
+const RUNNING_ID = 'da89020e-f54a-4573-b70b-764833ae761a';
 
 function renderedContent(ret: ToolReturn): string {
   return String(toToolMessage(isToolReturnWithUpdate(ret) ? ret.outcome : ret, 'test-id').content);
@@ -45,65 +48,74 @@ const savedSet = (setData: SessionSet['setData']): SessionSet => ({
   setData,
 });
 
-describe('log-set.tool — the model sets the weight, no algorithmic carry-over', () => {
-  // AC-PTF-6 (plan-and-tool-fixes T6, superseding the T5 shape): the weight has no default —
-  // with reps the model must pass it (0 = a bodyweight set). A reps-only call never reaches
-  // the handler: the schema rejects it, nothing is stored.
-  it('rejects reps without a weight at the schema level, nothing stored (AC-PTF-6)', async () => {
+describe("log-set.tool — the weight requirement is the service's, the tool relays it (AC-PTF-7)", () => {
+  it('a WeightRequiredError from the service → LLM_ERROR naming the exercise (AC-PTF-7)', async () => {
     const trainingService = makeTrainingService();
-    trainingService.getSessionDetails.mockResolvedValue(
-      sessionWith([
-        { type: 'strength', reps: 12, weight: 45, weightUnit: 'kg' },
-        { type: 'strength', reps: 12, weight: 59, weightUnit: 'kg' },
-      ]),
-    );
+    trainingService.getSessionDetails.mockResolvedValue(sessionWith([]));
+    trainingService.logSetWithContext.mockRejectedValue(new WeightRequiredError('Barbell Bench Press'));
 
     const { byName, config } = makeDeps(trainingService);
-    await expect(byName('log_set').invoke({ exerciseId: EX_ID, reps: 12 }, config)).rejects.toThrow(
-      /weight is required with reps/,
-    );
-    expect(trainingService.logSetWithContext).not.toHaveBeenCalled();
+    const result = (await byName('log_set').invoke({ exerciseId: EX_ID, reps: 12 }, config)) as ToolReturn;
+    const content = renderedContent(result);
+
+    expect(content).toContain(LLM_ERROR_PREFIX);
+    expect(content).toContain('Barbell Bench Press: weight is required');
   });
 
-  // AC-PTF-5 (plan-and-tool-fixes T5, reverting T3): the name pre-resolution existed only to
-  // find the set to carry from — the service resolves the name once, the tool never does.
-  it('passes exerciseName through unresolved, resolver never called by the tool (AC-PTF-5)', async () => {
+  it('reps without a weight reach the service as a bodyweight set flagged weightOmitted (AC-PTF-7)', async () => {
     const trainingService = makeTrainingService();
-    trainingService.getSessionDetails.mockResolvedValue(
-      sessionWith([{ type: 'strength', reps: 8, weight: 60, weightUnit: 'kg' }]),
-    );
-    trainingService.resolveExerciseIdByName.mockResolvedValue(EX_ID);
-    const expected = { type: 'strength' as const, reps: 10, weight: 60, weightUnit: 'kg' as const };
+    trainingService.getSessionDetails.mockResolvedValue(sessionWith([]));
+    const expected = { type: 'functional_reps' as const, reps: 8 };
     trainingService.logSetWithContext.mockResolvedValue({ set: savedSet(expected), setNumber: 2 });
 
     const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke({ exerciseId: PULL_UPS_ID, reps: 8 }, config)) as ToolReturn;
+
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ exerciseId: PULL_UPS_ID, setData: expected, weightOmitted: true }),
+    );
+    expect(renderedContent(result)).toContain('8 reps @ bodyweight');
+  });
+
+  it('reps with a number reach the service as added load, weightOmitted false (AC-PTF-7)', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.getSessionDetails.mockResolvedValue(sessionWith([]));
+    const expected = { type: 'strength' as const, reps: 8, weight: 10, weightUnit: 'kg' as const };
+    trainingService.logSetWithContext.mockResolvedValue({ set: savedSet(expected), setNumber: 2 });
+
+    const { byName, config } = makeDeps(trainingService);
+    await byName('log_set').invoke({ exerciseId: PULL_UPS_ID, reps: 8, weight: 10 }, config);
+
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ setData: expected, weightOmitted: false }),
+    );
+  });
+
+  it('a duration call carries no weight in setData — cardio stays duration/distance (AC-PTF-7)', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.getSessionDetails.mockResolvedValue(sessionWith([]));
+    trainingService.logSetWithContext.mockResolvedValue({
+      set: savedSet({ type: 'cardio_duration', duration: 1800 }),
+      setNumber: 1,
+    });
+
+    const { byName, config } = makeDeps(trainingService);
     const result = (await byName('log_set').invoke(
-      { exerciseName: 'bench press', reps: 10, weight: 60 },
+      { exerciseId: RUNNING_ID, durationSeconds: 1800, weight: 5 },
       config,
     )) as ToolReturn;
 
-    expect(trainingService.resolveExerciseIdByName).not.toHaveBeenCalled();
     expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
       'session-1',
-      expect.objectContaining({ exerciseName: 'bench press', setData: expected }),
+      expect.objectContaining({ setData: { type: 'cardio_duration', duration: 1800 } }),
     );
-    expect(trainingService.logSetWithContext.mock.calls[0][1].exerciseId).toBeUndefined();
-    expect(renderedContent(result)).not.toContain('carried over');
+    expect(renderedContent(result)).not.toContain('5 kg');
   });
 
-  // AC-PTF-4 (plan-and-tool-fixes T4): an explicit weight of 0 means a bodyweight set —
-  // after a weighted pull-up, weight 0 must not store "@ 0 kg" and must not carry.
-  it('log_set with weight 0 and no reps/duration/distance is rejected by the schema, nothing stored (AC-PTF-4)', async () => {
-    const trainingService = makeTrainingService();
-    const { byName, config } = makeDeps(trainingService);
-
-    await expect(byName('log_set').invoke({ exerciseId: EX_ID, weight: 0 }, config)).rejects.toThrow(
-      /Either reps, durationSeconds, or distanceKm must be provided/,
-    );
-    expect(trainingService.logSetWithContext).not.toHaveBeenCalled();
-  });
-
-  it('log_set with weight 0 stores functional_reps, no carry, named "bodyweight" (AC-PTF-4, AC-PTF-6)', async () => {
+  // AC-PTF-4 kept verbatim through T7: an explicit weight of 0 means a bodyweight set on any mode.
+  it('log_set with weight 0 stores functional_reps, no carry, named "bodyweight" (AC-PTF-4, AC-PTF-7)', async () => {
     const trainingService = makeTrainingService();
     trainingService.getSessionDetails.mockResolvedValue(
       sessionWith([{ type: 'strength', reps: 8, weight: 10, weightUnit: 'kg' }]),
@@ -116,32 +128,75 @@ describe('log-set.tool — the model sets the weight, no algorithmic carry-over'
 
     expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
       'session-1',
-      expect.objectContaining({ setData: expected }),
+      expect.objectContaining({ setData: expected, weightOmitted: false }),
     );
     expect(renderedContent(result)).toContain('8 reps @ bodyweight');
     expect(renderedContent(result)).not.toContain('@ 0 kg');
     expect(renderedContent(result)).not.toContain('carried over');
   });
+
+  it('log_set with weight 0 and no reps/duration/distance is rejected by the schema, nothing stored (AC-PTF-4)', async () => {
+    const trainingService = makeTrainingService();
+    const { byName, config } = makeDeps(trainingService);
+
+    await expect(byName('log_set').invoke({ exerciseId: EX_ID, weight: 0 }, config)).rejects.toThrow(
+      /Either reps, durationSeconds, or distanceKm must be provided/,
+    );
+    expect(trainingService.logSetWithContext).not.toHaveBeenCalled();
+  });
+
+  // The tool does not read the catalog: a name goes to the service as given, and the service
+  // resolves it once (ensureCurrentExercise) and judges the weight on that row.
+  it('a name-only call passes the name through and resolves nothing itself (AC-PTF-7)', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.getSessionDetails.mockResolvedValue(sessionWith([]));
+    trainingService.logSetWithContext.mockResolvedValue({
+      set: savedSet({ type: 'functional_reps', reps: 8 }),
+      setNumber: 2,
+    });
+
+    const { byName, config } = makeDeps(trainingService);
+    await byName('log_set').invoke({ exerciseName: 'pull-ups', reps: 8 }, config);
+
+    expect(trainingService.resolveExerciseIdByName).not.toHaveBeenCalled();
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ exerciseName: 'pull-ups', setData: { type: 'functional_reps', reps: 8 } }),
+    );
+    expect(trainingService.logSetWithContext.mock.calls[0][1].exerciseId).toBeUndefined();
+  });
+
+  it('a service failure on an unresolvable name reaches the model as before (AC-PTF-7)', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.getSessionDetails.mockResolvedValue(sessionWith([]));
+    trainingService.logSetWithContext.mockRejectedValue(new Error('no exercise found for name "plankk"'));
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke({ exerciseName: 'plankk', reps: 8 }, config)) as ToolReturn;
+
+    expect(renderedContent(result)).not.toContain('weight is required');
+    expect(renderedContent(result)).toContain('no exercise found for name "plankk"');
+  });
 });
 
-// T6 "Do (texts)" step 1 (plan-and-tool-fixes): the declared contract states what the schema
-// enforces — with reps the weight is required, and 0 names a bodyweight set (BR-TRAINING-047).
-// The old sentences coached the exact call the T6 refine rejects.
-describe('log-set.tool — the declared contract states the weight rule', () => {
-  it('description and the weight describe name weight 0 for bodyweight sets (AC-PTF-6)', () => {
+// T7 "Tool texts": the declared contract states the per-exercise weight rule — facts only.
+describe('log-set.tool — the declared contract states the per-exercise weight rule', () => {
+  it('the bodyweight line and the weight describe state the three modes (AC-PTF-7)', () => {
     const built = buildLogSetTool({ trainingService: makeTrainingService() }) as unknown as {
       description: string;
       schema: Parameters<typeof toJsonSchema>[0];
     };
 
-    expect(built.description).toContain('For bodyweight exercises: provide reps and weight 0 (no external load).');
-    expect(built.description).not.toContain('provide reps only.');
+    expect(built.description).toContain(
+      'For bodyweight exercises: provide reps and optionally a weight — omitted = a bodyweight set, a number = added load.',
+    );
+    expect(built.description).not.toContain('provide reps and weight 0 (no external load).');
 
     const jsonSchema = toJsonSchema(built.schema) as unknown as {
       properties: Record<string, { description?: string }>;
     };
     expect(jsonSchema.properties.weight?.description).toBe(
-      'Weight in kilograms (kg); required with reps. 0 = no external load (a bodyweight set).',
+      'Weight in kilograms (kg). Required for exercises that use a weight; optional for bodyweight exercises (omitted = bodyweight, a number = added load); not used for cardio.',
     );
   });
 });

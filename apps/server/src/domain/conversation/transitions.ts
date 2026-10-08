@@ -12,13 +12,16 @@ export interface TransitionRequest {
 }
 
 /**
- * Today's guard matrix, verbatim (BR-CONV-015). BUG-053 T2 (owner decision 2026-10-08): chat →
- * training exists for `reopen_workout` only — the chat `request_transition` schema keeps
- * excluding 'training', so the model cannot request this edge itself.
+ * The reason of the transition `prepare` requests when it finds an in_progress session idle past
+ * the timeout (INV-TRAINING-005): commit's session lifecycle handler performs the timeout
+ * auto-close, and the run hands off to chat in the same run to answer the user's message.
  */
+export const SESSION_TIMEOUT_REASON = 'session_timeout';
+
+/** Today's guard matrix, verbatim (BR-CONV-015). */
 export const TRANSITION_MATRIX: Readonly<Record<ConversationPhase, readonly ConversationPhase[]>> = {
   registration: ['chat', 'plan_creation'],
-  chat: ['plan_creation', 'session_planning', 'training'],
+  chat: ['plan_creation', 'session_planning'],
   plan_creation: ['chat', 'session_planning'],
   session_planning: ['training', 'chat'],
   training: ['chat'],

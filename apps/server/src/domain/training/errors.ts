@@ -31,12 +31,13 @@ export class ExerciseNotFoundError extends Error {
 }
 
 /**
- * BUG-053 (stale-session-autoclose plan T2): `reopenLastSession` found no `completed` session for
- * the user — there is nothing to return to training. The message is the fact the model relays.
+ * plan-and-tool-fixes review pass 5 (AC-PTF-7): reps were logged without a weight on an exercise
+ * whose catalog `weight_mode` is `required`. Raised by `TrainingService.logSetWithContext` on the
+ * catalog row it already resolves; the message is the fact the model reads.
  */
-export class NoCompletedSessionError extends Error {
-  constructor() {
-    super('No finished workout to reopen.');
-    this.name = 'NoCompletedSessionError';
+export class WeightRequiredError extends Error {
+  constructor(exerciseName: string) {
+    super(`${exerciseName}: weight is required`);
+    this.name = 'WeightRequiredError';
   }
 }

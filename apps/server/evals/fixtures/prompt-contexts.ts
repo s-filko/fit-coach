@@ -68,7 +68,6 @@ export function buildFixtureSession(fixture: EvalFixture, now: Date): WorkoutSes
     sessionPlanJson: null,
     lastActivityAt: now,
     autoCloseReason: null,
-    reopenedAt: null,
     createdAt: now,
     updatedAt: now,
     exercises: [],

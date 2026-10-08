@@ -25,12 +25,19 @@ function eventOf(overrides: Partial<PhaseTransitionCommitted>): PhaseTransitionC
 function makeDeps(sessionStatus: string | null) {
   const update = jest.fn(async () => ({}));
   const completeSession = jest.fn(async () => ({}));
+  const autoCloseTimedOutSessions = jest.fn(async () => undefined);
   const trainingService = {
     getSessionDetails: async () => (sessionStatus ? { id: 's1', status: sessionStatus } : null),
     completeSession,
+    autoCloseTimedOutSessions,
   } as unknown as ITrainingService;
   const workoutSessionRepo = { update } as unknown as IWorkoutSessionRepository;
-  return { handler: buildSessionLifecycleHandler({ trainingService, workoutSessionRepo }), update, completeSession };
+  return {
+    handler: buildSessionLifecycleHandler({ trainingService, workoutSessionRepo }),
+    update,
+    completeSession,
+    autoCloseTimedOutSessions,
+  };
 }
 
 describe('sessionLifecycleHandler (BR-CONV-018, D-D)', () => {
@@ -74,6 +81,16 @@ describe('sessionLifecycleHandler (BR-CONV-018, D-D)', () => {
 
     await expect(handler(eventOf({ activeSessionId: null }))).resolves.toEqual({});
     expect(update).not.toHaveBeenCalled();
+    expect(completeSession).not.toHaveBeenCalled();
+  });
+
+  it('review R1: reason session_timeout → the timeout auto-close (not completeSession), session cleared', async () => {
+    const { handler, completeSession, autoCloseTimedOutSessions } = makeDeps('in_progress');
+
+    await expect(handler(eventOf({ from: 'training', to: 'chat', reason: 'session_timeout' }))).resolves.toEqual({
+      activeSessionId: null,
+    });
+    expect(autoCloseTimedOutSessions).toHaveBeenCalledWith('u1');
     expect(completeSession).not.toHaveBeenCalled();
   });
 });

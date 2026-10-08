@@ -216,7 +216,8 @@ export const scenario: Scenario = {
           mustMatch: [
             '# Today (sets as reps×kg)',
             `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
-            `- Pull-ups [id ${PULL_UPS_ID}] — plan 3×6-8 — nothing yet`,
+            // T7 (AC-PTF-7): Pull-ups are weight_mode optional — the plan line names it.
+            `- Pull-ups [id ${PULL_UPS_ID}] — plan 3×6-8 (bodyweight; weight optional) — nothing yet`,
             // coach-simplification I1: per-exercise History (the last performances with dates, anchored
             // 2026-09-16, 4d before T0) is the training history block.
             '# History (before today)',
@@ -324,7 +325,7 @@ export const scenario: Scenario = {
           mustMatch: [
             `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — done: 8×80, 8×80`,
             // T6 (BR-TRAINING-047): a bodyweight set renders "8×bodyweight", not "8 reps".
-            `- Pull-ups [id ${PULL_UPS_ID}] — plan 3×6-8 — in progress: 8×bodyweight`,
+            `- Pull-ups [id ${PULL_UPS_ID}] — plan 3×6-8 (bodyweight; weight optional) — in progress: 8×bodyweight`,
           ],
         },
         tools: { must: ['log_set'] },

@@ -15,7 +15,7 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { TransitionHandler } from '@domain/conversation/events';
 import type { ConversationPhase } from '@domain/conversation/phases';
 import type { IConversationRunService, TranscriptPort } from '@domain/conversation/ports';
-import { evaluateTransition } from '@domain/conversation/transitions';
+import { evaluateTransition, SESSION_TIMEOUT_REASON } from '@domain/conversation/transitions';
 
 import { splitEpisode, toTranscriptMessages } from '@infra/ai/graph/episode';
 import { isAcceptedHandoff } from '@infra/ai/graph/handoff';
@@ -118,7 +118,16 @@ export function buildCommitNode(deps: CommitNodeDeps) {
     // target. The shared isAcceptedHandoff predicate (close-out Blocking 1)
     // is the SAME one tool-executor.ts uses to decide whether to silence the
     // carrier and route to 'handoff' — the two can no longer disagree.
-    const shouldHop = isAcceptedHandoff(handoffTargets, phase, state.activeSessionId, request, !isFirstCommitOfRun);
+    // Stale-session close (INV-TRAINING-005): `prepare` flagged the run — chat answers the user's
+    // message in this same run whatever TRANSITION_HANDOFF_TARGETS says. The flag is run context,
+    // which a model cannot set; the reason alone (model-suppliable) never forces a hop.
+    const staleClose =
+      ctx.staleSessionClose === true &&
+      isFirstCommitOfRun &&
+      request?.reason === SESSION_TIMEOUT_REASON &&
+      verdict?.ok === true;
+    const shouldHop =
+      staleClose || isAcceptedHandoff(handoffTargets, phase, state.activeSessionId, request, !isFirstCommitOfRun);
     ctx.hopping = shouldHop;
     if (shouldHop) {
       // D8.1: the hop's second agent call runs in the target phase — its block 1 and tool set differ.
@@ -225,6 +234,11 @@ export function buildCommitNode(deps: CommitNodeDeps) {
             compactReason = reasonFromHandler;
           }
         } catch (err) {
+          // The stale-session close is the run's precondition (ADR-0013 §6): never hop to chat with
+          // the session still open and set — fail the run.
+          if (staleClose) {
+            throw err;
+          }
           log.error({ err, userId, from: phase, to: verdict.toPhase }, 'Transition handler failed — continuing');
         }
       }
@@ -248,9 +262,12 @@ export function buildCommitNode(deps: CommitNodeDeps) {
       pendingTransition: null,
       activeSessionId,
       compactReason,
-      lastUserMessageAt: ctx.now.toISOString(),
-      // The run's one-shot expiry questions have been asked; the checkpoint at rest never carries them.
-      courseExpiryQuestions: [],
+      // The stale-close hop keeps the previous stamp: chat's agent and the next run must see the
+      // real time gap (the time-gap note, cacheWarm), not the 0 this commit would stamp.
+      lastUserMessageAt: staleClose ? state.lastUserMessageAt : ctx.now.toISOString(),
+      // The run's one-shot expiry questions have been asked; the checkpoint at rest never carries them
+      // — except across the stale-close hop, where chat is the phase that asks them.
+      courseExpiryQuestions: staleClose ? state.courseExpiryQuestions : [],
     };
   };
 }

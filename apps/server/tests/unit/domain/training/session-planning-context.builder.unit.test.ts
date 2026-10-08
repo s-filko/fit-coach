@@ -67,7 +67,6 @@ describe('SessionPlanningContextBuilder', () => {
     sessionPlanJson: null,
     lastActivityAt: completedAt,
     autoCloseReason: null,
-    reopenedAt: null,
     createdAt: completedAt,
     updatedAt: completedAt,
     exercises: [
@@ -88,6 +87,7 @@ describe('SessionPlanningContextBuilder', () => {
           name: 'Bench Press',
           category: 'compound',
           equipment: 'barbell',
+          weightMode: 'required',
           exerciseType: 'strength',
           description: null,
           energyCost: 'high',

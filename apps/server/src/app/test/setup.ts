@@ -70,30 +70,32 @@ export async function setupTestDI(): Promise<void> {
       }
 
       // Seed minimal test exercises data
-      // Insert test exercises with fixed UUIDs (matching seed file)
+      // Insert test exercises with fixed UUIDs (matching seed file). plan-and-tool-fixes T7:
+      // weight_mode matches deriveWeightMode(category, equipment, exerciseType) — bench/squat work with a
+      // weight (required), pull-ups are bodyweight (optional), running never stores one (none).
       await resetClient.query(`
         INSERT INTO exercises (
-          id, name, category, equipment, exercise_type, description, 
-          energy_cost, complexity, typical_duration_minutes, requires_spotter
+          id, name, category, equipment, exercise_type, description,
+          energy_cost, complexity, typical_duration_minutes, requires_spotter, weight_mode
         )
-        VALUES 
-          ('c7b0899c-a0f9-47ca-a69d-4bcd531b0c95', 'Barbell Bench Press', 'compound', 'barbell', 'strength', 
-           'Chest compound movement', 'high', 'intermediate', 12, true),
-          ('3818f94a-0543-4241-83b4-6840d06a4e6a', 'Barbell Back Squat', 'compound', 'barbell', 'strength', 
-           'Leg compound movement', 'very_high', 'advanced', 15, true),
-          ('8c88ebce-f5df-4d33-afdb-0b096a0dd7a8', 'Pull-ups', 'compound', 'bodyweight', 'strength', 
-           'Back compound movement', 'high', 'intermediate', 10, false),
+        VALUES
+          ('c7b0899c-a0f9-47ca-a69d-4bcd531b0c95', 'Barbell Bench Press', 'compound', 'barbell', 'strength',
+           'Chest compound movement', 'high', 'intermediate', 12, true, 'required'),
+          ('3818f94a-0543-4241-83b4-6840d06a4e6a', 'Barbell Back Squat', 'compound', 'barbell', 'strength',
+           'Leg compound movement', 'very_high', 'advanced', 15, true, 'required'),
+          ('8c88ebce-f5df-4d33-afdb-0b096a0dd7a8', 'Pull-ups', 'compound', 'bodyweight', 'strength',
+           'Back compound movement', 'high', 'intermediate', 10, false, 'optional'),
           ('da89020e-f54a-4573-b70b-764833ae761a', 'Running', 'cardio', 'none', 'cardio_distance',
-           'Cardio exercise', 'medium', 'beginner', 30, false),
+           'Cardio exercise', 'medium', 'beginner', 30, false, 'none'),
           ('6b1d2f39-8c47-4e5a-9d20-7f3a8b4c1e57', 'Assisted Pull-ups (Gravitron)', 'compound', 'stack', 'strength',
            'Assisted pull-ups on a counterweight machine (coach-quality-proof T2: the plate weight is assistance)',
-           'high', 'intermediate', 12, false)
+           'high', 'intermediate', 12, false, 'required')
         ON CONFLICT (id) DO NOTHING;
       `);
 
       // Get exercise IDs
       const result = await resetClient.query(`
-        SELECT id, name FROM exercises
+        SELECT id, name FROM exercises 
         WHERE name IN (
           'Barbell Bench Press', 'Barbell Back Squat', 'Pull-ups', 'Running',
           'Assisted Pull-ups (Gravitron)'
@@ -134,15 +136,6 @@ export async function setupTestDI(): Promise<void> {
             `
             INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
             VALUES ($1, 'cardio_system', 'primary'), ($1, 'lower_body_endurance', 'secondary')
-            ON CONFLICT DO NOTHING
-          `,
-            [row.id],
-          );
-        } else if (row.name === 'Assisted Pull-ups (Gravitron)') {
-          await resetClient.query(
-            `
-            INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
-            VALUES ($1, 'back_lats', 'primary'), ($1, 'biceps', 'secondary')
             ON CONFLICT DO NOTHING
           `,
             [row.id],

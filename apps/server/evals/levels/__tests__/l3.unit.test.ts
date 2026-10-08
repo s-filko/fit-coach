@@ -161,7 +161,7 @@ describe('loadScenarios', () => {
     const group = loadScenarios('new-journeys');
     expect(group.map(s => s.id)).toEqual([
       'g-greeting-after-open-session',
-      'h-forgot-plank-reopen',
+      'h-forgot-plank-edit',
       'i-weight-shorthand',
       'j-bodyweight',
       'k-weight-unknown',

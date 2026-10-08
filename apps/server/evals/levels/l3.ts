@@ -98,7 +98,7 @@ import { scenario as journeyKWeightUnknown } from '../scenarios/k-weight-unknown
 import { scenario as journeyLCorrection } from '../scenarios/l-correction.scenario';
 import { scenario as journeyMNoFalseLog } from '../scenarios/m-no-false-log.scenario';
 import { scenario as journeyGGreeting } from '../scenarios/g-greeting-after-open-session.scenario';
-import { scenario as journeyHPlank } from '../scenarios/h-forgot-plank-reopen.scenario';
+import { scenario as journeyHPlank } from '../scenarios/h-forgot-plank-edit.scenario';
 
 /** Every authored training journey, in run order — what a plain L3 run executes. */
 const ALL_SCENARIOS: Scenario[] = [journeyA, journeyB, journeyC, journeyCExplicit];

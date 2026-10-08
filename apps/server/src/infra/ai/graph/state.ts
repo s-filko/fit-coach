@@ -93,6 +93,13 @@ export const RunContext = Annotation.Root({
   hopBoundaryIndex: Annotation<number | undefined>(),
   hopTransition: Annotation<TransitionRequest | undefined>(),
   /**
+   * stale-session-autoclose review: set by `prepare` (and only there — a model cannot set run
+   * context) when it requested the stale-session close; `commit` forces the same-run hand-off to
+   * chat on it, keeps the previous `lastUserMessageAt` (chat must see the real time gap) and
+   * fails the run when the close throws.
+   */
+  staleSessionClose: Annotation<boolean | undefined>(),
+  /**
    * now-line-last review R1 (BR-LLM-008): prompt-version keys for the
    * modules this run sent CONDITIONALLY — the agent node sets them when it
    * actually renders the module (the time-gap note), and `commit` merges

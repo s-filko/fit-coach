@@ -118,6 +118,7 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
         phasePath: [] as ConversationPhase[],
         hopping: false,
         hopBoundaryIndex: undefined as number | undefined,
+        staleSessionClose: false,
       };
 
       // INV-LLM-009: persist the inbound message before the graph runs, keyed by

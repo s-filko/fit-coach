@@ -1,5 +1,5 @@
 {
-  "id": "a7af5432-dccc-43c4-a78c-dd6cc6cbeee0",
+  "id": "25b25bb6-6b23-4e7d-ade3-00744eab2d10",
   "prevId": "63eb6189-5d8c-45a9-a3a5-f50434b0ef48",
   "version": "7",
   "dialect": "postgresql",
@@ -541,6 +541,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "weight_mode": {
+          "name": "weight_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'required'"
+        },
         "description": {
           "name": "description",
           "type": "text",
@@ -693,7 +700,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "exercises_weight_mode_check": {
+          "name": "exercises_weight_mode_check",
+          "value": "\"exercises\".\"weight_mode\" in ('required', 'optional', 'none')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.llm_calls": {
@@ -2013,12 +2025,6 @@
         "auto_close_reason": {
           "name": "auto_close_reason",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reopened_at": {
-          "name": "reopened_at",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

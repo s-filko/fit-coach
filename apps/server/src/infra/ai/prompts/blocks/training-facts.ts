@@ -13,6 +13,7 @@ import type {
   SessionExerciseWithDetails,
   SessionSet,
   SetData,
+  WeightMode,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
 import type { UserFact } from '@domain/user/ports';
@@ -32,6 +33,11 @@ export interface ExerciseHistory {
   exerciseName: string;
   /** `4×12` — null = the exercise is not in today's plan (off plan). */
   plannedText: string | null;
+  /**
+   * The exercise's weight contract (plan-and-tool-fixes T7, AC-PTF-7) — the Today plan line
+   * names it when it is not the default `required`. Null = the catalog row is unknown.
+   */
+  weightMode: WeightMode | null;
   /** At most three, newest first. */
   performances: ExerciseLastPerformance[];
   /** The newest `skipped` row for this exercise, if any. */
@@ -450,12 +456,28 @@ export function trendLine(
 
 // --- Today -----------------------------------------------------------------------------------
 
+/**
+ * The weight-mode note of a Today plan line (plan-and-tool-fixes T7, AC-PTF-7): named only
+ * where it is not the default `required` — the coach reads from the line whether a weight
+ * applies to the exercise.
+ */
+function weightModeNote(weightMode: WeightMode | null | undefined): string {
+  if (weightMode === 'optional') {
+    return ' (bodyweight; weight optional)';
+  }
+  if (weightMode === 'none') {
+    return ' (weight not used)';
+  }
+  return '';
+}
+
 function exerciseLine(
   name: string,
   exerciseId: string,
   planText: string | null,
   ex: SessionExerciseWithDetails | undefined,
   planNote?: string,
+  weightMode?: WeightMode | null,
 ): string {
   let state: string;
   if (ex?.status === 'skipped') {
@@ -466,7 +488,7 @@ function exerciseLine(
     const label = ex.status === 'completed' ? 'done' : 'in progress';
     state = `${label}: ${formatSetsLine(ex.sets)}`;
   }
-  const plan = planText ? ` — plan ${planText}` : '';
+  const plan = planText ? ` — plan ${planText}${weightModeNote(weightMode)}` : '';
   const note = planNote?.trim() ? ` — planning note: ${planNote.trim()}` : '';
   return `- ${name} [id ${exerciseId}]${plan}${note} — ${state}`;
 }
@@ -513,6 +535,7 @@ export const TRAINING_TODAY_V1: ContextBlock<TrainingFactsData> = {
     }
 
     const nameOf = new Map(history.map(h => [h.exerciseId, h.exerciseName]));
+    const modeOf = new Map(history.map(h => [h.exerciseId, h.weightMode]));
     const startedById = new Map(session.exercises.map(ex => [ex.exerciseId, ex]));
     const plan = session.sessionPlanJson;
     const planIds = new Set(plan?.exercises.map(p => p.exerciseId) ?? []);
@@ -523,7 +546,9 @@ export const TRAINING_TODAY_V1: ContextBlock<TrainingFactsData> = {
       for (const p of plan.exercises) {
         const ex = startedById.get(p.exerciseId);
         const name = ex?.exercise.name ?? nameOf.get(p.exerciseId) ?? p.exerciseName ?? 'Exercise';
-        lines.push(exerciseLine(name, p.exerciseId, `${p.targetSets}×${p.targetReps}`, ex, p.notes));
+        lines.push(
+          exerciseLine(name, p.exerciseId, `${p.targetSets}×${p.targetReps}`, ex, p.notes, modeOf.get(p.exerciseId)),
+        );
       }
     } else {
       lines.push('No plan for this session.');

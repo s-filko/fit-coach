@@ -62,7 +62,7 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
   chat: [
     'update_profile',
     'request_transition',
-    'reopen_workout',
+    'edit_last_workout',
     'save_timezone',
     'set_language',
     'manage_fact',
@@ -80,7 +80,7 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
   session_planning: [
     'search_exercises',
     'start_training_session',
-    'reopen_workout',
+    'edit_last_workout',
     'request_transition',
     'save_timezone',
     'set_language',
@@ -96,6 +96,7 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
     'set_session_place',
     'delete_last_sets',
     'update_last_set',
+    'edit_last_workout',
     'save_timezone',
     'set_language',
     'manage_fact',
@@ -299,7 +300,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
       exerciseRepository: {
         findByIdsWithMuscles: async (ids: string[]) => {
           expect(ids).toEqual([BENCH, ROW]);
-          return [{ id: BENCH, name: 'Barbell Bench Press', muscleGroups: [] }];
+          return [{ id: BENCH, name: 'Barbell Bench Press', weightMode: 'required', muscleGroups: [] }];
         },
       },
     });
@@ -319,6 +320,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
             exerciseId: BENCH,
             exerciseName: 'Barbell Bench Press', // catalog name wins over the plan's 'Bench Press' (D19)
             plannedText: '3×8',
+            weightMode: 'required', // T7 (AC-PTF-7): from the catalog row the loader already fetches
             performances: [performance],
             lastSkippedAt: null,
             loadsUsed: [],
@@ -327,6 +329,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
             exerciseId: ROW,
             exerciseName: 'Row',
             plannedText: '3×10',
+            weightMode: null, // no catalog row for this id — the mode is unknown
             performances: [],
             lastSkippedAt: skippedAt,
             loadsUsed: [],

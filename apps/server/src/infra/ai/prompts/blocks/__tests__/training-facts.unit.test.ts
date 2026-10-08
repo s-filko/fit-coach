@@ -52,6 +52,7 @@ function exercise(id: string, name: string): ExerciseWithMuscles {
     category: 'compound',
     equipment: 'machine',
     exerciseType: 'strength',
+    weightMode: 'required',
     description: null,
     energyCost: 'medium',
     complexity: 'intermediate',
@@ -123,11 +124,13 @@ function history(
   plannedText: string | null,
   performances: ExerciseLastPerformance[],
   lastSkippedAt: Date | null = null,
+  weightMode: ExerciseHistory['weightMode'] = 'required',
 ): ExerciseHistory {
   return {
     exerciseId: id,
     exerciseName: name,
     plannedText,
+    weightMode,
     performances,
     lastSkippedAt,
     loadsUsed: collectLoadsUsed(performances),
@@ -165,7 +168,6 @@ function makeSession(over: Partial<WorkoutSessionWithDetails> = {}): WorkoutSess
     },
     lastActivityAt: new Date('2026-10-01T10:55:00.000Z'),
     autoCloseReason: null,
-    reopenedAt: null,
     createdAt: started,
     updatedAt: started,
     exercises: [
@@ -282,6 +284,24 @@ describe('TRAINING_TODAY_V1 (# Today)', () => {
       0,
     );
     expect(named).toContain(`- Seated Leg Curl [id ${ID.curl}] — plan 3×15 — nothing yet`);
+  });
+
+  // T7 (AC-PTF-7): the plan line names the exercise's weight mode only when it is not the
+  // default `required` — the coach reads from the line itself whether a weight applies.
+  it('names the weight mode on a plan line only when it is not required (AC-PTF-7)', () => {
+    const render = (weightMode: ExerciseHistory['weightMode']): string =>
+      TRAINING_TODAY_V1.render(
+        { ...DATA, history: [history(ID.curl, 'Seated Leg Curl', '3×15', [], null, weightMode)] },
+        CTX,
+        0,
+      ) ?? '';
+
+    expect(render('optional')).toContain(
+      `- Seated Leg Curl [id ${ID.curl}] — plan 3×15 (bodyweight; weight optional) — nothing yet`,
+    );
+    expect(render('none')).toContain(`- Seated Leg Curl [id ${ID.curl}] — plan 3×15 (weight not used) — nothing yet`);
+    expect(render('required')).toContain(`- Seated Leg Curl [id ${ID.curl}] — plan 3×15 — nothing yet`);
+    expect(render(null)).toContain(`- Seated Leg Curl [id ${ID.curl}] — plan 3×15 — nothing yet`);
   });
 
   it('states the place only when stated', () => {

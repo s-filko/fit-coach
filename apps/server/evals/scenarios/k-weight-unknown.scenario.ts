@@ -5,7 +5,7 @@ import { SQUAT_ID, singleExercisePast, trainingSetupSteps } from './weight-loggi
  * Journey k — the weight is unknown (coach-quality-proof T1 / AC-CQ-1,
  * BR-TRAINING-047): an exercise with no history, «сделал 10» with no weight
  * named. The scripted model tries the reps-only call — the schema rejects it
- * (`weight is required with reps (0 = a bodyweight set)`), nothing is stored,
+ * (`<exercise>: weight is required`), nothing is stored,
  * and the coach asks for the weight. `seen` pins the rejection text reaching
  * the model (deterministic-only plane); live, a well-behaved model asks
  * directly — with or without attempting the call — so the tools plane asserts
@@ -51,7 +51,7 @@ export const scenario: Scenario = {
             // The honest no-history row the model had in front of it.
             '- no earlier record',
             // The schema rejection the failed call fed back (BR-TRAINING-047).
-            'weight is required with reps',
+            'weight is required',
           ],
         },
         delivered: { mustMatch: [ASK_WEIGHT_TEXT, { text: 'вес', liveOnly: true }] },

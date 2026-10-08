@@ -2,8 +2,7 @@
  * `chat.context` v2 (BUG-053, stale-session-autoclose plan T3 / AC-SSA-3): v1's render plus one
  * fact — a session closed by the timeout auto-close says so: `closed automatically after
  * inactivity` sits between the time and the duration on its recent-sessions line. A session
- * closed any other way, or one that was reopened and finished again (the reopen clears
- * `auto_close_reason`), shows no marker. Without a timeout-closed session the render is v1 byte
+ * closed any other way shows no marker. Without a timeout-closed session the render is v1 byte
  * for byte. The only chat context block the chat phase renders.
  */
 import {

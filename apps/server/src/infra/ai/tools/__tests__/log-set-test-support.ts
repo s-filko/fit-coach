@@ -1,6 +1,6 @@
-// Shared plumbing for the log_set tool tests: a mocked ITrainingService, the executor-shaped
-// RunnableConfig and the invokable tool wrapper. Not a `.unit.test.ts` file, so jest's testMatch
-// never picks it up.
+// Shared plumbing for the log_set tool tests: a mocked ITrainingService, the
+// executor-shaped RunnableConfig and the invokable tool wrapper. Not a `.unit.test.ts`
+// file, so jest's testMatch never picks it up.
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { ITrainingService } from '@domain/training/ports';

@@ -77,7 +77,7 @@ export const scenario: Scenario = {
       ],
       expect: {
         // Today's row names the first set bodyweight (the short form, T6).
-        seen: { mustMatch: ['- Pull-ups [id ' + PULL_UPS_ID + '] — plan 3×6-8 — in progress: 8×bodyweight'] },
+        seen: { mustMatch: ['- Pull-ups [id ' + PULL_UPS_ID + '] — plan 3×6-8 (bodyweight; weight optional) — in progress: 8×bodyweight'] },
         tools: { must: ['log_set'] },
         delivered: { mustMatch: [BELT_REPLY_TEXT] },
         persisted: {

@@ -5,21 +5,21 @@ import { GREETING_REPLY, scenario as journeyG } from './g-greeting-after-open-se
 /**
  * Journey h — «я вчера не дописал планку» (coach-quality-proof T1 / AC-CQ-1):
  * continues journey g — after the stale session auto-closed, the user
- * remembers two unlogged plank holds. The coach reopens the closed workout
- * (`reopen_workout`, the chat → training hand-off) and logs the two isometric
- * sets in the OLD session, dated to its last activity (BR-TRAINING-030 retro
- * dating). The plank is seeded in the old session's exercises (one name, an
+ * remembers two unlogged plank holds. The coach adds the two isometric
+ * sets to the closed workout with `edit_last_workout` (action `add`): the
+ * workout stays completed, the conversation stays in chat, and the sets are
+ * dated to its last activity (BR-TRAINING-049 retro dating). The plank is seeded in the old session's exercises (one name, an
  * exact catalog match for `log_set` by name) with no sets yet.
  */
-export const REOPEN_REPLY = 'Дописал планку: 2 по 45 секунд к той тренировке.';
+export const EDIT_REPLY = 'Дописал планку: 2 по 45 секунд к той тренировке.';
 
 /** The past is journey g's world (the open upper_a with bench sets and an empty plank) plus the plank row. */
 const gPast = journeyG.past;
 
 export const scenario: Scenario = {
-  id: 'h-forgot-plank-reopen',
+  id: 'h-forgot-plank-edit',
   description:
-    'after g: «я вчера не дописал планку, 2 по 45 секунд» — reopen_workout returns the closed session to training and two isometric sets land in it, dated to its last activity',
+    'after g: «я вчера не дописал планку, 2 по 45 секунд» — edit_last_workout adds two isometric sets to the closed session, which stays completed, dated to its last activity',
   past: {
     ...gPast,
     catalog: [
@@ -50,23 +50,22 @@ export const scenario: Scenario = {
         phaseAfter: { phase: 'chat' },
       },
     },
-    // --- step 1: the forgotten plank — reopen, then two isometric sets in the old session ---
+    // --- step 1: the forgotten plank — two isometric sets added to the closed workout ---
     {
       action: 'user',
       text: 'я вчера не дописал планку, 2 по 45 секунд',
       script: [
-        { toolCall: { name: 'reopen_workout', args: {} } },
-        { toolCall: { name: 'log_set', args: { exerciseName: 'Plank', durationSeconds: 45 } } },
-        { toolCall: { name: 'log_set', args: { exerciseName: 'Plank', durationSeconds: 45 } } },
-        { text: REOPEN_REPLY },
+        { toolCall: { name: 'edit_last_workout', args: { action: 'add', exerciseName: 'Plank', durationSeconds: 45 } } },
+        { toolCall: { name: 'edit_last_workout', args: { action: 'add', exerciseName: 'Plank', durationSeconds: 45 } } },
+        { text: EDIT_REPLY },
       ],
       expect: {
-        tools: { must: ['reopen_workout', 'log_set'] },
-        delivered: { mustMatch: [REOPEN_REPLY] },
+        tools: { must: ['edit_last_workout'] },
+        delivered: { mustMatch: [EDIT_REPLY] },
         persisted: {
           session: {
             key: 'upper_a',
-            status: 'in_progress',
+            status: 'completed',
             exercises: [
               {
                 exercise: 'Barbell Bench Press',
@@ -80,7 +79,7 @@ export const scenario: Scenario = {
           },
           turnRecorded: true,
         },
-        phaseAfter: { phase: 'training' },
+        phaseAfter: { phase: 'chat' },
       },
     },
   ],

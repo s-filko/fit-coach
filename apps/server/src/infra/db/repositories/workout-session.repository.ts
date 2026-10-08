@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray, isNotNull, ne, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, lt, ne, type SQL, sql } from 'drizzle-orm';
 
 import { ActiveSessionExistsError } from '@domain/training/errors';
 import type {
@@ -24,15 +24,6 @@ import { findInErrorCauseChain } from '@shared/pg-error-cause';
 
 /** The partial unique index behind INV-TRAINING-002 (migration 0010). */
 const ONE_IN_PROGRESS_INDEX = 'uq_workout_sessions_one_in_progress_per_user';
-
-/**
- * BUG-053 T2 (INV-TRAINING-005): the repo side of `autoCloseIdleSince` — the idle base is
- * `max(last_activity_at, reopened_at)` (Postgres GREATEST ignores NULLs, so a never-reopened
- * session keeps its plain `last_activity_at` base). A just-reopened workout is fresh, not stale.
- */
-function idleSinceBefore(cutoffTime: Date): SQL {
-  return sql`greatest(${workoutSessions.lastActivityAt}, ${workoutSessions.reopenedAt}) < ${cutoffTime}`;
-}
 
 /**
  * Postgres unique-violation on the one-active-session index — matched by SQLSTATE `23505` and the index
@@ -299,7 +290,14 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     const [session] = await db
       .select()
       .from(workoutSessions)
-      .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.status, 'completed')))
+      // completed_at NULL would sort FIRST on DESC: a completed row without a date is not "the latest".
+      .where(
+        and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.status, 'completed'),
+          isNotNull(workoutSessions.completedAt),
+        ),
+      )
       .orderBy(desc(workoutSessions.completedAt))
       .limit(1);
 
@@ -352,7 +350,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     const sessions = await db
       .select()
       .from(workoutSessions)
-      .where(and(eq(workoutSessions.status, 'in_progress'), idleSinceBefore(cutoffTime)));
+      .where(and(eq(workoutSessions.status, 'in_progress'), lt(workoutSessions.lastActivityAt, cutoffTime)));
 
     return sessions.map(s => ({
       ...s,
@@ -366,7 +364,11 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       .select()
       .from(workoutSessions)
       .where(
-        and(eq(workoutSessions.userId, userId), eq(workoutSessions.status, 'in_progress'), idleSinceBefore(cutoffTime)),
+        and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.status, 'in_progress'),
+          lt(workoutSessions.lastActivityAt, cutoffTime),
+        ),
       );
 
     for (const session of timedOutSessions) {
