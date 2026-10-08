@@ -495,3 +495,30 @@ Decisions:
   - `npm run test:unit` → Test Suites: 182 passed, 182 total / Tests: 1817 passed, 1817 total.
   - `DB_PORT=5999 npm run test:unit` (CI parity, no DB) → 182/182 suites, 1817/1817 tests.
   - DB suites not run by the worker (shared test DB) — orchestrator's § 2 run covers them.
+
+### T6 — Do (texts), step 1: the declared contract states the weight rule (AC-PTF-6)
+
+- Red first, recorded before the fix (`infra/ai/tools/__tests__/log-set.weight-input.unit.test.ts`):
+  `137:31` 'description and the weight describe name weight 0 for bodyweight sets (AC-PTF-6)' —
+  `Expected substring: "For bodyweight exercises: provide reps and weight 0 (no external load)."`,
+  received description still carrying "For bodyweight exercises: provide reps only." — Summary:
+  Tests: 1 failed, 4 passed, 5 total. (The first red run failed to compile — TS2339 on
+  `toJsonSchema(...).properties`; the recorded red above is against the unchanged texts.)
+- Implementation (`infra/ai/tools/log-set.tool.ts`, exactly two strings, facts only):
+  - description line → 'For bodyweight exercises: provide reps and weight 0 (no external load).'
+  - weight `.describe` → 'Weight in kilograms (kg); required with reps. 0 = no external load (a bodyweight set).'
+  No other description, tool text or prompt file changed; handler and schema untouched.
+- Snapshot updated deliberately (listed per plan): `evals/snapshots/__tests__/__snapshots__/tool-surface.unit.test.ts.snap`
+  via `jest -u` — exactly the two strings in the training phase's log_set entry (tool description +
+  weight property), verified by reading the snapshot diff; nothing else moved.
+- Left untouched, noted: `log-set.tool.repro.test.ts:50` (excluded from the default run, red by design)
+  still quotes the old sentence in a comment — outside this step's two-string ownership.
+- Verification (from `apps/server`):
+  - `npm run check-all` → 0 errors (eslint, prettier "All matched files use Prettier code style!",
+    `tsc --noEmit` clean).
+  - `npm run test:unit` → Test Suites: 182 passed, 182 total / Tests: 1818 passed, 1818 total /
+    Snapshots: 62 passed, 62 total.
+  - `flock /tmp/fitcoach-testdb.lock npm run test:scenarios` → Test Suites: 23 passed, 23 total /
+    Tests: 1 todo, 392 passed, 393 total.
+- (D) T6 texts step 1 — description contradiction fixed (class 3); the training-prompt rule is decided
+  after the live measurement.

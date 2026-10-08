@@ -1,8 +1,11 @@
+import { toJsonSchema } from '@langchain/core/utils/json_schema';
+
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
 import type { SessionSet } from '@domain/training/types';
 
 import { toToolMessage } from '@infra/ai/tools/outcome';
 
+import { buildLogSetTool } from '../log-set.tool';
 import { makeDeps, makeTrainingService } from './log-set-test-support';
 
 // T5/T6 (plan-and-tool-fixes): the model sets the weight — the tool stores what it is given.
@@ -118,5 +121,27 @@ describe('log-set.tool — the model sets the weight, no algorithmic carry-over'
     expect(renderedContent(result)).toContain('8 reps @ bodyweight');
     expect(renderedContent(result)).not.toContain('@ 0 kg');
     expect(renderedContent(result)).not.toContain('carried over');
+  });
+});
+
+// T6 "Do (texts)" step 1 (plan-and-tool-fixes): the declared contract states what the schema
+// enforces — with reps the weight is required, and 0 names a bodyweight set (BR-TRAINING-047).
+// The old sentences coached the exact call the T6 refine rejects.
+describe('log-set.tool — the declared contract states the weight rule', () => {
+  it('description and the weight describe name weight 0 for bodyweight sets (AC-PTF-6)', () => {
+    const built = buildLogSetTool({ trainingService: makeTrainingService() }) as unknown as {
+      description: string;
+      schema: Parameters<typeof toJsonSchema>[0];
+    };
+
+    expect(built.description).toContain('For bodyweight exercises: provide reps and weight 0 (no external load).');
+    expect(built.description).not.toContain('provide reps only.');
+
+    const jsonSchema = toJsonSchema(built.schema) as unknown as {
+      properties: Record<string, { description?: string }>;
+    };
+    expect(jsonSchema.properties.weight?.description).toBe(
+      'Weight in kilograms (kg); required with reps. 0 = no external load (a bodyweight set).',
+    );
   });
 });

@@ -151,7 +151,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         'Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from today\'s plan in the context or from a search_exercises result ("ID:..." line).',
         'If the exercise is not in the plan and you do not have its exact UUID, pass exerciseName instead (the server resolves it in the catalog) — never invent or guess a UUID.',
         'For strength/weighted exercises: provide reps and weight (in kg).',
-        'For bodyweight exercises: provide reps only.',
+        'For bodyweight exercises: provide reps and weight 0 (no external load).',
         'For cardio duration (bike, elliptical): provide durationSeconds only.',
         'For isometric holds (plank, side plank, wall sit): provide durationSeconds — the hold time in SECONDS — never reps; the server stores it as a timed hold.',
         'For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only).',
@@ -180,7 +180,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             .number()
             .min(0)
             .optional()
-            .describe('Weight used in kilograms (kg). Omit for bodyweight exercises.'),
+            .describe('Weight in kilograms (kg); required with reps. 0 = no external load (a bodyweight set).'),
           durationSeconds: z
             .number()
             .int()
