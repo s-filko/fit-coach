@@ -1182,6 +1182,23 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'forearms', involvement: 'primary' },
     ],
   },
+  {
+    id: '9766b855-84f6-48fd-9ceb-92f61991d0c2',
+    name: 'Barbell Preacher Curl',
+    category: 'isolation',
+    equipment: 'barbell',
+    exerciseType: 'strength',
+    description:
+      'Barbell curl on a preacher (Scott) bench — upper arms braced on an angled pad, strict bicep isolation',
+    energyCost: 'low',
+    complexity: 'beginner',
+    typicalDurationMinutes: 6,
+    requiresSpotter: false,
+    muscleGroups: [
+      { muscle: 'biceps', involvement: 'primary' },
+      { muscle: 'forearms', involvement: 'secondary' },
+    ],
+  },
 ];
 
 export async function seedExercises() {
