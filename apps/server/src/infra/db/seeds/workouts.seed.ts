@@ -14,7 +14,7 @@ interface SetData {
   type: 'strength' | 'isometric';
   reps?: number;
   weight?: number;
-  durationSeconds?: number;
+  duration?: number;
 }
 
 interface ExerciseSeed {
@@ -192,10 +192,10 @@ const workoutSeeds: WorkoutSeed[] = [
         exerciseName: 'Plank',
         orderIndex: 7,
         sets: [
-          { type: 'isometric', durationSeconds: 35 },
-          { type: 'isometric', durationSeconds: 40 },
-          { type: 'isometric', durationSeconds: 40 },
-          { type: 'isometric', durationSeconds: 40 },
+          { type: 'isometric', duration: 35 },
+          { type: 'isometric', duration: 40 },
+          { type: 'isometric', duration: 40 },
+          { type: 'isometric', duration: 40 },
         ],
       },
     ],
