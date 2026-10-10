@@ -2474,3 +2474,122 @@ dropped to 75 on an uneven-hold case (expected hold 80).
 
 `prompt-doctor`: check whether the history block states the break length plainly (the coach sometimes counted it), then
 measure with more samples before any wording change.
+
+## BUG-059 — A tool call written as text reached the user: `<invoke name="complete_current_exercise">`
+
+**Status:** Open
+**Severity:** High — the user sees raw markup instead of an answer, and the intended tool never runs
+**Found during:** owner's live dev workout 2026-10-09 (run `b409d8b1-a931-44fd-b2ef-8a25beb2d59c`, 12:53 UTC, user
+`60af022f…`, `anthropic/claude-sonnet-5.5`; read with `print-transcript --user … --since … --until …`)
+**Component:** training reply path (model text → stored AI message → bot); no check on the outgoing text
+
+### Description
+
+The user wrote «ты полный долбоеб, это ровно то же упражнение что я дела но на другом тренажере». The stored AI message,
+sent to Telegram, is the whole text `<invoke name="complete_current_exercise">\n</invoke>` — the model emitted the tool
+call as XML text instead of a structured tool call. No tool ran in that run; the exercise was auto-completed later by the
+next `log_set` (run `89d5b856`). The user asked «это что».
+
+### Fix plan
+
+Red test first: a model response whose text contains tool-call markup (`<invoke`, `<function_calls>`) is not delivered as
+the reply. Then decide (owner): reject and retry the model call, or fail loudly (no-fallbacks rule). Check the exact
+response payload (`--payloads`) to see whether the provider returned it as content or as a malformed tool call.
+
+## BUG-060 — «привет» after a closed session is answered with the canned «Тренировка завершена. Готов к новой?»
+
+**Status:** Open
+**Severity:** Medium — the first message of the day is not answered; the user had to repeat it («привет говорю»)
+**Found during:** owner's live dev session 2026-10-09 (run `19c631ac-71b1-465d-9d00-eed1d2bec932`, 10:20 UTC, no model call)
+**Component:** `infra/ai/graph/nodes/prepare.node.ts:82-99` (session-ended branch), `infra/ai/messages/ru.ts:20`
+
+### Description
+
+The conversation was still in phase `training` pointing at a session that had been completed outside the conversation
+(the 2026-10-08 leg workout `8d565ee4…`, 11:00–12:00, completed). `prepare` takes the "session ended" branch and commits
+the catalog reply `session_ended_return_to_chat` with a transition to chat — the user's words are never answered. The
+stale-session branch right below (BUG-053) already hands off to chat so chat answers in the same run; the ended branch
+does not. The next run (`d5790c6f`, 188 s — BUG-046) then apologised for the canned line and offered to continue the
+finished workout's plank (BUG-047 summary).
+
+### Fix plan
+
+Red test: a run in `training` whose session is completed answers the user's message (chat hand-off), with no catalog
+line. Align the ended branch with the stale branch.
+
+## BUG-061 — Plate-loaded lever machines have no load basis: «per side» vs «total» is a guess
+
+**Status:** Open — needs an owner rule
+**Severity:** Medium — history for the machine is not comparable; the coach's weight advice rests on a guess
+**Found during:** owner's live dev workout 2026-10-09 (runs `8e27faa6`, `c3ab3f26`, 11:35–11:38 UTC)
+**Component:** set model (load basis exists only for dumbbells, plan `set-kind`), training prompt / history block
+
+### Description
+
+Lever Lat Pulldown (Plate-Loaded) history holds 27.5 kg (2026-09-15) and 55 kg (2026-09-25). Asked «55 на сторону??»,
+the coach guessed «55 is probably the total, 27.5 per side», then admitted it cannot check and told the user to go by
+feel. The user asked «как правильно записывать на сторону или общий?» — the product has no answer. The day's sets
+(40 / 70 / 60) were stored with no basis either. The owner's equipment notes say this machine is loaded as plates per
+side, which contradicts the coach's advice.
+
+### Fix plan (owner decides)
+
+One rule for plate-loaded machines (per side or total), carried in the catalog like the dumbbell basis and rendered in
+history and tool replies; decide what to do with the existing ambiguous rows.
+
+## BUG-062 — The coach says an off-plan exercise has no history, then quotes it one turn later
+
+**Status:** Open — likely cause, not confirmed on the payload
+**Severity:** Medium — wrong "nothing to compare with" and a wrong starting weight (32 kg vs a 45 kg history)
+**Found during:** owner's live dev workout 2026-10-09 (runs `a4b32395`, `38351c7b`, `9eb9652d` → `11787a89`, 12:41–12:44 UTC)
+**Component:** `infra/ai/prompts/blocks/training-facts.ts:540-590` (history entries = plan items + exercises with a row
+today); session planning exercise choice
+
+### Description
+
+The user switched to the chest-supported lever row (off plan). Before any set of it was logged the coach said «история на
+этом тренажёре только начинается, сравнивать не с чем»; after the first set (10×32) it said «15 сентября ты сделал 3×12 с
+45 кг». The history block appears to cover only plan exercises and exercises with a row in today's session, so an
+off-plan exercise's history is invisible until its first set. Related: session planning put `Cable Seated Row, Close
+Grip` (February data) in the plan, while the owner's usual horizontal row is `Chest-Supported Row, Narrow Grip`.
+
+### Fix plan
+
+Confirm on the `--payloads` of run `a4b32395`; red test: an off-plan exercise named by the user gets its history in
+context (or the coach looks it up) before the first set.
+
+## BUG-063 — The coach gave an inverted fallback, argued about it, then handed the decision back to the user
+
+**Status:** Open — model behaviour; goes through `prompt-doctor`
+**Severity:** Medium — the owner lost trust mid-set («ты тренер или тряпка?», «мне ничего не удобнее если ты не ведешь»)
+**Found during:** owner's live dev workout 2026-10-09 (runs `8aa963a1` … `bb3432fc`, 12:16–12:22 UTC)
+**Component:** training prompt / coach conduct
+
+### Description
+
+After 10×25 and 9×25 at RPE 10 the coach proposed 24 kg dumbbells; told they do not exist, it said the previous 10×24
+«was recorded inaccurately» (invented) and proposed 22.5. It then confirmed twice «if 22.5 does not go, stay on 25» —
+falling back to the heavier weight when the lighter one fails. When the user pointed at the contradiction, the coach
+explained that 22.5 is lighter than 25, then retreated to «ты сам решаешь, какой вес брать» / «бери ту, что удобнее»
+until the user demanded that it lead. Related: BUG-049 (invented equipment increments).
+
+### Next step
+
+`prompt-doctor`: cause in the exact requests of these runs; eval case with a guard for a coherent single
+recommendation after pushback.
+
+## BUG-064 — A drop set is stored as an ordinary working set and over-counts the exercise («Total: 4/3 sets»)
+
+**Status:** Open
+**Severity:** Low
+**Found during:** owner's live dev workout 2026-10-09 (runs `4f4d4670`, `26361e11`, 13:02–13:06 UTC)
+**Component:** set kind (`set-kind` plan: warm-up / working only), exercise completion summary
+
+### Description
+
+«получилось 9 повторов и дропсетом на 3кг добил 6» was logged as two working sets (9×5, 6×3 with feedback «дропсет после
+9×5»). The completion summary reads `Total: 4/3 sets`, and history will show four working sets of lateral raises.
+
+### Fix plan
+
+Decide (owner) whether a drop set becomes a set kind or a part of the preceding set; until then it inflates set counts.
